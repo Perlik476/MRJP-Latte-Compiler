@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-patterns -fno-warn-overlapping-patterns #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module ParLatte
+module Latte.Par
   ( happyError
   , myLexer
   , pProgram
@@ -14,8 +14,8 @@ module ParLatte
 
 import Prelude
 
-import qualified AbsLatte
-import LexLatte
+import qualified Latte.Abs
+import Latte.Lex
 import qualified Data.Array as Happy_Data_Array
 import qualified Data.Bits as Bits
 import qualified GHC.Exts as Happy_GHC_Exts
@@ -30,239 +30,239 @@ type HappyAny = Happy_GHC_Exts.Any
 #else
 type HappyAny = forall a . a
 #endif
-newtype HappyWrap4 = HappyWrap4 ((AbsLatte.BNFC'Position, AbsLatte.Ident))
-happyIn4 :: ((AbsLatte.BNFC'Position, AbsLatte.Ident)) -> (HappyAbsSyn )
+newtype HappyWrap4 = HappyWrap4 ((Latte.Abs.BNFC'Position, Latte.Abs.Ident))
+happyIn4 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Ident)) -> (HappyAbsSyn )
 happyIn4 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap4 x)
 {-# INLINE happyIn4 #-}
 happyOut4 :: (HappyAbsSyn ) -> HappyWrap4
 happyOut4 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut4 #-}
-newtype HappyWrap5 = HappyWrap5 ((AbsLatte.BNFC'Position, Integer))
-happyIn5 :: ((AbsLatte.BNFC'Position, Integer)) -> (HappyAbsSyn )
+newtype HappyWrap5 = HappyWrap5 ((Latte.Abs.BNFC'Position, Integer))
+happyIn5 :: ((Latte.Abs.BNFC'Position, Integer)) -> (HappyAbsSyn )
 happyIn5 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap5 x)
 {-# INLINE happyIn5 #-}
 happyOut5 :: (HappyAbsSyn ) -> HappyWrap5
 happyOut5 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut5 #-}
-newtype HappyWrap6 = HappyWrap6 ((AbsLatte.BNFC'Position, String))
-happyIn6 :: ((AbsLatte.BNFC'Position, String)) -> (HappyAbsSyn )
+newtype HappyWrap6 = HappyWrap6 ((Latte.Abs.BNFC'Position, String))
+happyIn6 :: ((Latte.Abs.BNFC'Position, String)) -> (HappyAbsSyn )
 happyIn6 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap6 x)
 {-# INLINE happyIn6 #-}
 happyOut6 :: (HappyAbsSyn ) -> HappyWrap6
 happyOut6 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut6 #-}
-newtype HappyWrap7 = HappyWrap7 ((AbsLatte.BNFC'Position, AbsLatte.Program))
-happyIn7 :: ((AbsLatte.BNFC'Position, AbsLatte.Program)) -> (HappyAbsSyn )
+newtype HappyWrap7 = HappyWrap7 ((Latte.Abs.BNFC'Position, Latte.Abs.Program))
+happyIn7 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Program)) -> (HappyAbsSyn )
 happyIn7 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap7 x)
 {-# INLINE happyIn7 #-}
 happyOut7 :: (HappyAbsSyn ) -> HappyWrap7
 happyOut7 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut7 #-}
-newtype HappyWrap8 = HappyWrap8 ((AbsLatte.BNFC'Position, AbsLatte.TopDef))
-happyIn8 :: ((AbsLatte.BNFC'Position, AbsLatte.TopDef)) -> (HappyAbsSyn )
+newtype HappyWrap8 = HappyWrap8 ((Latte.Abs.BNFC'Position, Latte.Abs.TopDef))
+happyIn8 :: ((Latte.Abs.BNFC'Position, Latte.Abs.TopDef)) -> (HappyAbsSyn )
 happyIn8 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap8 x)
 {-# INLINE happyIn8 #-}
 happyOut8 :: (HappyAbsSyn ) -> HappyWrap8
 happyOut8 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut8 #-}
-newtype HappyWrap9 = HappyWrap9 ((AbsLatte.BNFC'Position, [AbsLatte.TopDef]))
-happyIn9 :: ((AbsLatte.BNFC'Position, [AbsLatte.TopDef])) -> (HappyAbsSyn )
+newtype HappyWrap9 = HappyWrap9 ((Latte.Abs.BNFC'Position, [Latte.Abs.TopDef]))
+happyIn9 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.TopDef])) -> (HappyAbsSyn )
 happyIn9 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap9 x)
 {-# INLINE happyIn9 #-}
 happyOut9 :: (HappyAbsSyn ) -> HappyWrap9
 happyOut9 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut9 #-}
-newtype HappyWrap10 = HappyWrap10 ((AbsLatte.BNFC'Position, AbsLatte.Arg))
-happyIn10 :: ((AbsLatte.BNFC'Position, AbsLatte.Arg)) -> (HappyAbsSyn )
+newtype HappyWrap10 = HappyWrap10 ((Latte.Abs.BNFC'Position, Latte.Abs.Arg))
+happyIn10 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Arg)) -> (HappyAbsSyn )
 happyIn10 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap10 x)
 {-# INLINE happyIn10 #-}
 happyOut10 :: (HappyAbsSyn ) -> HappyWrap10
 happyOut10 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut10 #-}
-newtype HappyWrap11 = HappyWrap11 ((AbsLatte.BNFC'Position, [AbsLatte.Arg]))
-happyIn11 :: ((AbsLatte.BNFC'Position, [AbsLatte.Arg])) -> (HappyAbsSyn )
+newtype HappyWrap11 = HappyWrap11 ((Latte.Abs.BNFC'Position, [Latte.Abs.Arg]))
+happyIn11 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.Arg])) -> (HappyAbsSyn )
 happyIn11 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap11 x)
 {-# INLINE happyIn11 #-}
 happyOut11 :: (HappyAbsSyn ) -> HappyWrap11
 happyOut11 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut11 #-}
-newtype HappyWrap12 = HappyWrap12 ((AbsLatte.BNFC'Position, AbsLatte.ClassDef))
-happyIn12 :: ((AbsLatte.BNFC'Position, AbsLatte.ClassDef)) -> (HappyAbsSyn )
+newtype HappyWrap12 = HappyWrap12 ((Latte.Abs.BNFC'Position, Latte.Abs.ClassDef))
+happyIn12 :: ((Latte.Abs.BNFC'Position, Latte.Abs.ClassDef)) -> (HappyAbsSyn )
 happyIn12 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap12 x)
 {-# INLINE happyIn12 #-}
 happyOut12 :: (HappyAbsSyn ) -> HappyWrap12
 happyOut12 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut12 #-}
-newtype HappyWrap13 = HappyWrap13 ((AbsLatte.BNFC'Position, AbsLatte.ClassElem))
-happyIn13 :: ((AbsLatte.BNFC'Position, AbsLatte.ClassElem)) -> (HappyAbsSyn )
+newtype HappyWrap13 = HappyWrap13 ((Latte.Abs.BNFC'Position, Latte.Abs.ClassElem))
+happyIn13 :: ((Latte.Abs.BNFC'Position, Latte.Abs.ClassElem)) -> (HappyAbsSyn )
 happyIn13 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap13 x)
 {-# INLINE happyIn13 #-}
 happyOut13 :: (HappyAbsSyn ) -> HappyWrap13
 happyOut13 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut13 #-}
-newtype HappyWrap14 = HappyWrap14 ((AbsLatte.BNFC'Position, [AbsLatte.ClassElem]))
-happyIn14 :: ((AbsLatte.BNFC'Position, [AbsLatte.ClassElem])) -> (HappyAbsSyn )
+newtype HappyWrap14 = HappyWrap14 ((Latte.Abs.BNFC'Position, [Latte.Abs.ClassElem]))
+happyIn14 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.ClassElem])) -> (HappyAbsSyn )
 happyIn14 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap14 x)
 {-# INLINE happyIn14 #-}
 happyOut14 :: (HappyAbsSyn ) -> HappyWrap14
 happyOut14 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut14 #-}
-newtype HappyWrap15 = HappyWrap15 ((AbsLatte.BNFC'Position, AbsLatte.ArrayElem))
-happyIn15 :: ((AbsLatte.BNFC'Position, AbsLatte.ArrayElem)) -> (HappyAbsSyn )
+newtype HappyWrap15 = HappyWrap15 ((Latte.Abs.BNFC'Position, Latte.Abs.ArrayElem))
+happyIn15 :: ((Latte.Abs.BNFC'Position, Latte.Abs.ArrayElem)) -> (HappyAbsSyn )
 happyIn15 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap15 x)
 {-# INLINE happyIn15 #-}
 happyOut15 :: (HappyAbsSyn ) -> HappyWrap15
 happyOut15 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut15 #-}
-newtype HappyWrap16 = HappyWrap16 ((AbsLatte.BNFC'Position, AbsLatte.ClassAttr))
-happyIn16 :: ((AbsLatte.BNFC'Position, AbsLatte.ClassAttr)) -> (HappyAbsSyn )
+newtype HappyWrap16 = HappyWrap16 ((Latte.Abs.BNFC'Position, Latte.Abs.ClassAttr))
+happyIn16 :: ((Latte.Abs.BNFC'Position, Latte.Abs.ClassAttr)) -> (HappyAbsSyn )
 happyIn16 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap16 x)
 {-# INLINE happyIn16 #-}
 happyOut16 :: (HappyAbsSyn ) -> HappyWrap16
 happyOut16 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut16 #-}
-newtype HappyWrap17 = HappyWrap17 ((AbsLatte.BNFC'Position, AbsLatte.MethodCall))
-happyIn17 :: ((AbsLatte.BNFC'Position, AbsLatte.MethodCall)) -> (HappyAbsSyn )
+newtype HappyWrap17 = HappyWrap17 ((Latte.Abs.BNFC'Position, Latte.Abs.MethodCall))
+happyIn17 :: ((Latte.Abs.BNFC'Position, Latte.Abs.MethodCall)) -> (HappyAbsSyn )
 happyIn17 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap17 x)
 {-# INLINE happyIn17 #-}
 happyOut17 :: (HappyAbsSyn ) -> HappyWrap17
 happyOut17 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut17 #-}
-newtype HappyWrap18 = HappyWrap18 ((AbsLatte.BNFC'Position, AbsLatte.FunctionCall))
-happyIn18 :: ((AbsLatte.BNFC'Position, AbsLatte.FunctionCall)) -> (HappyAbsSyn )
+newtype HappyWrap18 = HappyWrap18 ((Latte.Abs.BNFC'Position, Latte.Abs.FunctionCall))
+happyIn18 :: ((Latte.Abs.BNFC'Position, Latte.Abs.FunctionCall)) -> (HappyAbsSyn )
 happyIn18 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap18 x)
 {-# INLINE happyIn18 #-}
 happyOut18 :: (HappyAbsSyn ) -> HappyWrap18
 happyOut18 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut18 #-}
-newtype HappyWrap19 = HappyWrap19 ((AbsLatte.BNFC'Position, AbsLatte.Lvalue))
-happyIn19 :: ((AbsLatte.BNFC'Position, AbsLatte.Lvalue)) -> (HappyAbsSyn )
+newtype HappyWrap19 = HappyWrap19 ((Latte.Abs.BNFC'Position, Latte.Abs.Lvalue))
+happyIn19 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Lvalue)) -> (HappyAbsSyn )
 happyIn19 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap19 x)
 {-# INLINE happyIn19 #-}
 happyOut19 :: (HappyAbsSyn ) -> HappyWrap19
 happyOut19 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut19 #-}
-newtype HappyWrap20 = HappyWrap20 ((AbsLatte.BNFC'Position, AbsLatte.Block))
-happyIn20 :: ((AbsLatte.BNFC'Position, AbsLatte.Block)) -> (HappyAbsSyn )
+newtype HappyWrap20 = HappyWrap20 ((Latte.Abs.BNFC'Position, Latte.Abs.Block))
+happyIn20 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Block)) -> (HappyAbsSyn )
 happyIn20 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap20 x)
 {-# INLINE happyIn20 #-}
 happyOut20 :: (HappyAbsSyn ) -> HappyWrap20
 happyOut20 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut20 #-}
-newtype HappyWrap21 = HappyWrap21 ((AbsLatte.BNFC'Position, [AbsLatte.Stmt]))
-happyIn21 :: ((AbsLatte.BNFC'Position, [AbsLatte.Stmt])) -> (HappyAbsSyn )
+newtype HappyWrap21 = HappyWrap21 ((Latte.Abs.BNFC'Position, [Latte.Abs.Stmt]))
+happyIn21 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.Stmt])) -> (HappyAbsSyn )
 happyIn21 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap21 x)
 {-# INLINE happyIn21 #-}
 happyOut21 :: (HappyAbsSyn ) -> HappyWrap21
 happyOut21 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut21 #-}
-newtype HappyWrap22 = HappyWrap22 ((AbsLatte.BNFC'Position, AbsLatte.Stmt))
-happyIn22 :: ((AbsLatte.BNFC'Position, AbsLatte.Stmt)) -> (HappyAbsSyn )
+newtype HappyWrap22 = HappyWrap22 ((Latte.Abs.BNFC'Position, Latte.Abs.Stmt))
+happyIn22 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Stmt)) -> (HappyAbsSyn )
 happyIn22 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap22 x)
 {-# INLINE happyIn22 #-}
 happyOut22 :: (HappyAbsSyn ) -> HappyWrap22
 happyOut22 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut22 #-}
-newtype HappyWrap23 = HappyWrap23 ((AbsLatte.BNFC'Position, AbsLatte.Item))
-happyIn23 :: ((AbsLatte.BNFC'Position, AbsLatte.Item)) -> (HappyAbsSyn )
+newtype HappyWrap23 = HappyWrap23 ((Latte.Abs.BNFC'Position, Latte.Abs.Item))
+happyIn23 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Item)) -> (HappyAbsSyn )
 happyIn23 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap23 x)
 {-# INLINE happyIn23 #-}
 happyOut23 :: (HappyAbsSyn ) -> HappyWrap23
 happyOut23 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut23 #-}
-newtype HappyWrap24 = HappyWrap24 ((AbsLatte.BNFC'Position, [AbsLatte.Item]))
-happyIn24 :: ((AbsLatte.BNFC'Position, [AbsLatte.Item])) -> (HappyAbsSyn )
+newtype HappyWrap24 = HappyWrap24 ((Latte.Abs.BNFC'Position, [Latte.Abs.Item]))
+happyIn24 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.Item])) -> (HappyAbsSyn )
 happyIn24 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap24 x)
 {-# INLINE happyIn24 #-}
 happyOut24 :: (HappyAbsSyn ) -> HappyWrap24
 happyOut24 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut24 #-}
-newtype HappyWrap25 = HappyWrap25 ((AbsLatte.BNFC'Position, AbsLatte.Type))
-happyIn25 :: ((AbsLatte.BNFC'Position, AbsLatte.Type)) -> (HappyAbsSyn )
+newtype HappyWrap25 = HappyWrap25 ((Latte.Abs.BNFC'Position, Latte.Abs.Type))
+happyIn25 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Type)) -> (HappyAbsSyn )
 happyIn25 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap25 x)
 {-# INLINE happyIn25 #-}
 happyOut25 :: (HappyAbsSyn ) -> HappyWrap25
 happyOut25 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut25 #-}
-newtype HappyWrap26 = HappyWrap26 ((AbsLatte.BNFC'Position, [AbsLatte.Type]))
-happyIn26 :: ((AbsLatte.BNFC'Position, [AbsLatte.Type])) -> (HappyAbsSyn )
+newtype HappyWrap26 = HappyWrap26 ((Latte.Abs.BNFC'Position, [Latte.Abs.Type]))
+happyIn26 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.Type])) -> (HappyAbsSyn )
 happyIn26 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap26 x)
 {-# INLINE happyIn26 #-}
 happyOut26 :: (HappyAbsSyn ) -> HappyWrap26
 happyOut26 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut26 #-}
-newtype HappyWrap27 = HappyWrap27 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn27 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap27 = HappyWrap27 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn27 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn27 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap27 x)
 {-# INLINE happyIn27 #-}
 happyOut27 :: (HappyAbsSyn ) -> HappyWrap27
 happyOut27 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut27 #-}
-newtype HappyWrap28 = HappyWrap28 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn28 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap28 = HappyWrap28 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn28 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn28 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap28 x)
 {-# INLINE happyIn28 #-}
 happyOut28 :: (HappyAbsSyn ) -> HappyWrap28
 happyOut28 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut28 #-}
-newtype HappyWrap29 = HappyWrap29 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn29 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap29 = HappyWrap29 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn29 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn29 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap29 x)
 {-# INLINE happyIn29 #-}
 happyOut29 :: (HappyAbsSyn ) -> HappyWrap29
 happyOut29 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut29 #-}
-newtype HappyWrap30 = HappyWrap30 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn30 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap30 = HappyWrap30 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn30 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn30 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap30 x)
 {-# INLINE happyIn30 #-}
 happyOut30 :: (HappyAbsSyn ) -> HappyWrap30
 happyOut30 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut30 #-}
-newtype HappyWrap31 = HappyWrap31 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn31 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap31 = HappyWrap31 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn31 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn31 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap31 x)
 {-# INLINE happyIn31 #-}
 happyOut31 :: (HappyAbsSyn ) -> HappyWrap31
 happyOut31 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut31 #-}
-newtype HappyWrap32 = HappyWrap32 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn32 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap32 = HappyWrap32 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn32 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn32 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap32 x)
 {-# INLINE happyIn32 #-}
 happyOut32 :: (HappyAbsSyn ) -> HappyWrap32
 happyOut32 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut32 #-}
-newtype HappyWrap33 = HappyWrap33 ((AbsLatte.BNFC'Position, AbsLatte.Expr))
-happyIn33 :: ((AbsLatte.BNFC'Position, AbsLatte.Expr)) -> (HappyAbsSyn )
+newtype HappyWrap33 = HappyWrap33 ((Latte.Abs.BNFC'Position, Latte.Abs.Expr))
+happyIn33 :: ((Latte.Abs.BNFC'Position, Latte.Abs.Expr)) -> (HappyAbsSyn )
 happyIn33 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap33 x)
 {-# INLINE happyIn33 #-}
 happyOut33 :: (HappyAbsSyn ) -> HappyWrap33
 happyOut33 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut33 #-}
-newtype HappyWrap34 = HappyWrap34 ((AbsLatte.BNFC'Position, [AbsLatte.Expr]))
-happyIn34 :: ((AbsLatte.BNFC'Position, [AbsLatte.Expr])) -> (HappyAbsSyn )
+newtype HappyWrap34 = HappyWrap34 ((Latte.Abs.BNFC'Position, [Latte.Abs.Expr]))
+happyIn34 :: ((Latte.Abs.BNFC'Position, [Latte.Abs.Expr])) -> (HappyAbsSyn )
 happyIn34 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap34 x)
 {-# INLINE happyIn34 #-}
 happyOut34 :: (HappyAbsSyn ) -> HappyWrap34
 happyOut34 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut34 #-}
-newtype HappyWrap35 = HappyWrap35 ((AbsLatte.BNFC'Position, AbsLatte.AddOp))
-happyIn35 :: ((AbsLatte.BNFC'Position, AbsLatte.AddOp)) -> (HappyAbsSyn )
+newtype HappyWrap35 = HappyWrap35 ((Latte.Abs.BNFC'Position, Latte.Abs.AddOp))
+happyIn35 :: ((Latte.Abs.BNFC'Position, Latte.Abs.AddOp)) -> (HappyAbsSyn )
 happyIn35 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap35 x)
 {-# INLINE happyIn35 #-}
 happyOut35 :: (HappyAbsSyn ) -> HappyWrap35
 happyOut35 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut35 #-}
-newtype HappyWrap36 = HappyWrap36 ((AbsLatte.BNFC'Position, AbsLatte.MulOp))
-happyIn36 :: ((AbsLatte.BNFC'Position, AbsLatte.MulOp)) -> (HappyAbsSyn )
+newtype HappyWrap36 = HappyWrap36 ((Latte.Abs.BNFC'Position, Latte.Abs.MulOp))
+happyIn36 :: ((Latte.Abs.BNFC'Position, Latte.Abs.MulOp)) -> (HappyAbsSyn )
 happyIn36 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap36 x)
 {-# INLINE happyIn36 #-}
 happyOut36 :: (HappyAbsSyn ) -> HappyWrap36
 happyOut36 x = Happy_GHC_Exts.unsafeCoerce# x
 {-# INLINE happyOut36 #-}
-newtype HappyWrap37 = HappyWrap37 ((AbsLatte.BNFC'Position, AbsLatte.RelOp))
-happyIn37 :: ((AbsLatte.BNFC'Position, AbsLatte.RelOp)) -> (HappyAbsSyn )
+newtype HappyWrap37 = HappyWrap37 ((Latte.Abs.BNFC'Position, Latte.Abs.RelOp))
+happyIn37 :: ((Latte.Abs.BNFC'Position, Latte.Abs.RelOp)) -> (HappyAbsSyn )
 happyIn37 x = Happy_GHC_Exts.unsafeCoerce# (HappyWrap37 x)
 {-# INLINE happyIn37 #-}
 happyOut37 :: (HappyAbsSyn ) -> HappyWrap37
@@ -414,28 +414,28 @@ happyReduce_1 = happySpecReduce_1  0# happyReduction_1
 happyReduction_1 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn4
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.Ident (tokenText happy_var_1))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.Ident (tokenText happy_var_1))
 	)}
 
 happyReduce_2 = happySpecReduce_1  1# happyReduction_2
 happyReduction_2 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn5
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), (read (tokenText happy_var_1)) :: Integer)
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), (read (tokenText happy_var_1)) :: Integer)
 	)}
 
 happyReduce_3 = happySpecReduce_1  2# happyReduction_3
 happyReduction_3 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn6
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), ((\(PT _ (TL s)) -> s) happy_var_1))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), ((\(PT _ (TL s)) -> s) happy_var_1))
 	)}
 
 happyReduce_4 = happySpecReduce_1  3# happyReduction_4
 happyReduction_4 happy_x_1
 	 =  case happyOut9 happy_x_1 of { (HappyWrap9 happy_var_1) -> 
 	happyIn7
-		 ((fst happy_var_1, AbsLatte.PProgram (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.PProgram (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_5 = happyReduce 6# 4# happyReduction_5
@@ -451,7 +451,7 @@ happyReduction_5 (happy_x_6 `HappyStk`
 	case happyOut11 happy_x_4 of { (HappyWrap11 happy_var_4) -> 
 	case happyOut20 happy_x_6 of { (HappyWrap20 happy_var_6) -> 
 	happyIn8
-		 ((fst happy_var_1, AbsLatte.PFunDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_4) (snd happy_var_6))
+		 ((fst happy_var_1, Latte.Abs.PFunDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_4) (snd happy_var_6))
 	) `HappyStk` happyRest}}}}
 
 happyReduce_6 = happySpecReduce_3  4# happyReduction_6
@@ -462,7 +462,7 @@ happyReduction_6 happy_x_3
 	case happyOut4 happy_x_2 of { (HappyWrap4 happy_var_2) -> 
 	case happyOut12 happy_x_3 of { (HappyWrap12 happy_var_3) -> 
 	happyIn8
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.PClassDef (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2) (snd happy_var_3))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.PClassDef (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2) (snd happy_var_3))
 	)}}}
 
 happyReduce_7 = happyReduce 5# 4# happyReduction_7
@@ -477,7 +477,7 @@ happyReduction_7 (happy_x_5 `HappyStk`
 	case happyOut4 happy_x_4 of { (HappyWrap4 happy_var_4) -> 
 	case happyOut12 happy_x_5 of { (HappyWrap12 happy_var_5) -> 
 	happyIn8
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.PClassDefExt (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2) (snd happy_var_4) (snd happy_var_5))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.PClassDefExt (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2) (snd happy_var_4) (snd happy_var_5))
 	) `HappyStk` happyRest}}}}
 
 happyReduce_8 = happySpecReduce_1  5# happyReduction_8
@@ -502,12 +502,12 @@ happyReduction_10 happy_x_2
 	 =  case happyOut25 happy_x_1 of { (HappyWrap25 happy_var_1) -> 
 	case happyOut4 happy_x_2 of { (HappyWrap4 happy_var_2) -> 
 	happyIn10
-		 ((fst happy_var_1, AbsLatte.PArg (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
+		 ((fst happy_var_1, Latte.Abs.PArg (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
 	)}}
 
 happyReduce_11 = happySpecReduce_0  7# happyReduction_11
 happyReduction_11  =  happyIn11
-		 ((AbsLatte.BNFC'NoPosition, [])
+		 ((Latte.Abs.BNFC'NoPosition, [])
 	)
 
 happyReduce_12 = happySpecReduce_1  7# happyReduction_12
@@ -534,7 +534,7 @@ happyReduction_14 happy_x_3
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut14 happy_x_2 of { (HappyWrap14 happy_var_2) -> 
 	happyIn12
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ClassDef (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ClassDef (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_15 = happySpecReduce_3  9# happyReduction_15
@@ -544,7 +544,7 @@ happyReduction_15 happy_x_3
 	 =  case happyOut25 happy_x_1 of { (HappyWrap25 happy_var_1) -> 
 	case happyOut4 happy_x_2 of { (HappyWrap4 happy_var_2) -> 
 	happyIn13
-		 ((fst happy_var_1, AbsLatte.ClassAttrDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
+		 ((fst happy_var_1, Latte.Abs.ClassAttrDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
 	)}}
 
 happyReduce_16 = happyReduce 6# 9# happyReduction_16
@@ -560,12 +560,12 @@ happyReduction_16 (happy_x_6 `HappyStk`
 	case happyOut11 happy_x_4 of { (HappyWrap11 happy_var_4) -> 
 	case happyOut20 happy_x_6 of { (HappyWrap20 happy_var_6) -> 
 	happyIn13
-		 ((fst happy_var_1, AbsLatte.ClassMethodDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_4) (snd happy_var_6))
+		 ((fst happy_var_1, Latte.Abs.ClassMethodDef (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_4) (snd happy_var_6))
 	) `HappyStk` happyRest}}}}
 
 happyReduce_17 = happySpecReduce_0  10# happyReduction_17
 happyReduction_17  =  happyIn14
-		 ((AbsLatte.BNFC'NoPosition, [])
+		 ((Latte.Abs.BNFC'NoPosition, [])
 	)
 
 happyReduce_18 = happySpecReduce_2  10# happyReduction_18
@@ -586,7 +586,7 @@ happyReduction_19 (happy_x_4 `HappyStk`
 	 = case happyOut19 happy_x_1 of { (HappyWrap19 happy_var_1) -> 
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	happyIn15
-		 ((fst happy_var_1, AbsLatte.ArrayElem (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.ArrayElem (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	) `HappyStk` happyRest}}
 
 happyReduce_20 = happySpecReduce_3  12# happyReduction_20
@@ -596,7 +596,7 @@ happyReduction_20 happy_x_3
 	 =  case happyOut19 happy_x_1 of { (HappyWrap19 happy_var_1) -> 
 	case happyOut4 happy_x_3 of { (HappyWrap4 happy_var_3) -> 
 	happyIn16
-		 ((fst happy_var_1, AbsLatte.ClassAttr (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.ClassAttr (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	)}}
 
 happyReduce_21 = happyReduce 6# 13# happyReduction_21
@@ -611,7 +611,7 @@ happyReduction_21 (happy_x_6 `HappyStk`
 	case happyOut4 happy_x_3 of { (HappyWrap4 happy_var_3) -> 
 	case happyOut34 happy_x_5 of { (HappyWrap34 happy_var_5) -> 
 	happyIn17
-		 ((fst happy_var_1, AbsLatte.MethodCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3) (snd happy_var_5))
+		 ((fst happy_var_1, Latte.Abs.MethodCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3) (snd happy_var_5))
 	) `HappyStk` happyRest}}}
 
 happyReduce_22 = happyReduce 4# 14# happyReduction_22
@@ -623,42 +623,42 @@ happyReduction_22 (happy_x_4 `HappyStk`
 	 = case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	case happyOut34 happy_x_3 of { (HappyWrap34 happy_var_3) -> 
 	happyIn18
-		 ((fst happy_var_1, AbsLatte.FunctionCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.FunctionCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	) `HappyStk` happyRest}}
 
 happyReduce_23 = happySpecReduce_1  15# happyReduction_23
 happyReduction_23 happy_x_1
 	 =  case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	happyIn19
-		 ((fst happy_var_1, AbsLatte.LIdent (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.LIdent (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_24 = happySpecReduce_1  15# happyReduction_24
 happyReduction_24 happy_x_1
 	 =  case happyOut15 happy_x_1 of { (HappyWrap15 happy_var_1) -> 
 	happyIn19
-		 ((fst happy_var_1, AbsLatte.LArrayElem (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.LArrayElem (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_25 = happySpecReduce_1  15# happyReduction_25
 happyReduction_25 happy_x_1
 	 =  case happyOut16 happy_x_1 of { (HappyWrap16 happy_var_1) -> 
 	happyIn19
-		 ((fst happy_var_1, AbsLatte.LClassAttr (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.LClassAttr (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_26 = happySpecReduce_1  15# happyReduction_26
 happyReduction_26 happy_x_1
 	 =  case happyOut17 happy_x_1 of { (HappyWrap17 happy_var_1) -> 
 	happyIn19
-		 ((fst happy_var_1, AbsLatte.LMethodCall (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.LMethodCall (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_27 = happySpecReduce_1  15# happyReduction_27
 happyReduction_27 happy_x_1
 	 =  case happyOut18 happy_x_1 of { (HappyWrap18 happy_var_1) -> 
 	happyIn19
-		 ((fst happy_var_1, AbsLatte.LFuntionCall (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.LFuntionCall (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_28 = happySpecReduce_3  16# happyReduction_28
@@ -668,12 +668,12 @@ happyReduction_28 happy_x_3
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut21 happy_x_2 of { (HappyWrap21 happy_var_2) -> 
 	happyIn20
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SBlock (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SBlock (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_29 = happySpecReduce_0  17# happyReduction_29
 happyReduction_29  =  happyIn21
-		 ((AbsLatte.BNFC'NoPosition, [])
+		 ((Latte.Abs.BNFC'NoPosition, [])
 	)
 
 happyReduce_30 = happySpecReduce_2  17# happyReduction_30
@@ -689,14 +689,14 @@ happyReduce_31 = happySpecReduce_1  18# happyReduction_31
 happyReduction_31 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SEmpty (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SEmpty (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_32 = happySpecReduce_1  18# happyReduction_32
 happyReduction_32 happy_x_1
 	 =  case happyOut20 happy_x_1 of { (HappyWrap20 happy_var_1) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SBStmt (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.SBStmt (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_33 = happySpecReduce_3  18# happyReduction_33
@@ -706,7 +706,7 @@ happyReduction_33 happy_x_3
 	 =  case happyOut25 happy_x_1 of { (HappyWrap25 happy_var_1) -> 
 	case happyOut24 happy_x_2 of { (HappyWrap24 happy_var_2) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SDecl (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
+		 ((fst happy_var_1, Latte.Abs.SDecl (fst happy_var_1) (snd happy_var_1) (snd happy_var_2))
 	)}}
 
 happyReduce_34 = happyReduce 4# 18# happyReduction_34
@@ -718,7 +718,7 @@ happyReduction_34 (happy_x_4 `HappyStk`
 	 = case happyOut19 happy_x_1 of { (HappyWrap19 happy_var_1) -> 
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SAss (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.SAss (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	) `HappyStk` happyRest}}
 
 happyReduce_35 = happySpecReduce_3  18# happyReduction_35
@@ -727,7 +727,7 @@ happyReduction_35 happy_x_3
 	happy_x_1
 	 =  case happyOut19 happy_x_1 of { (HappyWrap19 happy_var_1) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SIncr (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.SIncr (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_36 = happySpecReduce_3  18# happyReduction_36
@@ -736,7 +736,7 @@ happyReduction_36 happy_x_3
 	happy_x_1
 	 =  case happyOut19 happy_x_1 of { (HappyWrap19 happy_var_1) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SDecr (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.SDecr (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_37 = happySpecReduce_3  18# happyReduction_37
@@ -746,7 +746,7 @@ happyReduction_37 happy_x_3
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut33 happy_x_2 of { (HappyWrap33 happy_var_2) -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SRet (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SRet (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_38 = happySpecReduce_2  18# happyReduction_38
@@ -754,7 +754,7 @@ happyReduction_38 happy_x_2
 	happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SVRet (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SVRet (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_39 = happyReduce 5# 18# happyReduction_39
@@ -768,7 +768,7 @@ happyReduction_39 (happy_x_5 `HappyStk`
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	case happyOut22 happy_x_5 of { (HappyWrap22 happy_var_5) -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SCond (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SCond (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5))
 	) `HappyStk` happyRest}}}
 
 happyReduce_40 = happyReduce 7# 18# happyReduction_40
@@ -785,7 +785,7 @@ happyReduction_40 (happy_x_7 `HappyStk`
 	case happyOut22 happy_x_5 of { (HappyWrap22 happy_var_5) -> 
 	case happyOut22 happy_x_7 of { (HappyWrap22 happy_var_7) -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SCondElse (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5) (snd happy_var_7))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SCondElse (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5) (snd happy_var_7))
 	) `HappyStk` happyRest}}}}
 
 happyReduce_41 = happyReduce 5# 18# happyReduction_41
@@ -799,7 +799,7 @@ happyReduction_41 (happy_x_5 `HappyStk`
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	case happyOut22 happy_x_5 of { (HappyWrap22 happy_var_5) -> 
 	happyIn22
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.SWhile (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.SWhile (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_3) (snd happy_var_5))
 	) `HappyStk` happyRest}}}
 
 happyReduce_42 = happySpecReduce_2  18# happyReduction_42
@@ -807,14 +807,14 @@ happyReduction_42 happy_x_2
 	happy_x_1
 	 =  case happyOut33 happy_x_1 of { (HappyWrap33 happy_var_1) -> 
 	happyIn22
-		 ((fst happy_var_1, AbsLatte.SExp (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.SExp (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_43 = happySpecReduce_1  19# happyReduction_43
 happyReduction_43 happy_x_1
 	 =  case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	happyIn23
-		 ((fst happy_var_1, AbsLatte.SNoInit (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.SNoInit (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_44 = happySpecReduce_3  19# happyReduction_44
@@ -824,7 +824,7 @@ happyReduction_44 happy_x_3
 	 =  case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	happyIn23
-		 ((fst happy_var_1, AbsLatte.SInit (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.SInit (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	)}}
 
 happyReduce_45 = happySpecReduce_1  20# happyReduction_45
@@ -848,28 +848,28 @@ happyReduce_47 = happySpecReduce_1  21# happyReduction_47
 happyReduction_47 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn25
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.TInt (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.TInt (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_48 = happySpecReduce_1  21# happyReduction_48
 happyReduction_48 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn25
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.TStr (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.TStr (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_49 = happySpecReduce_1  21# happyReduction_49
 happyReduction_49 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn25
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.TBool (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.TBool (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_50 = happySpecReduce_1  21# happyReduction_50
 happyReduction_50 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn25
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.TVoid (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.TVoid (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_51 = happySpecReduce_2  21# happyReduction_51
@@ -877,19 +877,19 @@ happyReduction_51 happy_x_2
 	happy_x_1
 	 =  case happyOut25 happy_x_1 of { (HappyWrap25 happy_var_1) -> 
 	happyIn25
-		 ((fst happy_var_1, AbsLatte.TArray (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.TArray (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_52 = happySpecReduce_1  21# happyReduction_52
 happyReduction_52 happy_x_1
 	 =  case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	happyIn25
-		 ((fst happy_var_1, AbsLatte.TClass (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.TClass (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_53 = happySpecReduce_0  22# happyReduction_53
 happyReduction_53  =  happyIn26
-		 ((AbsLatte.BNFC'NoPosition, [])
+		 ((Latte.Abs.BNFC'NoPosition, [])
 	)
 
 happyReduce_54 = happySpecReduce_1  22# happyReduction_54
@@ -913,35 +913,35 @@ happyReduce_56 = happySpecReduce_1  23# happyReduction_56
 happyReduction_56 happy_x_1
 	 =  case happyOut4 happy_x_1 of { (HappyWrap4 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EVar (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EVar (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_57 = happySpecReduce_1  23# happyReduction_57
 happyReduction_57 happy_x_1
 	 =  case happyOut5 happy_x_1 of { (HappyWrap5 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.ELitInt (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.ELitInt (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_58 = happySpecReduce_1  23# happyReduction_58
 happyReduction_58 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn27
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ELitTrue (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ELitTrue (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_59 = happySpecReduce_1  23# happyReduction_59
 happyReduction_59 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn27
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ELitFalse (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ELitFalse (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_60 = happySpecReduce_1  23# happyReduction_60
 happyReduction_60 happy_x_1
 	 =  case happyOut6 happy_x_1 of { (HappyWrap6 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EString (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EString (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_61 = happySpecReduce_3  23# happyReduction_61
@@ -951,14 +951,14 @@ happyReduction_61 happy_x_3
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut25 happy_x_2 of { (HappyWrap25 happy_var_2) -> 
 	happyIn27
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ECastNull (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ECastNull (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_62 = happySpecReduce_1  23# happyReduction_62
 happyReduction_62 happy_x_1
 	 =  case happyOut15 happy_x_1 of { (HappyWrap15 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EArrayElem (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EArrayElem (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_63 = happySpecReduce_2  23# happyReduction_63
@@ -967,28 +967,28 @@ happyReduction_63 happy_x_2
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut4 happy_x_2 of { (HappyWrap4 happy_var_2) -> 
 	happyIn27
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.EClassNew (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.EClassNew (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_64 = happySpecReduce_1  23# happyReduction_64
 happyReduction_64 happy_x_1
 	 =  case happyOut16 happy_x_1 of { (HappyWrap16 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EClassAttr (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EClassAttr (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_65 = happySpecReduce_1  23# happyReduction_65
 happyReduction_65 happy_x_1
 	 =  case happyOut17 happy_x_1 of { (HappyWrap17 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EMethodCall (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EMethodCall (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_66 = happySpecReduce_1  23# happyReduction_66
 happyReduction_66 happy_x_1
 	 =  case happyOut18 happy_x_1 of { (HappyWrap18 happy_var_1) -> 
 	happyIn27
-		 ((fst happy_var_1, AbsLatte.EFuntionCall (fst happy_var_1) (snd happy_var_1))
+		 ((fst happy_var_1, Latte.Abs.EFuntionCall (fst happy_var_1) (snd happy_var_1))
 	)}
 
 happyReduce_67 = happySpecReduce_3  23# happyReduction_67
@@ -998,7 +998,7 @@ happyReduction_67 happy_x_3
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut33 happy_x_2 of { (HappyWrap33 happy_var_2) -> 
 	happyIn27
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), (snd happy_var_2))
 	)}}
 
 happyReduce_68 = happySpecReduce_2  24# happyReduction_68
@@ -1007,7 +1007,7 @@ happyReduction_68 happy_x_2
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut27 happy_x_2 of { (HappyWrap27 happy_var_2) -> 
 	happyIn28
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ENeg (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ENeg (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_69 = happySpecReduce_2  24# happyReduction_69
@@ -1016,7 +1016,7 @@ happyReduction_69 happy_x_2
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	case happyOut27 happy_x_2 of { (HappyWrap27 happy_var_2) -> 
 	happyIn28
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ENot (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ENot (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)) (snd happy_var_2))
 	)}}
 
 happyReduce_70 = happySpecReduce_1  24# happyReduction_70
@@ -1034,7 +1034,7 @@ happyReduction_71 happy_x_3
 	case happyOut36 happy_x_2 of { (HappyWrap36 happy_var_2) -> 
 	case happyOut28 happy_x_3 of { (HappyWrap28 happy_var_3) -> 
 	happyIn29
-		 ((fst happy_var_1, AbsLatte.EMul (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.EMul (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
 	)}}}
 
 happyReduce_72 = happySpecReduce_1  25# happyReduction_72
@@ -1052,7 +1052,7 @@ happyReduction_73 happy_x_3
 	case happyOut35 happy_x_2 of { (HappyWrap35 happy_var_2) -> 
 	case happyOut29 happy_x_3 of { (HappyWrap29 happy_var_3) -> 
 	happyIn30
-		 ((fst happy_var_1, AbsLatte.EAdd (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.EAdd (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
 	)}}}
 
 happyReduce_74 = happySpecReduce_1  26# happyReduction_74
@@ -1070,7 +1070,7 @@ happyReduction_75 happy_x_3
 	case happyOut37 happy_x_2 of { (HappyWrap37 happy_var_2) -> 
 	case happyOut30 happy_x_3 of { (HappyWrap30 happy_var_3) -> 
 	happyIn31
-		 ((fst happy_var_1, AbsLatte.ERel (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.ERel (fst happy_var_1) (snd happy_var_1) (snd happy_var_2) (snd happy_var_3))
 	)}}}
 
 happyReduce_76 = happySpecReduce_1  27# happyReduction_76
@@ -1087,7 +1087,7 @@ happyReduction_77 happy_x_3
 	 =  case happyOut31 happy_x_1 of { (HappyWrap31 happy_var_1) -> 
 	case happyOut32 happy_x_3 of { (HappyWrap32 happy_var_3) -> 
 	happyIn32
-		 ((fst happy_var_1, AbsLatte.EAnd (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.EAnd (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	)}}
 
 happyReduce_78 = happySpecReduce_1  28# happyReduction_78
@@ -1104,7 +1104,7 @@ happyReduction_79 happy_x_3
 	 =  case happyOut32 happy_x_1 of { (HappyWrap32 happy_var_1) -> 
 	case happyOut33 happy_x_3 of { (HappyWrap33 happy_var_3) -> 
 	happyIn33
-		 ((fst happy_var_1, AbsLatte.EOr (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.EOr (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	)}}
 
 happyReduce_80 = happySpecReduce_1  29# happyReduction_80
@@ -1116,7 +1116,7 @@ happyReduction_80 happy_x_1
 
 happyReduce_81 = happySpecReduce_0  30# happyReduction_81
 happyReduction_81  =  happyIn34
-		 ((AbsLatte.BNFC'NoPosition, [])
+		 ((Latte.Abs.BNFC'NoPosition, [])
 	)
 
 happyReduce_82 = happySpecReduce_1  30# happyReduction_82
@@ -1140,77 +1140,77 @@ happyReduce_84 = happySpecReduce_1  31# happyReduction_84
 happyReduction_84 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn35
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OPlus (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OPlus (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_85 = happySpecReduce_1  31# happyReduction_85
 happyReduction_85 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn35
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OMinus (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OMinus (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_86 = happySpecReduce_1  32# happyReduction_86
 happyReduction_86 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn36
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OTimes (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OTimes (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_87 = happySpecReduce_1  32# happyReduction_87
 happyReduction_87 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn36
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ODiv (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ODiv (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_88 = happySpecReduce_1  32# happyReduction_88
 happyReduction_88 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn36
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OMod (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OMod (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_89 = happySpecReduce_1  33# happyReduction_89
 happyReduction_89 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OLTH (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OLTH (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_90 = happySpecReduce_1  33# happyReduction_90
 happyReduction_90 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OLE (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OLE (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_91 = happySpecReduce_1  33# happyReduction_91
 happyReduction_91 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OGTH (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OGTH (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_92 = happySpecReduce_1  33# happyReduction_92
 happyReduction_92 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OGE (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OGE (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_93 = happySpecReduce_1  33# happyReduction_93
 happyReduction_93 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.OEQU (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.OEQU (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyReduce_94 = happySpecReduce_1  33# happyReduction_94
 happyReduction_94 happy_x_1
 	 =  case happyOutTok happy_x_1 of { happy_var_1 -> 
 	happyIn37
-		 ((uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1), AbsLatte.ONE (uncurry AbsLatte.BNFC'Position (tokenLineCol happy_var_1)))
+		 ((uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1), Latte.Abs.ONE (uncurry Latte.Abs.BNFC'Position (tokenLineCol happy_var_1)))
 	)}
 
 happyNewToken action sts stk [] =
@@ -1299,7 +1299,7 @@ myLexer = tokens
 
 -- Entrypoints
 
-pProgram :: [Token] -> Err AbsLatte.Program
+pProgram :: [Token] -> Err Latte.Abs.Program
 pProgram = fmap snd . pProgram_internal
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 -- $Id: GenericTemplate.hs,v 1.26 2005/01/14 14:47:22 simonmar Exp $

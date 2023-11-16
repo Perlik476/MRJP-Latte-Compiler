@@ -1,13 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-unused-binds -fno-warn-missing-signatures #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
-{-# LINE 4 "LexLatte.x" #-}
+{-# LINE 4 "Latte/Lex.x" #-}
 {-# OPTIONS -fno-warn-incomplete-patterns #-}
 {-# OPTIONS_GHC -w #-}
 
 {-# LANGUAGE PatternSynonyms #-}
 
-module LexLatte where
+module Latte.Lex where
 
 import Prelude
 
@@ -126,7 +126,7 @@ alex_actions = array (0 :: Int, 10)
   , (0,alex_action_4)
   ]
 
-{-# LINE 63 "LexLatte.x" #-}
+{-# LINE 63 "Latte/Lex.x" #-}
 -- | Create a token with position.
 tok :: (String -> Tok) -> (Posn -> String -> Token)
 tok f p = PT p . f

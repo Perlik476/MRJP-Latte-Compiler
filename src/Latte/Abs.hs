@@ -8,7 +8,7 @@
 
 -- | The abstract syntax of language Latte.
 
-module AbsLatte where
+module Latte.Abs where
 
 import Prelude (Integer, String)
 import qualified Prelude as C

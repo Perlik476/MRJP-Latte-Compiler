@@ -1,4 +1,5 @@
-lattests
+tests/lattests
+TestLatte
 *.hi
 *.o
 *.log
