@@ -258,6 +258,7 @@ instance Print (Latte.Abs.Expr' a) where
     Latte.Abs.ELitFalse _ -> prPrec i 6 (concatD [doc (showString "false")])
     Latte.Abs.EString _ str -> prPrec i 6 (concatD [printString str])
     Latte.Abs.ECastNull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")null")])
+    Latte.Abs.EArrayNew _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     Latte.Abs.EArrayElem _ arrayelem -> prPrec i 6 (concatD [prt 0 arrayelem])
     Latte.Abs.EClassNew _ id_ -> prPrec i 6 (concatD [doc (showString "new"), prt 0 id_])
     Latte.Abs.EClassAttr _ classattr -> prPrec i 6 (concatD [prt 0 classattr])

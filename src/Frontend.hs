@@ -15,7 +15,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup)
+import Data.Map (Map, empty, fromList, union, member, lookup, insert)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -127,6 +127,12 @@ checkTopDef (PFunDef _ t ident args block) = do
   let envFun = \(venv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, cenv)
   local envFun (checkBlock block t)
   return Nothing
+checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
+  -- TODO
+  return Nothing
+checkTopDef (PClassDefExt _ ident ident' (ClassDef _ elems)) = do
+  -- TODO
+  return Nothing
 
 checkBlock :: Block -> Type -> FMonad
 checkBlock (SBlock _ stmts) t = do
@@ -141,10 +147,14 @@ checkBlock (SBlock _ stmts) t = do
 checkStmt :: Stmt -> Type -> FMonad
 checkStmt (SEmpty _) _ = return Nothing
 checkStmt (SBStmt _ block) t = checkBlock block t
-checkStmt (SDecl _ t items) _ = do
-  let idents = map (\decl -> case decl of {SNoInit _ ident -> ident; SInit _ ident _ -> ident}) items
-  mapM_ (`tryInsertToVEnv` t) idents
+checkStmt (SDecl _ t (item:items)) _ = do
+  tryInsertToVEnv ident t
+  local (insertToEnv ident t) (checkStmt (SDecl (hasPosition item) t items) t)
   return Nothing
+  where
+    ident = getIdent item
+    getIdent (SNoInit _ ident) = ident
+    getIdent (SInit _ ident _) = ident
 checkStmt (SAss _ lvalue expr) _ = do
   t <- checkLvalue lvalue
   t' <- checkExpr expr
@@ -165,6 +175,46 @@ checkStmt (SRet _ expr) t = do
 checkStmt (SVRet _) t = do
   unless (sameType t (TVoid 0)) $ throwError "Wrong type"
   return $ Just t
+checkStmt (SCond _ expr stmt) t = do
+  t' <- checkExpr expr
+  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+  checkStmt stmt t
+  -- TODO evaluate expr when possible
+  return Nothing
+checkStmt (SCondElse _ expr stmt1 stmt2) t = do
+  t' <- checkExpr expr
+  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+  checkStmt stmt1 t
+  checkStmt stmt2 t
+  -- TODO evaluate expr when possible
+  return Nothing
+checkStmt (SWhile _ expr stmt) t = do
+  t' <- checkExpr expr
+  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+  checkStmt stmt t
+  -- TODO evaluate expr when possible
+  return Nothing
+checkStmt (SFor _ t' ident expr stmt) t = do
+  t'' <- checkExpr expr
+  unless (sameType t'' (TArray 0 t')) $ throwError "Wrong type"
+  tryInsertToVEnv ident t'
+  local (insertToEnv ident t') (checkStmt stmt t)
+  return Nothing
+checkStmt (SExp _ expr) _ = do
+  checkExpr expr
+  return Nothing
+
+checkExpr :: Expr -> FMonad
+checkExpr (EVar _ ident) = do
+  (venv, cenv) <- ask
+  case Data.Map.lookup ident venv of
+    Just t -> return $ Just t
+    Nothing -> throwError "Unknown ident"
+checkExpr (ELitInt pos _) = return $ Just $ TInt pos
+checkExpr (ELitTrue pos) = return $ Just $ TBool pos
+checkExpr (ELitFalse pos) = return $ Just $ TBool pos
+checkExpr (EString pos _) = return $ Just $ TStr pos
+checkExpr 
 
 
 tryInsertToVEnv :: Ident -> Type -> FMonad
@@ -176,6 +226,10 @@ tryInsertToVEnv ident t = do
   let Just t' = Data.Map.lookup ident venv
   unless (sameType t t') $ throwError "Wrong type"
   return Nothing
+
+insertToEnv :: Ident -> Type -> Env -> Env
+insertToEnv ident t (venv, cenv) = (Data.Map.insert ident t venv, cenv)
+
 
 sameType :: Type -> Type -> Bool
 sameType (TInt _) (TInt _) = True

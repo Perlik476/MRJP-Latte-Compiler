@@ -118,6 +118,8 @@ EString.      Expr6 ::= String ;
 
 ECastNull.    Expr6 ::= "(" Type ")null" ;
 
+EArrayNew.    Expr6 ::= "new" Type "[" Expr "]" ;
+
 EArrayElem.   Expr6 ::= ArrayElem ;
 
 EClassNew.    Expr6 ::= "new" Ident ;

@@ -112,6 +112,7 @@ data Expr' a
     | ELitFalse a
     | EString a String
     | ECastNull a (Type' a)
+    | EArrayNew a (Type' a) (Expr' a)
     | EArrayElem a (ArrayElem' a)
     | EClassNew a Ident
     | EClassAttr a (ClassAttr' a)
@@ -246,6 +247,7 @@ instance HasPosition Expr where
     ELitFalse p -> p
     EString p _ -> p
     ECastNull p _ -> p
+    EArrayNew p _ _ -> p
     EArrayElem p _ -> p
     EClassNew p _ -> p
     EClassAttr p _ -> p
