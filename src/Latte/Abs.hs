@@ -85,6 +85,7 @@ data Stmt' a
     | SCond a (Expr' a) (Stmt' a)
     | SCondElse a (Expr' a) (Stmt' a) (Stmt' a)
     | SWhile a (Expr' a) (Stmt' a)
+    | SFor a (Type' a) Ident Ident (Stmt' a)
     | SExp a (Expr' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
@@ -219,6 +220,7 @@ instance HasPosition Stmt where
     SCond p _ _ -> p
     SCondElse p _ _ _ -> p
     SWhile p _ _ -> p
+    SFor p _ _ _ _ -> p
     SExp p _ -> p
 
 instance HasPosition Item where
