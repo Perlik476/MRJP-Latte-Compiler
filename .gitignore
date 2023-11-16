@@ -1,5 +1,6 @@
 tests/lattests
-TestLatte
+Test
+Frontend
 *.hi
 *.o
 *.log

@@ -14,11 +14,11 @@ ALEX_OPTS  = --ghc
 
 # Default goal.
 
-all : Latte/Test
+all : Latte/Test Frontend
 
 # Rules for building the parser.
 
-Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs : Latte.cf
+Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs Frontend.hs : Latte.cf
 	bnfc --haskell -d --functor Latte.cf
 
 %.hs : %.y
@@ -29,12 +29,18 @@ Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs : Latte.cf
 
 Latte/Test : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Latte/Test.hs
 	${GHC} ${GHC_OPTS} $@
-	mv Latte/Test ../..
+	mv Latte/Test ..
+
+Frontend : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Frontend.hs
+	${GHC} ${GHC_OPTS} $@
+	mv Frontend ..
 
 # Rules for cleaning generated files.
 
 clean :
 	-rm -f Latte/*.hi Latte/*.o Latte/*.log Latte/*.aux Latte/*.dvi Latte/*.info Latte/*.x Latte/*.y Latte/*.bak Latte/*.txt
+	-rm -f *.hi *.o *.log *.aux *.dvi *.info *.x *.y *.bak *.txt
+	rm -f ../Latte/Test ../Frontend
 
 distclean : clean
 	-rm -f Latte/Abs.hs Latte/Abs.hs.bak Latte/ComposOp.hs Latte/ComposOp.hs.bak Latte/Doc.txt Latte/Doc.txt.bak Latte/ErrM.hs Latte/ErrM.hs.bak Latte/Layout.hs Latte/Layout.hs.bak Latte/Lex.x Latte/Lex.x.bak Latte/Par.y Latte/Par.y.bak Latte/Print.hs Latte/Print.hs.bak Latte/Skel.hs Latte/Skel.hs.bak Latte/Test.hs Latte/Test.hs.bak Latte/XML.hs Latte/XML.hs.bak Latte/AST.agda Latte/AST.agda.bak Latte/Parser.agda Latte/Parser.agda.bak Latte/IOLib.agda Latte/IOLib.agda.bak Latte/Main.agda Latte/Main.agda.bak Latte/Latte.dtd Latte/Latte.dtd.bak Latte/Test Latte/Lex.hs Latte/Par.hs Latte/Par.info Latte/ParData.hs Makefile
