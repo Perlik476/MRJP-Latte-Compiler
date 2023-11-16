@@ -21,47 +21,73 @@ transIdent x = case x of
 
 transProgram :: Show a => AbsLatte.Program' a -> Result
 transProgram x = case x of
-  AbsLatte.Program _ topdefs -> failure x
+  AbsLatte.PProgram _ topdefs -> failure x
 
 transTopDef :: Show a => AbsLatte.TopDef' a -> Result
 transTopDef x = case x of
-  AbsLatte.FnDef _ type_ ident args block -> failure x
+  AbsLatte.PFunDef _ type_ ident args block -> failure x
 
 transArg :: Show a => AbsLatte.Arg' a -> Result
 transArg x = case x of
-  AbsLatte.Arg _ type_ ident -> failure x
+  AbsLatte.PArg _ type_ ident -> failure x
+
+transArrayElem :: Show a => AbsLatte.ArrayElem' a -> Result
+transArrayElem x = case x of
+  AbsLatte.ArrayElem _ lvalue expr -> failure x
+
+transClassAttr :: Show a => AbsLatte.ClassAttr' a -> Result
+transClassAttr x = case x of
+  AbsLatte.ClassAttr _ lvalue ident -> failure x
+
+transMethodCall :: Show a => AbsLatte.MethodCall' a -> Result
+transMethodCall x = case x of
+  AbsLatte.MethodCall _ lvalue ident exprs -> failure x
+
+transFunctionCall :: Show a => AbsLatte.FunctionCall' a -> Result
+transFunctionCall x = case x of
+  AbsLatte.FunctionCall _ ident exprs -> failure x
+
+transLvalue :: Show a => AbsLatte.Lvalue' a -> Result
+transLvalue x = case x of
+  AbsLatte.LIdent _ ident -> failure x
+  AbsLatte.LArrayElem _ arrayelem -> failure x
+  AbsLatte.LClassAttr _ classattr -> failure x
+  AbsLatte.LMethodCall _ methodcall -> failure x
+  AbsLatte.LFuntionCall _ functioncall -> failure x
 
 transBlock :: Show a => AbsLatte.Block' a -> Result
 transBlock x = case x of
-  AbsLatte.Block _ stmts -> failure x
+  AbsLatte.SBlock _ stmts -> failure x
 
 transStmt :: Show a => AbsLatte.Stmt' a -> Result
 transStmt x = case x of
-  AbsLatte.Empty _ -> failure x
-  AbsLatte.BStmt _ block -> failure x
-  AbsLatte.Decl _ type_ items -> failure x
-  AbsLatte.Ass _ ident expr -> failure x
-  AbsLatte.Incr _ ident -> failure x
-  AbsLatte.Decr _ ident -> failure x
-  AbsLatte.Ret _ expr -> failure x
-  AbsLatte.VRet _ -> failure x
-  AbsLatte.Cond _ expr stmt -> failure x
-  AbsLatte.CondElse _ expr stmt1 stmt2 -> failure x
-  AbsLatte.While _ expr stmt -> failure x
+  AbsLatte.SEmpty _ -> failure x
+  AbsLatte.SBStmt _ block -> failure x
+  AbsLatte.SDecl _ type_ items -> failure x
+  AbsLatte.SAss _ lvalue expr -> failure x
+  AbsLatte.SIncr _ lvalue -> failure x
+  AbsLatte.SDecr _ lvalue -> failure x
+  AbsLatte.SRet _ expr -> failure x
+  AbsLatte.SVRet _ -> failure x
+  AbsLatte.SCond _ expr stmt -> failure x
+  AbsLatte.SCondElse _ expr stmt1 stmt2 -> failure x
+  AbsLatte.SWhile _ expr stmt -> failure x
   AbsLatte.SExp _ expr -> failure x
 
 transItem :: Show a => AbsLatte.Item' a -> Result
 transItem x = case x of
-  AbsLatte.NoInit _ ident -> failure x
-  AbsLatte.Init _ ident expr -> failure x
+  AbsLatte.SNoInit _ ident -> failure x
+  AbsLatte.SInit _ ident expr -> failure x
 
 transType :: Show a => AbsLatte.Type' a -> Result
 transType x = case x of
-  AbsLatte.Int _ -> failure x
-  AbsLatte.Str _ -> failure x
-  AbsLatte.Bool _ -> failure x
-  AbsLatte.Void _ -> failure x
-  AbsLatte.Fun _ type_ types -> failure x
+  AbsLatte.TInt _ -> failure x
+  AbsLatte.TStr _ -> failure x
+  AbsLatte.TBool _ -> failure x
+  AbsLatte.TVoid _ -> failure x
+  AbsLatte.TArray _ type_ -> failure x
+  AbsLatte.TClass _ ident -> failure x
+  AbsLatte.TFun _ type_ types -> failure x
 
 transExpr :: Show a => AbsLatte.Expr' a -> Result
 transExpr x = case x of
@@ -69,10 +95,15 @@ transExpr x = case x of
   AbsLatte.ELitInt _ integer -> failure x
   AbsLatte.ELitTrue _ -> failure x
   AbsLatte.ELitFalse _ -> failure x
-  AbsLatte.EApp _ ident exprs -> failure x
   AbsLatte.EString _ string -> failure x
-  AbsLatte.Neg _ expr -> failure x
-  AbsLatte.Not _ expr -> failure x
+  AbsLatte.ECastNull _ type_ -> failure x
+  AbsLatte.EArrayElem _ arrayelem -> failure x
+  AbsLatte.EClassNew _ ident -> failure x
+  AbsLatte.EClassAttr _ classattr -> failure x
+  AbsLatte.EMethodCall _ methodcall -> failure x
+  AbsLatte.EFuntionCall _ functioncall -> failure x
+  AbsLatte.ENeg _ expr -> failure x
+  AbsLatte.ENot _ expr -> failure x
   AbsLatte.EMul _ expr1 mulop expr2 -> failure x
   AbsLatte.EAdd _ expr1 addop expr2 -> failure x
   AbsLatte.ERel _ expr1 relop expr2 -> failure x
@@ -81,20 +112,20 @@ transExpr x = case x of
 
 transAddOp :: Show a => AbsLatte.AddOp' a -> Result
 transAddOp x = case x of
-  AbsLatte.Plus _ -> failure x
-  AbsLatte.Minus _ -> failure x
+  AbsLatte.OPlus _ -> failure x
+  AbsLatte.OMinus _ -> failure x
 
 transMulOp :: Show a => AbsLatte.MulOp' a -> Result
 transMulOp x = case x of
-  AbsLatte.Times _ -> failure x
-  AbsLatte.Div _ -> failure x
-  AbsLatte.Mod _ -> failure x
+  AbsLatte.OTimes _ -> failure x
+  AbsLatte.ODiv _ -> failure x
+  AbsLatte.OMod _ -> failure x
 
 transRelOp :: Show a => AbsLatte.RelOp' a -> Result
 transRelOp x = case x of
-  AbsLatte.LTH _ -> failure x
-  AbsLatte.LE _ -> failure x
-  AbsLatte.GTH _ -> failure x
-  AbsLatte.GE _ -> failure x
-  AbsLatte.EQU _ -> failure x
-  AbsLatte.NE _ -> failure x
+  AbsLatte.OLTH _ -> failure x
+  AbsLatte.OLE _ -> failure x
+  AbsLatte.OGTH _ -> failure x
+  AbsLatte.OGE _ -> failure x
+  AbsLatte.OEQU _ -> failure x
+  AbsLatte.ONE _ -> failure x
