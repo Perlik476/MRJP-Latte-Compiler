@@ -4,7 +4,13 @@ entrypoints Program ;
 
 PProgram.   Program ::= [TopDef] ;
 
-PFunDef.    TopDef ::= Type Ident "(" [Arg] ")" Block ;
+-- definitions ---------------------------------------------
+
+PFunDef.      TopDef ::= Type Ident "(" [Arg] ")" Block ;
+
+PClassDef.    TopDef ::= "class" Ident ClassDef ;
+
+PClassDefExt. TopDef ::= "class" Ident "extends" Ident ClassDef ;
 
 separator nonempty TopDef "" ;
 
@@ -12,7 +18,15 @@ PArg.      Arg ::= Type Ident;
 
 separator  Arg "," ;
 
--- arrays, classes, function calls -------------------------
+ClassDef.       ClassDef ::= "{" [ClassElem] "}" ;
+
+ClassAttrDef.   ClassElem ::= Type Ident ";" ;
+
+ClassMethodDef. ClassElem ::= Type Ident "(" [Arg] ")" Block ;
+
+separator       ClassElem "" ;
+
+-- lvalue expressions --------------------------------------
 
 ArrayElem.     ArrayElem ::= Lvalue "[" Expr "]" ;
 

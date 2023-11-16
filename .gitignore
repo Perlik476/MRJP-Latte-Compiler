@@ -1,1 +1,11 @@
 lattests
+*.hi
+*.o
+*.log
+*.aux
+*.dvi
+*.bak
+*.info
+*.x
+*.y
+*.txt

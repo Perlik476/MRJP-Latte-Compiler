@@ -23,11 +23,24 @@ data Program' a = PProgram a [TopDef' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type TopDef = TopDef' BNFC'Position
-data TopDef' a = PFunDef a (Type' a) Ident [Arg' a] (Block' a)
+data TopDef' a
+    = PFunDef a (Type' a) Ident [Arg' a] (Block' a)
+    | PClassDef a Ident (ClassDef' a)
+    | PClassDefExt a Ident Ident (ClassDef' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Arg = Arg' BNFC'Position
 data Arg' a = PArg a (Type' a) Ident
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
+type ClassDef = ClassDef' BNFC'Position
+data ClassDef' a = ClassDef a [ClassElem' a]
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
+type ClassElem = ClassElem' BNFC'Position
+data ClassElem' a
+    = ClassAttrDef a (Type' a) Ident
+    | ClassMethodDef a (Type' a) Ident [Arg' a] (Block' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type ArrayElem = ArrayElem' BNFC'Position
@@ -149,10 +162,21 @@ instance HasPosition Program where
 instance HasPosition TopDef where
   hasPosition = \case
     PFunDef p _ _ _ _ -> p
+    PClassDef p _ _ -> p
+    PClassDefExt p _ _ _ -> p
 
 instance HasPosition Arg where
   hasPosition = \case
     PArg p _ _ -> p
+
+instance HasPosition ClassDef where
+  hasPosition = \case
+    ClassDef p _ -> p
+
+instance HasPosition ClassElem where
+  hasPosition = \case
+    ClassAttrDef p _ _ -> p
+    ClassMethodDef p _ _ _ _ -> p
 
 instance HasPosition ArrayElem where
   hasPosition = \case

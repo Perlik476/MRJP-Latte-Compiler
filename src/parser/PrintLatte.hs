@@ -147,6 +147,8 @@ instance Print (AbsLatte.Program' a) where
 instance Print (AbsLatte.TopDef' a) where
   prt i = \case
     AbsLatte.PFunDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+    AbsLatte.PClassDef _ id_ classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_, prt 0 classdef])
+    AbsLatte.PClassDefExt _ id_1 id_2 classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_1, doc (showString "extends"), prt 0 id_2, prt 0 classdef])
 
 instance Print [AbsLatte.TopDef' a] where
   prt _ [] = concatD []
@@ -161,6 +163,19 @@ instance Print [AbsLatte.Arg' a] where
   prt _ [] = concatD []
   prt _ [x] = concatD [prt 0 x]
   prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
+
+instance Print (AbsLatte.ClassDef' a) where
+  prt i = \case
+    AbsLatte.ClassDef _ classelems -> prPrec i 0 (concatD [doc (showString "{"), prt 0 classelems, doc (showString "}")])
+
+instance Print (AbsLatte.ClassElem' a) where
+  prt i = \case
+    AbsLatte.ClassAttrDef _ type_ id_ -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString ";")])
+    AbsLatte.ClassMethodDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+
+instance Print [AbsLatte.ClassElem' a] where
+  prt _ [] = concatD []
+  prt _ (x:xs) = concatD [prt 0 x, prt 0 xs]
 
 instance Print (AbsLatte.ArrayElem' a) where
   prt i = \case
