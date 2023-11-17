@@ -32,14 +32,19 @@ runFile v p f = putStrLn f >> readFile f >>= run v p
 run v p s =
   case p ts of
     Left err -> do
-      putStrLn "\nParse              Failed...\n"
+      putStrLn "\nParse Failed.\n"
       putStrV v "Tokens:"
       mapM_ (putStrV v . showPosToken . mkPosToken) ts
       putStrLn err
       exitFailure
     Right tree -> do
-      runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty)
-      putStrLn "\nParse Successful!"
+      val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty)
+      case val of
+        Right _ -> putStrLn "\nParse Successful."
+        Left err -> do
+          putStrLn "\nParse Failed.\n"
+          putStrLn err
+          exitFailure
   where
   ts = myLexer s
   showPosToken ((l,c),t) = concat [ show l, ":", show c, "\t", show t ]
@@ -283,7 +288,7 @@ checkExpr (EOr pos expr1 expr2) = do
 
 
 checkLvalue :: Lvalue -> FMonad
-checkLvalue (LIdent _ ident) = do
+checkLvalue (LVar _ ident) = do
   (venv, cenv) <- ask
   case Data.Map.lookup ident venv of
     Just t -> return $ Just t
@@ -304,7 +309,6 @@ checkLvalue (LFuntionCall _ (FunctionCall _ ident exprs)) = do
 checkLvalue (LMethodCall _ (MethodCall _ lvalue ident exprs)) = do
   -- TODO
   return Nothing
-
 
 
 tryInsertToVEnv :: Ident -> Type -> FMonad

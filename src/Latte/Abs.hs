@@ -61,7 +61,7 @@ data FunctionCall' a = FunctionCall a Ident [Expr' a]
 
 type Lvalue = Lvalue' BNFC'Position
 data Lvalue' a
-    = LIdent a Ident
+    = LVar a Ident
     | LArrayElem a (ArrayElem' a)
     | LClassAttr a (ClassAttr' a)
     | LMethodCall a (MethodCall' a)
@@ -198,7 +198,7 @@ instance HasPosition FunctionCall where
 
 instance HasPosition Lvalue where
   hasPosition = \case
-    LIdent p _ -> p
+    LVar p _ -> p
     LArrayElem p _ -> p
     LClassAttr p _ -> p
     LMethodCall p _ -> p

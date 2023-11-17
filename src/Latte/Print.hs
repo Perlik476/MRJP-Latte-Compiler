@@ -195,7 +195,7 @@ instance Print (Latte.Abs.FunctionCall' a) where
 
 instance Print (Latte.Abs.Lvalue' a) where
   prt i = \case
-    Latte.Abs.LIdent _ id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Latte.Abs.LVar _ id_ -> prPrec i 0 (concatD [prt 0 id_])
     Latte.Abs.LArrayElem _ arrayelem -> prPrec i 0 (concatD [prt 0 arrayelem])
     Latte.Abs.LClassAttr _ classattr -> prPrec i 0 (concatD [prt 0 classattr])
     Latte.Abs.LMethodCall _ methodcall -> prPrec i 0 (concatD [prt 0 methodcall])
@@ -222,7 +222,7 @@ instance Print (Latte.Abs.Stmt' a) where
     Latte.Abs.SCond _ expr stmt -> prPrec i 0 (concatD [doc (showString "if"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt])
     Latte.Abs.SCondElse _ expr stmt1 stmt2 -> prPrec i 0 (concatD [doc (showString "if"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt1, doc (showString "else"), prt 0 stmt2])
     Latte.Abs.SWhile _ expr stmt -> prPrec i 0 (concatD [doc (showString "while"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt])
-    Latte.Abs.SFor _ type_ id_1 id_2 stmt -> prPrec i 0 (concatD [doc (showString "for"), doc (showString "("), prt 0 type_, prt 0 id_1, doc (showString ":"), prt 0 id_2, doc (showString ")"), prt 0 stmt])
+    Latte.Abs.SFor _ type_ id_ lvalue stmt -> prPrec i 0 (concatD [doc (showString "for"), doc (showString "("), prt 0 type_, prt 0 id_, doc (showString ":"), prt 0 lvalue, doc (showString ")"), prt 0 stmt])
     Latte.Abs.SExp _ expr -> prPrec i 0 (concatD [prt 0 expr, doc (showString ";")])
 
 instance Print (Latte.Abs.Item' a) where

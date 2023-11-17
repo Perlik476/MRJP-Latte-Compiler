@@ -38,7 +38,7 @@ FunctionCall.  FunctionCall ::= Ident "(" [Expr] ")" ;
 
 -- lvalues -------------------------------------------------
 
-LIdent.        Lvalue ::= Ident ;
+LVar.        Lvalue ::= Ident ;
 
 LArrayElem.    Lvalue ::= ArrayElem ;
 
@@ -82,7 +82,7 @@ SCondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 SWhile.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-SFor.       Stmt ::= "for" "(" Type Ident ":" Ident ")" Stmt ;
+SFor.       Stmt ::= "for" "(" Type Ident ":" Lvalue ")" Stmt ;
 
 SExp.       Stmt ::= Expr  ";" ;
 

@@ -60,7 +60,7 @@ transFunctionCall x = case x of
 
 transLvalue :: Show a => Latte.Abs.Lvalue' a -> Result
 transLvalue x = case x of
-  Latte.Abs.LIdent _ ident -> failure x
+  Latte.Abs.LVar _ ident -> failure x
   Latte.Abs.LArrayElem _ arrayelem -> failure x
   Latte.Abs.LClassAttr _ classattr -> failure x
   Latte.Abs.LMethodCall _ methodcall -> failure x
@@ -83,7 +83,7 @@ transStmt x = case x of
   Latte.Abs.SCond _ expr stmt -> failure x
   Latte.Abs.SCondElse _ expr stmt1 stmt2 -> failure x
   Latte.Abs.SWhile _ expr stmt -> failure x
-  Latte.Abs.SFor _ type_ ident1 ident2 stmt -> failure x
+  Latte.Abs.SFor _ type_ ident lvalue stmt -> failure x
   Latte.Abs.SExp _ expr -> failure x
 
 transItem :: Show a => Latte.Abs.Item' a -> Result
