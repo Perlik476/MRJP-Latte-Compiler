@@ -85,7 +85,7 @@ data Stmt' a
     | SCond a (Expr' a) (Stmt' a)
     | SCondElse a (Expr' a) (Stmt' a) (Stmt' a)
     | SWhile a (Expr' a) (Stmt' a)
-    | SFor a (Type' a) Ident Ident (Stmt' a)
+    | SFor a (Type' a) Ident (Lvalue' a) (Stmt' a)
     | SExp a (Expr' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 

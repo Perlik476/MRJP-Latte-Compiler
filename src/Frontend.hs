@@ -157,47 +157,47 @@ checkStmt (SDecl _ t (item:items)) _ = do
     getIdent (SInit _ ident _) = ident
 checkStmt (SDecl _ t []) _ = return Nothing
 checkStmt (SAss _ lvalue expr) _ = do
-  t <- checkLvalue lvalue
-  t' <- checkExpr expr
+  Just t <- checkLvalue lvalue
+  Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
   return Nothing
-checkStmt (SIncr _ lvalue) _ = do
-  t <- checkLvalue lvalue
-  unless (sameType t (TInt 0)) $ throwError "Wrong type"
+checkStmt (SIncr pos lvalue) _ = do
+  Just t <- checkLvalue lvalue
+  unless (sameType t (TInt pos)) $ throwError "Wrong type"
   return Nothing
-checkStmt (SDecr _ lvalue) _ = do
-  t <- checkLvalue lvalue
-  unless (sameType t (TInt 0)) $ throwError "Wrong type"
+checkStmt (SDecr pos lvalue) _ = do
+  Just t <- checkLvalue lvalue
+  unless (sameType t (TInt pos)) $ throwError "Wrong type"
   return Nothing
 checkStmt (SRet _ expr) t = do
-  t' <- checkExpr expr
+  Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
   return $ Just t
-checkStmt (SVRet _) t = do
-  unless (sameType t (TVoid 0)) $ throwError "Wrong type"
+checkStmt (SVRet pos) t = do
+  unless (sameType t (TVoid pos)) $ throwError "Wrong type"
   return $ Just t
-checkStmt (SCond _ expr stmt) t = do
-  t' <- checkExpr expr
-  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+checkStmt (SCond pos expr stmt) t = do
+  Just t' <- checkExpr expr
+  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   checkStmt stmt t
   -- TODO evaluate expr when possible
   return Nothing
-checkStmt (SCondElse _ expr stmt1 stmt2) t = do
-  t' <- checkExpr expr
-  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+checkStmt (SCondElse pos expr stmt1 stmt2) t = do
+  Just t' <- checkExpr expr
+  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   checkStmt stmt1 t
   checkStmt stmt2 t
   -- TODO evaluate expr when possible
   return Nothing
-checkStmt (SWhile _ expr stmt) t = do
-  t' <- checkExpr expr
-  unless (sameType t' (TBool 0)) $ throwError "Wrong type"
+checkStmt (SWhile pos expr stmt) t = do
+  Just t' <- checkExpr expr
+  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   checkStmt stmt t
   -- TODO evaluate expr when possible
   return Nothing
-checkStmt (SFor _ t' ident expr stmt) t = do
-  t'' <- checkExpr expr
-  unless (sameType t'' (TArray 0 t')) $ throwError "Wrong type"
+checkStmt (SFor pos t' ident lvalue stmt) t = do
+  Just t'' <- checkLvalue lvalue
+  unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
   tryInsertToVEnv ident t'
   local (insertToEnv ident t') (checkStmt stmt t)
   return Nothing
@@ -226,12 +226,12 @@ checkExpr (ECastNull pos t) = do
     _ -> throwError "Wrong type"
 checkExpr (EArrayNew pos t expr) = do
   Just t' <- checkExpr expr  -- TODO check if expr is not nothing
-  unless (sameType t' (TInt 0)) $ throwError "Wrong type"
+  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   return $ Just $ TArray pos t
 checkExpr (EArrayElem pos (ArrayElem _ lvalue expr)) = do
   Just t <- checkLvalue lvalue
   Just t' <- checkExpr expr
-  unless (sameType t' (TInt 0)) $ throwError "Wrong type"
+  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   case t of
     TArray _ t'' -> return $ Just t''
     _ -> throwError "Wrong type"
@@ -249,21 +249,21 @@ checkExpr (EFuntionCall pos (FunctionCall _ ident exprs)) = do
   return Nothing
 checkExpr (ENeg pos expr) = do
   Just t <- checkExpr expr
-  unless (sameType t (TInt 0)) $ throwError "Wrong type"
+  unless (sameType t (TInt pos)) $ throwError "Wrong type"
   return $ Just t
 checkExpr (ENot pos expr) = do
   Just t <- checkExpr expr
-  unless (sameType t (TBool 0)) $ throwError "Wrong type"
+  unless (sameType t (TBool pos)) $ throwError "Wrong type"
   return $ Just t
 checkExpr (EMul pos expr1 op expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
-  unless (sameType t1 (TInt 0) && sameType t2 (TInt 0)) $ throwError "Wrong type"
+  unless (sameType t1 (TInt pos) && sameType t2 (TInt pos)) $ throwError "Wrong type"
   return $ Just $ TInt pos
 checkExpr (EAdd pos expr1 op expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
-  unless (sameType t1 (TInt 0) && sameType t2 (TInt 0)) $ throwError "Wrong type"
+  unless (sameType t1 (TInt pos) && sameType t2 (TInt pos)) $ throwError "Wrong type"
   return $ Just $ TInt pos
 checkExpr (ERel pos expr1 op expr2) = do
   Just t1 <- checkExpr expr1
@@ -273,13 +273,38 @@ checkExpr (ERel pos expr1 op expr2) = do
 checkExpr (EAnd pos expr1 expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
-  unless (sameType t1 (TBool 0) && sameType t2 (TBool 0)) $ throwError "Wrong type"
+  unless (sameType t1 (TBool pos) && sameType t2 (TBool pos)) $ throwError "Wrong type"
   return $ Just $ TBool pos
 checkExpr (EOr pos expr1 expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
-  unless (sameType t1 (TBool 0) && sameType t2 (TBool 0)) $ throwError "Wrong type"
+  unless (sameType t1 (TBool pos) && sameType t2 (TBool pos)) $ throwError "Wrong type"
   return $ Just $ TBool pos
+
+
+checkLvalue :: Lvalue -> FMonad
+checkLvalue (LIdent _ ident) = do
+  (venv, cenv) <- ask
+  case Data.Map.lookup ident venv of
+    Just t -> return $ Just t
+    Nothing -> throwError "Unknown ident"
+checkLvalue (LArrayElem _ (ArrayElem pos lvalue expr)) = do
+  Just t <- checkLvalue lvalue
+  Just t' <- checkExpr expr
+  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
+  case t of
+    TArray _ t'' -> return $ Just t''
+    _ -> throwError "Wrong type"
+checkLvalue (LClassAttr _ (ClassAttr _ lvalue ident)) = do
+  -- TODO
+  return Nothing
+checkLvalue (LFuntionCall _ (FunctionCall _ ident exprs)) = do
+  -- TODO
+  return Nothing
+checkLvalue (LMethodCall _ (MethodCall _ lvalue ident exprs)) = do
+  -- TODO
+  return Nothing
+
 
 
 tryInsertToVEnv :: Ident -> Type -> FMonad
@@ -287,10 +312,11 @@ tryInsertToVEnv ident t = do
   (venv, cenv) <- ask
   when (Data.Map.member ident venv) $ throwError "Duplicate ident"
   when (Data.Map.member ident cenv) $ throwError "Duplicate ident"
-  when (sameType t (TVoid 0)) $ throwError "Void type"
+  when (sameType t (TVoid $ hasPosition t)) $ throwError "Void type"
   let Just t' = Data.Map.lookup ident venv
   unless (sameType t t') $ throwError "Wrong type"
   return Nothing
+
 
 insertToEnv :: Ident -> Type -> Env -> Env
 insertToEnv ident t (venv, cenv) = (Data.Map.insert ident t venv, cenv)
