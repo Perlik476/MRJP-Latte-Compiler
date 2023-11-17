@@ -130,8 +130,10 @@ checkTopDef (PFunDef _ t ident args block) = do
   let argTypes = map (\(PArg _ t _) -> t) args
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   let envFun = \(venv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, cenv)
-  local envFun (checkBlock block t)
-  return Nothing
+  mt' <- local envFun (checkBlock block t)
+  case mt' of
+    Just t' -> if sameType t t' then return Nothing else throwError "Wrong return type"
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError "Wrong return type"
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   -- TODO
   return Nothing
@@ -148,11 +150,9 @@ checkStmts (SEmpty _:stmts) t = checkStmts stmts t
 checkStmts (SBStmt _ block:stmts) t = do
   checkBlock block t
   checkStmts stmts t
-  return Nothing
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToVEnv ident t
   local (insertToEnv ident t) (checkStmts (SDecl (hasPosition item) t items:stmts) t')
-  return Nothing
   where
     ident = getIdent item
     getIdent (SNoInit _ ident) = ident
@@ -163,48 +163,53 @@ checkStmts (SAss _ lvalue expr:stmts) t'' = do
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
   checkStmts stmts t''
-  return Nothing
 checkStmts (SIncr pos lvalue:stmts) t' = do
   Just t <- checkLvalue lvalue
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
   checkStmts stmts t'
-  return Nothing
 checkStmts (SDecr pos lvalue:stmts) t' = do
   Just t <- checkLvalue lvalue
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
   checkStmts stmts t'
-  return Nothing
 checkStmts (SRet _ expr:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
-  checkStmts stmts t
-  return Nothing
+  mt'' <- checkStmts stmts t
+  case mt'' of
+    Just t'' -> if sameType t t'' then return $ Just t else throwError "Wrong return type"
+    Nothing -> return $ Just t
 checkStmts (SVRet pos:stmts) t = do
   unless (sameType t (TVoid pos)) $ throwError "Wrong type"
-  checkStmts stmts t
-  return Nothing
+  mt'' <- checkStmts stmts t
+  case mt'' of
+    Just t'' -> if sameType t t'' then return $ Just t else throwError "Wrong return type"
+    Nothing -> return $ Just t
 checkStmts (SCond pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmts [stmt] t
+  mt1 <- checkStmts [stmt] t
   -- TODO evaluate expr when possible
-  checkStmts stmts t
-  return Nothing
+  mt'' <- checkStmts stmts t
+  case (mt1, mt'') of
+    (_, Just _) -> return $ Just t
+    _ -> throwError "If branch doesn't return and there is no return after"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmts [stmt1] t
-  checkStmts [stmt2] t
+  mt1 <- checkStmts [stmt1] t
+  mt2 <- checkStmts [stmt2] t
   -- TODO evaluate expr when possible
-  checkStmts stmts t
-  return Nothing
+  mt'' <- checkStmts stmts t
+  case (mt1, mt2, mt'') of
+    (Just _, Just _, _) -> return $ Just t
+    (_, _, Just _) -> return $ Just t
+    _ -> throwError "If else branches don't return and there is no return after"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   checkStmts [stmt] t
   -- TODO evaluate expr when possible
   checkStmts stmts t
-  return Nothing
 checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
   Just t'' <- checkLvalue lvalue
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
@@ -212,11 +217,9 @@ checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
   local (insertToEnv ident t') (checkStmts [stmt] t)
   -- TODO evaluate expr when possible
   checkStmts stmts t
-  return Nothing
 checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
   checkStmts stmts t
-  return Nothing
 
 checkExpr :: Expr -> FMonad
 checkExpr (EVar _ ident) = do
