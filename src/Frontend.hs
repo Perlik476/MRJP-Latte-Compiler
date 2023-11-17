@@ -140,74 +140,82 @@ checkTopDef (PClassDefExt _ ident ident' (ClassDef _ elems)) = do
   return Nothing
 
 checkBlock :: Block -> Type -> FMonad
-checkBlock (SBlock _ stmts) t = do
-  let lastStmt = last stmts
-  let stmts' = init stmts
-  local (const emptyEnv) (mapM_ (`checkStmt` t) stmts')
-  mt' <- checkStmt lastStmt t
-  case mt' of
-    Nothing -> return Nothing
-    Just t' -> if t == t' then return $ Just t else throwError "Wrong return type"
+checkBlock (SBlock _ stmts) = checkStmts stmts
 
-checkStmt :: Stmt -> Type -> FMonad
-checkStmt (SEmpty _) _ = return Nothing
-checkStmt (SBStmt _ block) t = checkBlock block t
-checkStmt (SDecl _ t (item:items)) _ = do
+checkStmts :: [Stmt] -> Type -> FMonad
+checkStmts [] _ = return Nothing
+checkStmts (SEmpty _:stmts) t = checkStmts stmts t
+checkStmts (SBStmt _ block:stmts) t = do
+  checkBlock block t
+  checkStmts stmts t
+  return Nothing
+checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToVEnv ident t
-  local (insertToEnv ident t) (checkStmt (SDecl (hasPosition item) t items) t)
+  local (insertToEnv ident t) (checkStmts (SDecl (hasPosition item) t items:stmts) t')
   return Nothing
   where
     ident = getIdent item
     getIdent (SNoInit _ ident) = ident
     getIdent (SInit _ ident _) = ident
-checkStmt (SDecl _ t []) _ = return Nothing
-checkStmt (SAss _ lvalue expr) _ = do
+checkStmts (SDecl _ _ []:stmts) t = checkStmts stmts t
+checkStmts (SAss _ lvalue expr:stmts) t'' = do
   Just t <- checkLvalue lvalue
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
+  checkStmts stmts t''
   return Nothing
-checkStmt (SIncr pos lvalue) _ = do
+checkStmts (SIncr pos lvalue:stmts) t' = do
   Just t <- checkLvalue lvalue
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
+  checkStmts stmts t'
   return Nothing
-checkStmt (SDecr pos lvalue) _ = do
+checkStmts (SDecr pos lvalue:stmts) t' = do
   Just t <- checkLvalue lvalue
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
+  checkStmts stmts t'
   return Nothing
-checkStmt (SRet _ expr) t = do
+checkStmts (SRet _ expr:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
-  return $ Just t
-checkStmt (SVRet pos) t = do
+  checkStmts stmts t
+  return Nothing
+checkStmts (SVRet pos:stmts) t = do
   unless (sameType t (TVoid pos)) $ throwError "Wrong type"
-  return $ Just t
-checkStmt (SCond pos expr stmt) t = do
+  checkStmts stmts t
+  return Nothing
+checkStmts (SCond pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmt stmt t
+  checkStmts [stmt] t
   -- TODO evaluate expr when possible
+  checkStmts stmts t
   return Nothing
-checkStmt (SCondElse pos expr stmt1 stmt2) t = do
+checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmt stmt1 t
-  checkStmt stmt2 t
+  checkStmts [stmt1] t
+  checkStmts [stmt2] t
   -- TODO evaluate expr when possible
+  checkStmts stmts t
   return Nothing
-checkStmt (SWhile pos expr stmt) t = do
+checkStmts (SWhile pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmt stmt t
+  checkStmts [stmt] t
   -- TODO evaluate expr when possible
+  checkStmts stmts t
   return Nothing
-checkStmt (SFor pos t' ident lvalue stmt) t = do
+checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
   Just t'' <- checkLvalue lvalue
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
   tryInsertToVEnv ident t'
-  local (insertToEnv ident t') (checkStmt stmt t)
+  local (insertToEnv ident t') (checkStmts [stmt] t)
+  -- TODO evaluate expr when possible
+  checkStmts stmts t
   return Nothing
-checkStmt (SExp _ expr) _ = do
+checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
+  checkStmts stmts t
   return Nothing
 
 checkExpr :: Expr -> FMonad
@@ -317,10 +325,7 @@ tryInsertToVEnv ident t = do
   when (Data.Map.member ident venv) $ throwError "Duplicate ident"
   when (Data.Map.member ident cenv) $ throwError "Duplicate ident"
   when (sameType t (TVoid $ hasPosition t)) $ throwError "Void type"
-  let Just t' = Data.Map.lookup ident venv
-  unless (sameType t t') $ throwError "Wrong type"
   return Nothing
-
 
 insertToEnv :: Ident -> Type -> Env -> Env
 insertToEnv ident t (venv, cenv) = (Data.Map.insert ident t venv, cenv)
