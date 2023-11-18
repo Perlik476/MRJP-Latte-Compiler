@@ -38,7 +38,7 @@ FunctionCall.  FunctionCall ::= Ident "(" [Expr] ")" ;
 
 -- lvalues -------------------------------------------------
 
-LVar.        Lvalue ::= Ident ;
+LVar.          Lvalue ::= Ident ;
 
 LArrayElem.    Lvalue ::= ArrayElem ;
 

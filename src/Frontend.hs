@@ -15,7 +15,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup, insert)
+import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -68,6 +68,8 @@ main = do
     fs         -> mapM_ (runFile 2 pProgram) fs
 
 type FMonad = ExceptT Error (ReaderT Env IO) (Maybe Type)
+type LMonad = ExceptT Error (ReaderT Env IO) (Maybe RType)
+type RType = (Type, Bool)  -- (Type, isAssignable)
 
 type Error = String
 
@@ -107,10 +109,11 @@ checkMain topDefs = do
 
 functionDeclarationsToVEnv :: [TopDef] -> VEnv
 functionDeclarationsToVEnv topDefs =
-  Data.Map.fromList $ map (\(PFunDef _ t ident args _) -> (ident, t)) (filter isFunDef topDefs)
+  Data.Map.fromList $ map (\(PFunDef pos t ident args _) -> (ident, TFun pos t $ map argToType args)) (filter isFunDef topDefs)
   where
     isFunDef PFunDef {} = True
     isFunDef _ = False
+    argToType (PArg _ t _) = t
 
 classDeclarationsToCEnv :: [TopDef] -> CEnv
 classDeclarationsToCEnv topDefs =
@@ -162,16 +165,19 @@ checkStmts (SDecl _ t (item:items):stmts) t' = do
     getIdent (SInit _ ident _) = ident
 checkStmts (SDecl _ _ []:stmts) t = checkStmts stmts t
 checkStmts (SAss _ lvalue expr:stmts) t'' = do
-  Just t <- checkLvalue lvalue
+  Just (t, ass) <- checkLvalue lvalue
+  unless ass $ throwError "Not assignable"
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
   checkStmts stmts t''
 checkStmts (SIncr pos lvalue:stmts) t' = do
-  Just t <- checkLvalue lvalue
+  Just (t, ass) <- checkLvalue lvalue
+  unless ass $ throwError "Not assignable"
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
   checkStmts stmts t'
 checkStmts (SDecr pos lvalue:stmts) t' = do
-  Just t <- checkLvalue lvalue
+  Just (t, ass) <- checkLvalue lvalue
+  unless ass $ throwError "Not assignable"
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
   checkStmts stmts t'
 checkStmts (SRet _ expr:stmts) t = do
@@ -214,7 +220,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
   -- TODO evaluate expr when possible
   checkStmts stmts t
 checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
-  Just t'' <- checkLvalue lvalue
+  Just (t'', _) <- checkLvalue lvalue
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
   tryInsertToVEnv ident t'
   local (insertToEnv ident t') (checkStmts [stmt] t)
@@ -247,13 +253,9 @@ checkExpr (EArrayNew pos t expr) = do
   Just t' <- checkExpr expr  -- TODO check if expr is not nothing
   unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   return $ Just $ TArray pos t
-checkExpr (EArrayElem pos (ArrayElem _ lvalue expr)) = do
-  Just t <- checkLvalue lvalue
-  Just t' <- checkExpr expr
-  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
-  case t of
-    TArray _ t'' -> return $ Just t''
-    _ -> throwError "Wrong type"
+checkExpr (EArrayElem pos arrayElem) = do
+  Just (t, _) <- checkLvalue (LArrayElem pos arrayElem)
+  return $ Just t
 checkExpr (EClassAttr pos (ClassAttr _ lvalue ident)) = do
   -- TODO
   return Nothing
@@ -273,7 +275,6 @@ checkExpr (EFuntionCall pos (FunctionCall _ ident exprs)) = do
       let argTypes = map (\(Just t) -> t) margTypes
       if all (== True) $ zipWith sameType argTypes ts then return $ Just t' else throwError "Wrong type of arguments"
     _ -> throwError "Unknown function"
-
 checkExpr (ENeg pos expr) = do
   Just t <- checkExpr expr
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
@@ -309,28 +310,36 @@ checkExpr (EOr pos expr1 expr2) = do
   return $ Just $ TBool pos
 
 
-checkLvalue :: Lvalue -> FMonad
+checkLvalue :: Lvalue -> LMonad
 checkLvalue (LVar _ ident) = do
   (venv, cenv) <- ask
   case Data.Map.lookup ident venv of
-    Just t -> return $ Just t
+    Just t -> return $ Just (t, True)
     Nothing -> throwError "Unknown ident"
 checkLvalue (LArrayElem _ (ArrayElem pos lvalue expr)) = do
-  Just t <- checkLvalue lvalue
+  Just (t, _) <- checkLvalue lvalue
   Just t' <- checkExpr expr
   unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   case t of
-    TArray _ t'' -> return $ Just t''
+    TArray _ t'' -> return $ Just (t'', True)
     _ -> throwError "Wrong type"
 checkLvalue (LClassAttr _ (ClassAttr _ lvalue ident)) = do
-  -- TODO
-  return Nothing
-checkLvalue (LFuntionCall _ (FunctionCall _ ident exprs)) = do
   -- TODO
   return Nothing
 checkLvalue (LMethodCall _ (MethodCall _ lvalue ident exprs)) = do
   -- TODO
   return Nothing
+checkLvalue (LFuntionCall pos fun) = do
+  mt <- checkExpr (EFuntionCall pos fun)
+  return (case mt of
+        Just t -> Just (t, referenceType t)
+        Nothing -> Nothing
+    )
+
+referenceType :: Type -> Bool
+referenceType TArray {} = True
+referenceType TClass {} = True
+referenceType _ = False
 
 
 tryInsertToVEnv :: Ident -> Type -> FMonad

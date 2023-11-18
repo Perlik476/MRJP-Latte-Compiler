@@ -1,0 +1,22 @@
+int main() {
+    g()[0] = f();
+    // h() = f();
+    i() = "world";
+    return 0;
+}
+
+int f() {
+    return 0;
+}
+
+int[] g() {
+    return new int[1];
+}
+
+int h() {
+    return 1;
+}
+
+string i() {
+    return "hello";
+}
