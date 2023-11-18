@@ -150,9 +150,10 @@ checkBlock (SBlock _ stmts) = checkStmts stmts
 checkStmts :: [Stmt] -> Type -> FMonad
 checkStmts [] _ = return Nothing
 checkStmts (SEmpty _:stmts) t = checkStmts stmts t
-checkStmts (SBStmt _ block:stmts) t = do
+checkStmts [SBStmt _ block] t = do
   checkBlock block t
-  checkStmts stmts t
+checkStmts (SBStmt _ block:stmts) t = do
+  error "SBStmt: impossible"
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToVEnv ident t
   local (insertToEnv ident t) (checkStmts stmts' t')
