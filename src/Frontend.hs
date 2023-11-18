@@ -152,8 +152,11 @@ checkStmts (SBStmt _ block:stmts) t = do
   checkStmts stmts t
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToVEnv ident t
-  local (insertToEnv ident t) (checkStmts (SDecl (hasPosition item) t items:stmts) t')
+  local (insertToEnv ident t) (checkStmts stmts' t')
   where
+    stmts' = case item of
+      SNoInit {} -> SDecl (hasPosition item) t items:stmts
+      SInit pos _ expr -> SAss pos (LVar pos ident) expr:SDecl pos t items:stmts
     ident = getIdent item
     getIdent (SNoInit _ ident) = ident
     getIdent (SInit _ ident _) = ident
@@ -261,8 +264,16 @@ checkExpr (EMethodCall pos (MethodCall _ lvalue ident exprs)) = do
   -- TODO
   return Nothing
 checkExpr (EFuntionCall pos (FunctionCall _ ident exprs)) = do
-  -- TODO
-  return Nothing
+  (venv, _) <- ask
+  case Data.Map.lookup ident venv of
+    Just (TFun _ t' ts) -> do
+      when (length ts /= length exprs) $ throwError "Wrong number of arguments"
+      margTypes <- mapM checkExpr exprs
+      when (Nothing `elem` margTypes) $ throwError "Wrong type of arguments"
+      let argTypes = map (\(Just t) -> t) margTypes
+      if all (== True) $ zipWith sameType argTypes ts then return $ Just t' else throwError "Wrong type of arguments"
+    _ -> throwError "Unknown function"
+
 checkExpr (ENeg pos expr) = do
   Just t <- checkExpr expr
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
