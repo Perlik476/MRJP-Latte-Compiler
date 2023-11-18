@@ -67,9 +67,13 @@ main = do
     "-s":fs    -> mapM_ (runFile 0 pProgram) fs
     fs         -> mapM_ (runFile 2 pProgram) fs
 
-type FMonad = ExceptT Error (ReaderT Env IO) (Maybe Type)
-type LMonad = ExceptT Error (ReaderT Env IO) (Maybe RType)
+type FMonad' a = ExceptT Error (ReaderT Env IO) a
+type FMonad = FMonad' (Maybe Type)
+type EMonad = FMonad' (Maybe ExprVal)
+type LMonad = FMonad' (Maybe RType)
 type RType = (Type, Bool)  -- (Type, isAssignable)
+data ExprVal = VInt Integer | VBool Bool
+  deriving (Eq, Ord, Show, Read)
 
 type Error = String
 
@@ -198,38 +202,117 @@ checkStmts (SCond pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   mt1 <- checkStmts [stmt] t
-  -- TODO evaluate expr when possible
   mt'' <- checkStmts stmts t
-  case (mt1, mt'') of
-    (_, Just _) -> return $ Just t
-    _ -> throwError "If branch doesn't return and there is no return after"
+  mb <- tryEvalExpr expr
+  case mb of
+    Nothing ->
+      case (mt1, mt'') of
+        (_, Just _) -> return $ Just t
+        _ -> throwError "If branch doesn't return and there is no return after"
+    Just (VBool True) -> return mt1
+    Just (VBool False) -> return Nothing
+    _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
   mt1 <- checkStmts [stmt1] t
   mt2 <- checkStmts [stmt2] t
-  -- TODO evaluate expr when possible
   mt'' <- checkStmts stmts t
-  case (mt1, mt2, mt'') of
-    (Just _, Just _, _) -> return $ Just t
-    (_, _, Just _) -> return $ Just t
-    _ -> throwError "If else branches don't return and there is no return after"
+  mb <- tryEvalExpr expr
+  case mb of
+    Nothing ->
+      case (mt1, mt2, mt'') of
+        (Just _, Just _, _) -> return $ Just t
+        (_, _, Just _) -> return $ Just t
+        _ -> throwError "If else branches don't return and there is no return after"
+    Just (VBool True) -> return mt1
+    Just (VBool False) -> return mt2
+    _ -> error "checkStmts: impossible"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError "Wrong type"
-  checkStmts [stmt] t
-  -- TODO evaluate expr when possible
-  checkStmts stmts t
+  mt1 <- checkStmts [stmt] t
+  mt'' <- checkStmts stmts t
+  mb <- tryEvalExpr expr
+  case mb of
+    Nothing ->
+      case (mt1, mt'') of
+        (_, Just _) -> return $ Just t
+        _ -> throwError "No return after while loop with undetermined conditions"
+    Just (VBool True) -> return mt1
+    Just (VBool False) -> return mt''
+    _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
   Just (t'', _) <- checkLvalue lvalue
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
   tryInsertToVEnv ident t'
   local (insertToEnv ident t') (checkStmts [stmt] t)
-  -- TODO evaluate expr when possible
   checkStmts stmts t
 checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
   checkStmts stmts t
+
+tryEvalExpr :: Expr -> EMonad
+tryEvalExpr (ELitInt pos n) = return $ Just $ VInt n
+tryEvalExpr (ELitTrue pos) = return $ Just $ VBool True
+tryEvalExpr (ELitFalse pos) = return $ Just $ VBool False
+tryEvalExpr (ENeg pos expr) = do
+  mn <- tryEvalExpr expr
+  case mn of
+    Just (VInt n) -> return $ Just $ VInt (-n)
+    _ -> return Nothing
+tryEvalExpr (ENot pos expr) = do
+  mb <- tryEvalExpr expr
+  case mb of
+    Just (VBool b) -> return $ Just $ VBool (not b)
+    _ -> return Nothing
+tryEvalExpr (EMul pos expr1 op expr2) = do
+  mn1 <- tryEvalExpr expr1
+  mn2 <- tryEvalExpr expr2
+  case (mn1, mn2) of
+    (Just (VInt n1), Just (VInt n2)) -> return $ Just $ VInt $ case op of
+      OTimes _ -> n1 * n2
+      ODiv _ -> n1 `div` n2
+      OMod _ -> n1 `mod` n2
+    _ -> return Nothing
+tryEvalExpr (EAdd pos expr1 op expr2) = do
+  mn1 <- tryEvalExpr expr1
+  mn2 <- tryEvalExpr expr2
+  case (mn1, mn2) of
+    (Just (VInt n1), Just (VInt n2)) -> return $ Just $ VInt $ case op of
+      OPlus _ -> n1 + n2
+      OMinus _ -> n1 - n2
+    _ -> return Nothing
+tryEvalExpr (ERel pos expr1 op expr2) = do
+  mn1 <- tryEvalExpr expr1
+  mn2 <- tryEvalExpr expr2
+  case (mn1, mn2) of
+    (Just (VInt n1), Just (VInt n2)) -> return $ Just $ VBool $ case op of
+      OLTH _ -> n1 < n2
+      OLE _ -> n1 <= n2
+      OGTH _ -> n1 > n2
+      OGE _ -> n1 >= n2
+      OEQU _ -> n1 == n2
+      ONE _ -> n1 /= n2
+    (Just (VBool b1), Just (VBool b2)) -> return $ Just $ VBool $ case op of
+      OEQU _ -> b1 == b2
+      ONE _ -> b1 /= b2
+      _ -> error "tryEvalExpr: impossible"
+    _ -> return Nothing
+tryEvalExpr (EAnd pos expr1 expr2) = do
+  mb1 <- tryEvalExpr expr1
+  mb2 <- tryEvalExpr expr2
+  case (mb1, mb2) of
+    (Just (VBool b1), Just (VBool b2)) -> return $ Just $ VBool $ b1 && b2
+    _ -> return Nothing
+tryEvalExpr (EOr pos expr1 expr2) = do
+  mb1 <- tryEvalExpr expr1
+  mb2 <- tryEvalExpr expr2
+  case (mb1, mb2) of
+    (Just (VBool b1), Just (VBool b2)) -> return $ Just $ VBool $ b1 || b2
+    _ -> return Nothing
+tryEvalExpr _ = return Nothing
+
 
 checkExpr :: Expr -> FMonad
 checkExpr (EVar _ ident) = do

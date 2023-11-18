@@ -4,10 +4,8 @@ int main() {
 }
 
 int f() {
-    if (true) {
+    boolean b = true;
+    if (b) {
         return 1;
-    }
-    else {
-        return 0;
     }
 }
