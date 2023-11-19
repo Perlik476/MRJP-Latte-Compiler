@@ -16,7 +16,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList)
+import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -113,6 +113,7 @@ data Error =
   | ErrNotAFunction Type
   | ErrVoidValue Pos
   | ErrFunctionValue Pos
+  | ErrRedefinitionOfBuiltinFunction IIdent
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -150,6 +151,7 @@ instance Show Error where
   show (ErrNotAFunction t) = "Not a function type " ++ showType t ++ " at " ++ showPos (hasPosition t)
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
+  show (ErrRedefinitionOfBuiltinFunction ident) = "Redefinition of builtin function " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
 
 
 showIdent :: IIdent -> String
@@ -170,13 +172,22 @@ showPos BNFC'NoPosition = "unknown"
 showPos _ = error "showPos: impossible"
 
 
-
 type VEnv = Map IIdent Type
 type FEnv = Map IIdent Type
 type CEnv = Map IIdent (ClassType, VEnv, FEnv)
 type ClassType = ([ClassElem], Maybe IIdent)
 type Env = (VEnv, FEnv, CEnv)
-emptyEnv = (Data.Map.empty, Data.Map.empty)
+emptyEnv :: Env
+emptyEnv = (Data.Map.empty, stdlib, Data.Map.empty)
+
+stdlib :: FEnv
+stdlib = Data.Map.fromList [
+  (IIdent BNFC'NoPosition (Ident "printInt"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TInt BNFC'NoPosition]),
+  (IIdent BNFC'NoPosition (Ident "printString"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TStr BNFC'NoPosition]),
+  (IIdent BNFC'NoPosition (Ident "error"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) []),
+  (IIdent BNFC'NoPosition (Ident "readInt"), TFun BNFC'NoPosition (TInt BNFC'NoPosition) []),
+  (IIdent BNFC'NoPosition (Ident "readString"), TFun BNFC'NoPosition (TStr BNFC'NoPosition) [])
+  ]
 
 checkProgram :: Program -> FMonad
 checkProgram (PProgram _ topDefs) = do
@@ -250,6 +261,8 @@ classDeclarationsToCEnv topDefs =
 
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef _ t ident args block) = do
+  let (IIdent _ (Ident name)) = ident
+  when (name `elem` map (\(IIdent _ (Ident name')) -> name') (Data.Map.keys stdlib)) $ throwError $ ErrRedefinitionOfBuiltinFunction ident
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
