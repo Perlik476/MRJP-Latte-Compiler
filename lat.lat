@@ -1,7 +1,7 @@
 int main() {
     int x = 0;
     {
-        boolean x = "dupa";
+        boolean x = true;
     }
     return 0;
 }

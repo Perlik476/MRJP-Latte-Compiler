@@ -41,7 +41,7 @@ run v p s =
       hPutStrLn stderr err
       exitFailure
     Right tree -> do
-      val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty, Data.Map.empty)
+      val <- runReaderT (runExceptT (checkProgram tree)) (emptyEnv, 0)
       case val of
         Right _ -> putStrLn "OK"
         Left err -> do
@@ -70,13 +70,15 @@ main = do
     "-s":fs    -> mapM_ (runFile 0 pProgram) fs
     fs         -> mapM_ (runFile 2 pProgram) fs
 
-type FMonad' a = ExceptT Error (ReaderT Env IO) a
+type FMonad' a = ExceptT Error (ReaderT (Env, Integer) IO) a
 type FMonad = FMonad' (Maybe Type)
 type TEMonad = FMonad' (Maybe ExprVal)
 type EMonad = FMonad' RType
 type RType = (Type, Bool)  -- (Type, isAssignable)
 data ExprVal = VInt Integer | VBool Bool
   deriving (Eq, Ord, Show, Read)
+type EnvD = (Env, Integer)
+
 
 type Pos = BNFC'Position
 data Error =
@@ -92,8 +94,8 @@ data Error =
   | ErrDuplicateClassMethod IIdent
   | ErrDuplicateFunctionArgumentName IIdent
   | ErrWrongType Type Type -- (expected, got)
-  | ErrWrongNumberOfArguments IIdent Int Int -- (function name, expected, got)
-  | ErrWrongTypeOfArgument IIdent Int Type Type -- (function name, arg number, expected, got)
+  | ErrWrongNumberOfArguments Pos Ident Int Int -- (function name, expected, got)
+  | ErrWrongTypeOfArgument Pos Ident Int Type Type -- (function name, arg number, expected, got)
   | ErrVoidReturnValue Pos
   | ErrNoMain
   | ErrMultipleMain Pos
@@ -113,7 +115,7 @@ data Error =
   | ErrNotAFunction Type
   | ErrVoidValue Pos
   | ErrFunctionValue Pos
-  | ErrRedefinitionOfBuiltinFunction IIdent
+  | ErrRedefinitionOfBuiltinFunction Pos Ident
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -130,8 +132,8 @@ instance Show Error where
   show (ErrDuplicateClassMethod ident) = "Duplicate class method " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
   show (ErrDuplicateFunctionArgumentName ident) = "Duplicate function argument name " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
   show (ErrWrongType t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition t) ++ ", expected " ++ showType t
-  show (ErrWrongNumberOfArguments ident n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos (hasPosition ident) ++ " of function " ++ showIdent ident ++ ", expected " ++ show n
-  show (ErrWrongTypeOfArgument ident n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition ident) ++ " of argument " ++ show n ++ " of function " ++ showIdent ident ++ ", expected " ++ showType t
+  show (ErrWrongNumberOfArguments pos ident n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos pos ++ " of function " ++ showIdent' ident ++ ", expected " ++ show n
+  show (ErrWrongTypeOfArgument pos ident n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos pos ++ " of argument " ++ show n ++ " of function " ++ showIdent' ident ++ ", expected " ++ showType t
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
   show ErrNoMain = "No main function"
   show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
@@ -151,11 +153,17 @@ instance Show Error where
   show (ErrNotAFunction t) = "Not a function type " ++ showType t ++ " at " ++ showPos (hasPosition t)
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
-  show (ErrRedefinitionOfBuiltinFunction ident) = "Redefinition of builtin function " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrRedefinitionOfBuiltinFunction pos ident) = "Redefinition of builtin function " ++ showIdent' ident ++ " at " ++ showPos pos
 
 
 showIdent :: IIdent -> String
 showIdent (IIdent _ (Ident ident)) = show ident
+
+showIdent' :: Ident -> String
+showIdent' (Ident ident) = show ident
+
+fromIIdent :: IIdent -> Ident
+fromIIdent (IIdent _ ident) = ident
 
 showType :: Type -> String
 showType (TInt _) = "int"
@@ -172,21 +180,21 @@ showPos BNFC'NoPosition = "unknown"
 showPos _ = error "showPos: impossible"
 
 
-type VEnv = Map IIdent Type
-type FEnv = Map IIdent Type
-type CEnv = Map IIdent (ClassType, VEnv, FEnv)
-type ClassType = ([ClassElem], Maybe IIdent)
+type VEnv = Map Ident (Type, Integer)
+type FEnv = Map Ident Type
+type CEnv = Map Ident (ClassType, VEnv, FEnv)
+type ClassType = ([ClassElem], Maybe Ident)
 type Env = (VEnv, FEnv, CEnv)
 emptyEnv :: Env
 emptyEnv = (Data.Map.empty, stdlib, Data.Map.empty)
 
 stdlib :: FEnv
 stdlib = Data.Map.fromList [
-  (IIdent BNFC'NoPosition (Ident "printInt"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TInt BNFC'NoPosition]),
-  (IIdent BNFC'NoPosition (Ident "printString"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TStr BNFC'NoPosition]),
-  (IIdent BNFC'NoPosition (Ident "error"), TFun BNFC'NoPosition (TVoid BNFC'NoPosition) []),
-  (IIdent BNFC'NoPosition (Ident "readInt"), TFun BNFC'NoPosition (TInt BNFC'NoPosition) []),
-  (IIdent BNFC'NoPosition (Ident "readString"), TFun BNFC'NoPosition (TStr BNFC'NoPosition) [])
+  (Ident "printInt", TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TInt BNFC'NoPosition]),
+  (Ident "printString", TFun BNFC'NoPosition (TVoid BNFC'NoPosition) [TStr BNFC'NoPosition]),
+  (Ident "error", TFun BNFC'NoPosition (TVoid BNFC'NoPosition) []),
+  (Ident "readInt", TFun BNFC'NoPosition (TInt BNFC'NoPosition) []),
+  (Ident "readString", TFun BNFC'NoPosition (TStr BNFC'NoPosition) [])
   ]
 
 checkProgram :: Program -> FMonad
@@ -194,10 +202,12 @@ checkProgram (PProgram _ topDefs) = do
   let idents = map getTopDefIdent topDefs
   checkNoDuplicateIdents idents ErrDuplicateFunction
   checkMain topDefs
-  let fenv = functionDeclarationsToVEnv topDefs
+  let fenv = functionDeclarationsToFEnv topDefs
   let cenv = classDeclarationsToCEnv topDefs
-  let env = (Data.Map.empty, fenv, cenv)
-  local (const env) (mapM_ checkTopDef topDefs)
+  let
+    newEnv :: (Env, Integer) -> (Env, Integer)
+    newEnv = \((venv', fenv', cenv'), depth) -> ((venv', Data.Map.union fenv' fenv, Data.Map.union cenv' cenv), depth)
+  local newEnv (mapM_ checkTopDef topDefs)
   return Nothing
 
 getTopDefIdent :: TopDef -> IIdent
@@ -230,9 +240,9 @@ checkMain topDefs = do
     _ -> throwError $ ErrMainNotAFunction (hasPosition main)
   return Nothing
 
-functionDeclarationsToVEnv :: [TopDef] -> VEnv
-functionDeclarationsToVEnv topDefs =
-  Data.Map.fromList $ map (\(PFunDef pos t ident args _) -> (ident, TFun pos t $ map argToType args)) (filter isFunDef topDefs)
+functionDeclarationsToFEnv :: [TopDef] -> FEnv
+functionDeclarationsToFEnv topDefs =
+  Data.Map.fromList $ map (\(PFunDef pos t ident args _) -> (fromIIdent ident, TFun pos t $ map argToType args)) (filter isFunDef topDefs)
   where
     isFunDef PFunDef {} = True
     isFunDef _ = False
@@ -245,10 +255,10 @@ classDeclarationsToCEnv topDefs =
     f (PClassDef _ ident (ClassDef _ elems)) =
       let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
           varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
-          venv = Data.Map.fromList $ zip (classElemsToIdents varElems) (classElemsToTypes varElems)
-          fenv = Data.Map.fromList $ zip (classElemsToIdents funElems) (classElemsToTypes funElems)
+          venv = Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat 0)
+          fenv = Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
       in
-      (ident, ((elems, Nothing), venv, fenv))
+      (fromIIdent ident, ((elems, Nothing), venv, fenv))
     f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
       f (PClassDef BNFC'NoPosition ident (ClassDef BNFC'NoPosition elems))
       -- TODO
@@ -260,15 +270,17 @@ classDeclarationsToCEnv topDefs =
 
 
 checkTopDef :: TopDef -> FMonad
-checkTopDef (PFunDef _ t ident args block) = do
-  let (IIdent _ (Ident name)) = ident
-  when (name `elem` map (\(IIdent _ (Ident name')) -> name') (Data.Map.keys stdlib)) $ throwError $ ErrRedefinitionOfBuiltinFunction ident
+checkTopDef (PFunDef pos t ident args block) = do
+  let (IIdent _ ident') = ident
+  when (ident' `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos ident'
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
-  let envFun = \(venv, fenv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, fenv, cenv)
+  let envFun = \((venv, fenv, cenv), d) -> (
+          (Data.Map.union venv $ Data.Map.fromList $ zip (map fromIIdent argIdents) $ zip argTypes $ repeat (d + 1), fenv, cenv), (d + 1)
+        )
   mt' <- local envFun (checkBlock block t)
   case mt' of
     Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
@@ -283,8 +295,10 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
   mapM_ checkValType $ classElemsToTypes varElems
   checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
-  let envClass = \(venv, fenv, cenv) -> (aux venv varElems, aux fenv funElems, cenv)
-      aux env' elems' = Data.Map.union env' $ Data.Map.fromList $ zip (classElemsToIdents elems') (classElemsToTypes elems')
+  let envClass = \((venv, fenv, cenv), d) ->
+        let venv' = Data.Map.union venv $ Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat d)
+            fenv' = Data.Map.union fenv $ Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
+        in ((venv', fenv', cenv), d)
   local envClass (mapM_ checkClassElem elems)
   return Nothing
 checkTopDef (PClassDefExt pos ident ident' (ClassDef pos' elems)) = do
@@ -308,7 +322,7 @@ classElemsToTypes ((ClassMethodDef pos t _ args _):elems) = TFun pos t (map (\(P
 
 
 checkBlock :: Block -> Type -> FMonad
-checkBlock (SBlock _ stmts) = checkStmts stmts
+checkBlock (SBlock _ stmts) t = local increaseDepth (checkStmts stmts t)
 
 checkStmts :: [Stmt] -> Type -> FMonad
 checkStmts [] _ = return Nothing
@@ -323,7 +337,8 @@ checkStmts (SBStmt _ block:stmts) t = do
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToEnv ident t
   checkValType t
-  local (insertToEnv ident t) (checkStmts stmts' t')
+  depth <- asks snd
+  local (insertToEnv depth ident t) (checkStmts stmts' t')
   where
     stmts' = case item of
       SNoInit {} -> SDecl (hasPosition item) t items:stmts
@@ -411,8 +426,13 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   (t'', _) <- checkExpr expr
   unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType (TArray (hasPosition expr) t') t''
-  tryInsertToEnv ident t'
-  local (insertToEnv ident t') (checkStmts [stmt] t)
+  local increaseDepth $ tryInsertToEnv ident t'
+  d <- asks snd
+  local (insertToEnv (d + 1) ident t') (checkStmts [
+    case stmt of
+      SBStmt {} -> stmt
+      _ -> SBStmt (hasPosition stmt) (SBlock (hasPosition stmt) [stmt])
+    ] t)
   checkStmts stmts t
 checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
@@ -489,9 +509,9 @@ tryEvalExpr _ = return Nothing
 
 checkExpr :: Expr -> EMonad
 checkExpr (EVar _ ident) = do
-  (venv, _, _) <- ask
-  case Data.Map.lookup ident venv of
-    Just t -> return (t, True)
+  ((venv, _, _), _) <- ask
+  case Data.Map.lookup (fromIIdent ident) venv of
+    Just (t, _) -> return (t, True)
     Nothing -> throwError $ ErrUnknownVariable ident
 checkExpr (ELitInt pos _) = return (TInt pos, False)
 checkExpr (ELitTrue pos) = return (TBool pos, False)
@@ -500,8 +520,8 @@ checkExpr (EString pos _) = return (TStr pos, False)
 checkExpr (ECastNull pos t) = do
   case t of
     TClass _ ident -> do
-      (venv, _, cenv) <- ask
-      case Data.Map.lookup ident cenv of
+      ((venv, _, cenv), _) <- ask
+      case Data.Map.lookup (fromIIdent ident) cenv of
         Just _ -> return (t, False)
         Nothing -> throwError $ ErrUnknownClass ident
     TArray {} -> return (t, False)
@@ -523,43 +543,43 @@ checkExpr (EClassAttr pos expr ident) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
-      (_, _, cenv) <- ask
-      case Data.Map.lookup ident' cenv of
+      ((_, _, cenv), _) <- ask
+      case Data.Map.lookup (fromIIdent ident') cenv of
         Just (_, cvenv, _) -> do
-          case Data.Map.lookup ident cvenv of
-            Just t -> return (t, True)
+          case Data.Map.lookup (fromIIdent ident) cvenv of
+            Just (t, _) -> return (t, True)
             Nothing -> throwError $ ErrUnknownClassAttribute ident
         Nothing -> throwError $ ErrUnknownClass ident'
     _ -> throwError $ ErrNotAClass t
 checkExpr (EClassNew pos ident) = do
-  (_, _, cenv) <- ask
-  case Data.Map.lookup ident cenv of
+  ((_, _, cenv), _) <- ask
+  case Data.Map.lookup (fromIIdent ident) cenv of
     Just _ -> return (TClass pos ident, False)
     Nothing -> throwError $ ErrUnknownClass ident
 checkExpr (EMethodCall pos expr ident exprs) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
-      (_, _, cenv) <- ask
-      case Data.Map.lookup ident' cenv of
+      ((_, _, cenv), _) <- ask
+      case Data.Map.lookup (fromIIdent ident') cenv of
         Just (_, _, cfenv) -> do
-          case Data.Map.lookup ident cfenv of
+          case Data.Map.lookup (fromIIdent ident) cfenv of
             Just (TFun pos' t' ts) -> do
-              let methodEnv = (\(venv, fenv, cenv) -> (venv, cfenv, cenv))
+              let methodEnv = (\((venv, fenv, cenv), d) -> ((venv, cfenv, cenv), d)) -- TODO
               local methodEnv $ checkExpr (EFuntionCall pos ident exprs)
             Just _ -> throwError $ ErrNotAFunction t
             Nothing -> throwError $ ErrUnknownClassMethod ident
         Nothing -> throwError $ ErrUnknownClass ident'
     _ -> throwError $ ErrNotAClass t
 checkExpr (EFuntionCall pos ident exprs) = do
-  (_, fenv, _) <- ask
-  case Data.Map.lookup ident fenv of
+  ((_, fenv, _), _) <- ask
+  case Data.Map.lookup (fromIIdent ident) fenv of
     Just (TFun _ t ts) -> do
-      when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments ident (length ts) (length exprs)
+      when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIIdent ident) (length ts) (length exprs)
       argTypes' <- mapM checkExpr exprs
       let argTypes = map fst argTypes'
       if all (== True) $ zipWith sameType argTypes ts then return (t, False) else
-        throwError $ ErrWrongTypeOfArgument ident (length ts) (head ts) (head argTypes)
+        throwError $ ErrWrongTypeOfArgument pos (fromIIdent ident) (length ts) (head ts) (head argTypes)
     _ -> throwError $ ErrUnknownFunction ident
 checkExpr (ENeg pos expr) = do
   (t, _) <- checkExpr expr
@@ -607,8 +627,8 @@ checkExpr (EOr pos expr1 expr2) = do
 checkValType :: Type -> FMonad' ()
 checkValType (TArray _ t) = checkValType t
 checkValType (TClass _ ident) = do
-  (_, _, cenv) <- ask
-  case Data.Map.lookup ident cenv of
+  ((_, _, cenv), _) <- ask
+  case Data.Map.lookup (fromIIdent ident) cenv of
     Just _ -> return ()
     Nothing -> throwError $ ErrUnknownClass ident
 checkValType t@TFun {} = throwError $ ErrFunctionValue (hasPosition t)
@@ -618,28 +638,35 @@ checkValType _ = return ()
 checkFunRetType :: Type -> FMonad' ()
 checkFunRetType arr@(TArray _ t) = checkValType arr
 checkFunRetType (TClass _ ident) = do
-  (_, _, cenv) <- ask
-  case Data.Map.lookup ident cenv of
+  ((_, _, cenv), _) <- ask
+  case Data.Map.lookup (fromIIdent ident) cenv of
     Just _ -> return ()
     Nothing -> throwError $ ErrUnknownClass ident
-checkFunRetType t@TFun {} = throwError $ ErrFunctionValue (hasPosition t)
+checkFunRetType (TFun _ t _) = checkFunRetType t
 checkFunRetType _ = return ()
 
 
 tryInsertToEnv :: IIdent -> Type -> FMonad
 tryInsertToEnv ident t = do
-  (venv, fenv, _) <- ask
+  ((venv, fenv, _), depth) <- ask
   case t of
-    TFun {} -> when (Data.Map.member ident fenv) $ throwError $ ErrDuplicateFunction ident
-    _ -> when (Data.Map.member ident venv) $ throwError $ ErrDuplicateVariable ident
+    TFun {} -> when (Data.Map.member (fromIIdent ident) fenv) $ throwError $ ErrDuplicateFunction ident
+    _ -> do
+      case Data.Map.lookup (fromIIdent ident) venv of
+        Just (_, depth') -> do
+          when (depth' == depth) $ throwError $ ErrDuplicateVariable ident
+        Nothing -> return ()
   when (sameType t (TVoid $ hasPosition t)) $ throwError $ ErrVoidValue (hasPosition t)
   return Nothing
 
-insertToEnv :: IIdent -> Type -> Env -> Env
-insertToEnv ident t (venv, fenv, cenv) =
+insertToEnv :: Integer -> IIdent -> Type -> EnvD -> EnvD
+insertToEnv depth ident t ((venv, fenv, cenv), oldDepth) =
   case t of
-    TFun {} -> (venv, Data.Map.insert ident t fenv, cenv)
-    _ -> (Data.Map.insert ident t venv, fenv, cenv)
+    TFun {} -> ((venv, Data.Map.insert (fromIIdent ident) t fenv, cenv), oldDepth)
+    _ -> ((Data.Map.insert (fromIIdent ident) (t, depth) venv, fenv, cenv), oldDepth)
+
+increaseDepth :: EnvD -> EnvD
+increaseDepth (env, depth) = (env, depth + 1)
 
 
 sameType :: Type -> Type -> Bool
