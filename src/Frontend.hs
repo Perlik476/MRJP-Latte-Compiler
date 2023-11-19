@@ -160,11 +160,12 @@ checkTopDef (PFunDef _ t ident args block) = do
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError "Wrong return type"
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
-  -- checkNoDuplicateIdents elemIdents -- TODO?
   let elemTypes = classElemsToTypes elems
   mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
   let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+  checkNoDuplicateIdents $ classElemsToIdents funElems
   let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+  checkNoDuplicateIdents $ classElemsToIdents varElems
   let envClass = \(venv, fenv, cenv) -> (aux venv varElems, aux fenv funElems, cenv)
       aux env' elems' = Data.Map.union env' $ Data.Map.fromList $ zip (classElemsToIdents elems') (classElemsToTypes elems')
   local envClass (mapM_ checkClassElem elems)
