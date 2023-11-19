@@ -130,12 +130,12 @@ classDeclarationsToCEnv :: [TopDef] -> CEnv
 classDeclarationsToCEnv topDefs =
   Data.Map.fromList $ map f (filter isClassDef topDefs)
   where
-    f (PClassDef _ ident (ClassDef _ elems)) = 
+    f (PClassDef _ ident (ClassDef _ elems)) =
       let elemIdents = map getClassElemIdent elems
           elemTypes = map getClassElemType elems
           venv = Data.Map.fromList $ zip elemIdents elemTypes in
       (ident, ((elems, Nothing), venv))
-    f (PClassDefExt _ ident ident' (ClassDef _ elems)) = 
+    f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
       -- TODO
       let elemIdents = map getClassElemIdent elems
           elemTypes = map getClassElemType elems
@@ -438,7 +438,11 @@ checkExpr (EAdd pos expr1 op expr2) = do
 checkExpr (ERel pos expr1 op expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
-  unless (sameType t1 t2) $ throwError "Wrong type"
+  unless (sameType t1 t2 && not (sameType t1 (TVoid pos))) $ throwError "Wrong type"
+  case op of
+    OLTH {} -> return $ Just $ TBool pos
+    OLE {} -> return $ Just $ TBool pos
+    _ -> if sameType t1 (TInt pos) then return $ Just $ TBool pos else throwError "Only ints can be compared"
   return $ Just $ TBool pos
 checkExpr (EAnd pos expr1 expr2) = do
   Just t1 <- checkExpr expr1
