@@ -153,7 +153,9 @@ checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef _ t ident args block) = do
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
+  mapM_ checkValType argTypes
   let argIdents = map (\(PArg _ _ ident) -> ident) args
+  checkNoDuplicateIdents argIdents
   let envFun = \(venv, fenv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, fenv, cenv)
   mt' <- local envFun (checkBlock block t)
   case mt' of
