@@ -440,10 +440,9 @@ checkExpr (ERel pos expr1 op expr2) = do
   Just t2 <- checkExpr expr2
   unless (sameType t1 t2 && not (sameType t1 (TVoid pos))) $ throwError "Wrong type"
   case op of
-    OLTH {} -> return $ Just $ TBool pos
-    OLE {} -> return $ Just $ TBool pos
+    OEQU {} -> return $ Just $ TBool pos
+    ONE {} -> return $ Just $ TBool pos
     _ -> if sameType t1 (TInt pos) then return $ Just $ TBool pos else throwError "Only ints can be compared"
-  return $ Just $ TBool pos
 checkExpr (EAnd pos expr1 expr2) = do
   Just t1 <- checkExpr expr1
   Just t2 <- checkExpr expr2
