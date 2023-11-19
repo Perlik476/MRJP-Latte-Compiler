@@ -303,14 +303,20 @@ checkStmts (SExp _ expr:stmts) t = do
   tryEvalExpr expr
   checkStmts stmts t
 
+
+maxInt = 2^31 - 1
+minInt = -2^31
+checkInt :: Integer -> TEMonad
+checkInt n = if minInt <= n && n <= maxInt then return $ Just $ VInt n else throwError "Integer out of range"
+
 tryEvalExpr :: Expr -> TEMonad
-tryEvalExpr (ELitInt pos n) = return $ Just $ VInt n
+tryEvalExpr (ELitInt pos n) = checkInt n
 tryEvalExpr (ELitTrue pos) = return $ Just $ VBool True
 tryEvalExpr (ELitFalse pos) = return $ Just $ VBool False
 tryEvalExpr (ENeg pos expr) = do
   mn <- tryEvalExpr expr
   case mn of
-    Just (VInt n) -> return $ Just $ VInt (-n)
+    Just (VInt n) -> checkInt (-n)
     _ -> return Nothing
 tryEvalExpr (ENot pos expr) = do
   mb <- tryEvalExpr expr
@@ -322,17 +328,17 @@ tryEvalExpr (EMul pos expr1 op expr2) = do
   mn2 <- tryEvalExpr expr2
   case (mn1, mn2) of
     (Just (VInt n1), Just (VInt n2)) -> case op of
-      OTimes _ -> return $ Just $ VInt $ n1 * n2
-      ODiv _ -> if n2 /= 0 then return $ Just $ VInt $ n1 `div` n2 else throwError "Division by zero"
-      OMod _ -> if n2 /= 0 then return $ Just $ VInt $  n1 `mod` n2 else throwError "Mod by zero"
+      OTimes _ -> checkInt $ n1 * n2
+      ODiv _ -> if n2 /= 0 then checkInt $ n1 `div` n2 else throwError "Division by zero"
+      OMod _ -> if n2 /= 0 then checkInt $ n1 `mod` n2 else throwError "Mod by zero"
     _ -> return Nothing
 tryEvalExpr (EAdd pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
   mn2 <- tryEvalExpr expr2
   case (mn1, mn2) of
-    (Just (VInt n1), Just (VInt n2)) -> return $ Just $ VInt $ case op of
-      OPlus _ -> n1 + n2
-      OMinus _ -> n1 - n2
+    (Just (VInt n1), Just (VInt n2)) -> case op of
+      OPlus _ -> checkInt $ n1 + n2
+      OMinus _ -> checkInt $ n1 - n2
     _ -> return Nothing
 tryEvalExpr (ERel pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
