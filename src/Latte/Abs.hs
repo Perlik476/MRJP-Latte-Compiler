@@ -39,8 +39,12 @@ data ClassDef' a = ClassDef a [ClassElem' a]
 
 type ClassElem = ClassElem' BNFC'Position
 data ClassElem' a
-    = ClassAttrDef a (Type' a) Ident
+    = ClassAttrDef a (Type' a) [ClassItem' a]
     | ClassMethodDef a (Type' a) Ident [Arg' a] (Block' a)
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
+type ClassItem = ClassItem' BNFC'Position
+data ClassItem' a = ClassItem a Ident
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Block = Block' BNFC'Position
@@ -154,6 +158,10 @@ instance HasPosition ClassElem where
   hasPosition = \case
     ClassAttrDef p _ _ -> p
     ClassMethodDef p _ _ _ _ -> p
+
+instance HasPosition ClassItem where
+  hasPosition = \case
+    ClassItem p _ -> p
 
 instance HasPosition Block where
   hasPosition = \case

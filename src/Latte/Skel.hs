@@ -39,8 +39,12 @@ transClassDef x = case x of
 
 transClassElem :: Show a => Latte.Abs.ClassElem' a -> Result
 transClassElem x = case x of
-  Latte.Abs.ClassAttrDef _ type_ ident -> failure x
+  Latte.Abs.ClassAttrDef _ type_ classitems -> failure x
   Latte.Abs.ClassMethodDef _ type_ ident args block -> failure x
+
+transClassItem :: Show a => Latte.Abs.ClassItem' a -> Result
+transClassItem x = case x of
+  Latte.Abs.ClassItem _ ident -> failure x
 
 transBlock :: Show a => Latte.Abs.Block' a -> Result
 transBlock x = case x of

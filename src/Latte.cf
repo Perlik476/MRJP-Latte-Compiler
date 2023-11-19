@@ -20,7 +20,11 @@ separator  Arg "," ;
 
 ClassDef.       ClassDef ::= "{" [ClassElem] "}" ;
 
-ClassAttrDef.   ClassElem ::= Type Ident ";" ;
+ClassAttrDef.   ClassElem ::= Type [ClassItem] ";" ;
+
+ClassItem.      ClassItem ::= Ident ;
+
+separator nonempty ClassItem "," ;
 
 ClassMethodDef. ClassElem ::= Type Ident "(" [Arg] ")" Block ;
 

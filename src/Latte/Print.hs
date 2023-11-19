@@ -170,8 +170,17 @@ instance Print (Latte.Abs.ClassDef' a) where
 
 instance Print (Latte.Abs.ClassElem' a) where
   prt i = \case
-    Latte.Abs.ClassAttrDef _ type_ id_ -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString ";")])
+    Latte.Abs.ClassAttrDef _ type_ classitems -> prPrec i 0 (concatD [prt 0 type_, prt 0 classitems, doc (showString ";")])
     Latte.Abs.ClassMethodDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+
+instance Print (Latte.Abs.ClassItem' a) where
+  prt i = \case
+    Latte.Abs.ClassItem _ id_ -> prPrec i 0 (concatD [prt 0 id_])
+
+instance Print [Latte.Abs.ClassItem' a] where
+  prt _ [] = concatD []
+  prt _ [x] = concatD [prt 0 x]
+  prt _ (x:xs) = concatD [prt 0 x, doc (showString ","), prt 0 xs]
 
 instance Print [Latte.Abs.ClassElem' a] where
   prt _ [] = concatD []
