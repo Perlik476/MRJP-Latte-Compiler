@@ -1,11 +1,23 @@
 int main() {
-    f();
+    A a = new A;
+    a.set_x(5);
+    a.get_x();
+    a.inc();
     return 0;
 }
 
-int f() {
-    boolean b = true;
-    if (b) {
-        return 1;
+class A {
+    int x;
+
+    int get_x() {
+        return x;
+    }
+
+    void set_x(int y) {
+        x = y;
+    }
+
+    void inc() {
+        set_x(get_x() + 1);
     }
 }

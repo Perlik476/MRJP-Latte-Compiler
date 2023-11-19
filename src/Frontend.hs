@@ -21,6 +21,7 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Data.List
+import Control.Exception (try)
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -81,7 +82,7 @@ data ExprVal = VInt Integer | VBool Bool
 type Error = String
 
 type VEnv = Map Ident Type
-type CEnv = Map Ident ClassType
+type CEnv = Map Ident (ClassType, VEnv)
 type ClassType = ([ClassElem], Maybe Ident)
 type Env = (VEnv, CEnv)
 emptyEnv = (Data.Map.empty, Data.Map.empty)
@@ -126,8 +127,17 @@ classDeclarationsToCEnv :: [TopDef] -> CEnv
 classDeclarationsToCEnv topDefs =
   Data.Map.fromList $ map f (filter isClassDef topDefs)
   where
-    f (PClassDef _ ident (ClassDef _ elems)) = (ident, (elems, Nothing))
-    f (PClassDefExt _ ident ident' (ClassDef _ elems)) = (ident, (elems, Just ident'))
+    f (PClassDef _ ident (ClassDef _ elems)) = 
+      let elemIdents = map getClassElemIdent elems
+          elemTypes = map getClassElemType elems
+          venv = Data.Map.fromList $ zip elemIdents elemTypes in
+      (ident, ((elems, Nothing), venv))
+    f (PClassDefExt _ ident ident' (ClassDef _ elems)) = 
+      -- TODO
+      let elemIdents = map getClassElemIdent elems
+          elemTypes = map getClassElemType elems
+          venv = Data.Map.fromList $ zip elemIdents elemTypes in
+      (ident, ((elems, Just ident'), venv))
     f _ = error "classDeclarationsToCEnv: impossible"
 
     isClassDef PClassDef {} = True
@@ -145,11 +155,30 @@ checkTopDef (PFunDef _ t ident args block) = do
     Just t' -> if sameType t t' then return Nothing else throwError "Wrong return type"
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError "Wrong return type"
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
-  -- TODO
+  let elemIdents = map getClassElemIdent elems
+  checkNoDuplicateIdents elemIdents
+  let elemTypes = map getClassElemType elems
+  mapM_ (uncurry tryInsertToVEnv) (elemIdents `zip` elemTypes)
+  let envClass = \(venv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip elemIdents elemTypes, cenv)
+  local envClass (mapM_ checkClassElem elems)
   return Nothing
-checkTopDef (PClassDefExt _ ident ident' (ClassDef _ elems)) = do
+checkTopDef (PClassDefExt pos ident ident' (ClassDef pos' elems)) = do
   -- TODO
-  return Nothing
+  checkTopDef (PClassDef pos ident (ClassDef pos' elems))
+
+checkClassElem :: ClassElem -> FMonad
+checkClassElem (ClassAttrDef _ t ident) = return Nothing
+checkClassElem (ClassMethodDef pos t ident args block) = do
+  checkTopDef (PFunDef pos t ident args block)
+
+getClassElemIdent :: ClassElem -> Ident
+getClassElemIdent (ClassAttrDef _ t ident) = ident
+getClassElemIdent (ClassMethodDef _ t ident args _) = ident
+
+getClassElemType :: ClassElem -> Type
+getClassElemType (ClassAttrDef _ t _) = t
+getClassElemType (ClassMethodDef pos t _ args _) = TFun pos t $ map (\(PArg _ t _) -> t) args
+
 
 checkBlock :: Block -> Type -> FMonad
 checkBlock (SBlock _ stmts) = checkStmts stmts
@@ -344,14 +373,37 @@ checkExpr (EArrayElem pos arrayElem) = do
   Just (t, _) <- checkLvalue (LArrayElem pos arrayElem)
   return $ Just t
 checkExpr (EClassAttr pos (ClassAttr _ lvalue ident)) = do
-  -- TODO
-  return Nothing
+  Just (t, ass) <- checkLvalue lvalue
+  case t of
+    TClass _ ident' -> do
+      (venv, cenv) <- ask
+      case Data.Map.lookup ident' cenv of
+        Just (_, cvenv) -> do
+          case Data.Map.lookup ident cvenv of
+            Just t -> return $ Just t
+            Nothing -> throwError "Unknown class attribute"
+        Nothing -> throwError "Unknown class"
+    _ -> throwError "Wrong type"
 checkExpr (EClassNew pos ident) = do
-  -- TODO
-  return Nothing
+  (_, cenv) <- ask
+  case Data.Map.lookup ident cenv of
+    Just _ -> return $ Just $ TClass pos ident
+    Nothing -> throwError "Class not defined"
 checkExpr (EMethodCall pos (MethodCall _ lvalue ident exprs)) = do
-  -- TODO
-  return Nothing
+  Just (t, ass) <- checkLvalue lvalue
+  case t of
+    TClass _ ident' -> do
+      (venv, cenv) <- ask
+      case Data.Map.lookup ident' cenv of
+        Just (_, cvenv) -> do
+          case Data.Map.lookup ident cvenv of
+            Just (TFun pos' t' ts) -> do
+              let methodEnv = (\(venv, cenv) -> (cvenv, cenv))
+              local methodEnv $ checkExpr (EFuntionCall pos (FunctionCall pos ident exprs))
+            Just _ -> throwError "Not a method"
+            Nothing -> throwError "Unknown class attribute"
+        Nothing -> throwError "Unknown class"
+    _ -> throwError "Wrong type"
 checkExpr (EFuntionCall pos (FunctionCall _ ident exprs)) = do
   (venv, _) <- ask
   case Data.Map.lookup ident venv of
@@ -410,18 +462,15 @@ checkLvalue (LArrayElem _ (ArrayElem pos lvalue expr)) = do
   case t of
     TArray _ t'' -> return $ Just (t'', True)
     _ -> throwError "Wrong type"
-checkLvalue (LClassAttr _ (ClassAttr _ lvalue ident)) = do
-  -- TODO
-  return Nothing
-checkLvalue (LMethodCall _ (MethodCall _ lvalue ident exprs)) = do
-  -- TODO
-  return Nothing
+checkLvalue (LClassAttr pos attr@(ClassAttr _ lvalue ident)) = do
+  Just t <- checkExpr (EClassAttr pos attr)
+  return $ Just (t, True)
+checkLvalue (LMethodCall pos method@(MethodCall _ lvalue ident exprs)) = do
+  Just t <- checkExpr (EMethodCall pos method)
+  return $ Just (t, referenceType t)
 checkLvalue (LFuntionCall pos fun) = do
-  mt <- checkExpr (EFuntionCall pos fun)
-  return (case mt of
-        Just t -> Just (t, referenceType t)
-        Nothing -> Nothing
-    )
+  Just t <- checkExpr (EFuntionCall pos fun)
+  return $ Just (t, referenceType t)
 
 referenceType :: Type -> Bool
 referenceType TArray {} = True
