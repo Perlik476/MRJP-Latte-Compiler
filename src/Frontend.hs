@@ -7,6 +7,7 @@ module Main where
 import Prelude
 import System.Environment ( getArgs )
 import System.Exit        ( exitFailure )
+import System.IO          ( hPutStrLn, stderr )
 import Control.Monad      ( when )
 
 import Latte.Abs
@@ -32,18 +33,20 @@ runFile v p f = putStrLn f >> readFile f >>= run v p
 run v p s =
   case p ts of
     Left err -> do
-      putStrLn "\nParse Failed.\n"
+      hPutStrLn stderr "ERROR"
+      hPutStrLn stderr "Parse failed."
       putStrV v "Tokens:"
       mapM_ (putStrV v . showPosToken . mkPosToken) ts
-      putStrLn err
+      hPutStrLn stderr err
       exitFailure
     Right tree -> do
       val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty)
       case val of
-        Right _ -> putStrLn "\nParse Successful."
+        Right _ -> putStrLn "Frontend check successful."
         Left err -> do
-          putStrLn "\nParse Failed.\n"
-          putStrLn err
+          hPutStrLn stderr "ERROR"
+          hPutStrLn stderr "Frontend check failed."
+          hPutStrLn stderr $ "error: " ++ show err
           exitFailure
   where
   ts = myLexer s
@@ -242,8 +245,8 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
-checkStmts (SFor pos t' ident lvalue stmt:stmts) t = do
-  Just (t'', _) <- checkLvalue lvalue
+checkStmts (SFor pos t' ident expr stmt:stmts) t = do
+  Just t'' <- checkExpr expr
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
   tryInsertToVEnv ident t'
   local (insertToEnv ident t') (checkStmts [stmt] t)
@@ -331,7 +334,7 @@ checkExpr (ECastNull pos t) = do
       case Data.Map.lookup ident cenv of
         Just _ -> return $ Just t
         Nothing -> throwError "Unknown class"
-    TArray _ t' -> return $ Just t
+    TArray {} -> return $ Just t
     _ -> throwError "Wrong type"
 checkExpr (EArrayNew pos t expr) = do
   Just t' <- checkExpr expr  -- TODO check if expr is not nothing

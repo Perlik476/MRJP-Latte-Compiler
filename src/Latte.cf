@@ -82,7 +82,7 @@ SCondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 SWhile.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-SFor.       Stmt ::= "for" "(" Type Ident ":" Lvalue ")" Stmt ;
+SFor.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
 
 SExp.       Stmt ::= Expr  ";" ;
 

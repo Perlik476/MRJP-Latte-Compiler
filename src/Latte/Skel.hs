@@ -83,7 +83,7 @@ transStmt x = case x of
   Latte.Abs.SCond _ expr stmt -> failure x
   Latte.Abs.SCondElse _ expr stmt1 stmt2 -> failure x
   Latte.Abs.SWhile _ expr stmt -> failure x
-  Latte.Abs.SFor _ type_ ident lvalue stmt -> failure x
+  Latte.Abs.SFor _ type_ ident expr stmt -> failure x
   Latte.Abs.SExp _ expr -> failure x
 
 transItem :: Show a => Latte.Abs.Item' a -> Result
