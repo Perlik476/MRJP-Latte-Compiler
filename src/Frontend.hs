@@ -199,9 +199,11 @@ sameIdent (IIdent _ ident) (IIdent _ ident') = ident == ident'
 
 checkNoDuplicateIdents :: [IIdent] -> (IIdent -> Error) -> FMonad
 checkNoDuplicateIdents idents err = do
-  if length idents == length (Data.List.nub idents) then return Nothing else
-    let dup = head $ idents Data.List.\\ Data.List.nub idents in
-    throwError $ err dup
+  let names = map (\(IIdent _ (Ident name)) -> name) idents
+  if length names == length (Data.List.nub names) then return Nothing else
+    let dup = head $ names Data.List.\\ Data.List.nub names
+        dupPos = hasPosition $ head $ filter (\(IIdent _ (Ident name)) -> name == dup) idents in
+    throwError $ err (IIdent dupPos (Ident dup))
 
 checkMain :: [TopDef] -> FMonad
 checkMain topDefs = do
