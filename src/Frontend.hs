@@ -209,6 +209,7 @@ checkStmts (SAss _ lvalue expr:stmts) t'' = do
   unless ass $ throwError "Not assignable"
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
+  tryEvalExpr expr
   checkStmts stmts t''
 checkStmts (SIncr pos lvalue:stmts) t' = do
   Just (t, ass) <- checkLvalue lvalue
@@ -223,6 +224,7 @@ checkStmts (SDecr pos lvalue:stmts) t' = do
 checkStmts (SRet _ expr:stmts) t = do
   Just t' <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
+  tryEvalExpr expr
   mt'' <- checkStmts stmts t
   case mt'' of
     Just t'' -> if sameType t t'' then return $ Just t else throwError "Wrong return type"
@@ -285,6 +287,7 @@ checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   checkStmts stmts t
 checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
+  tryEvalExpr expr
   checkStmts stmts t
 
 tryEvalExpr :: Expr -> EMonad
@@ -305,10 +308,10 @@ tryEvalExpr (EMul pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
   mn2 <- tryEvalExpr expr2
   case (mn1, mn2) of
-    (Just (VInt n1), Just (VInt n2)) -> return $ Just $ VInt $ case op of
-      OTimes _ -> n1 * n2
-      ODiv _ -> n1 `div` n2
-      OMod _ -> n1 `mod` n2
+    (Just (VInt n1), Just (VInt n2)) -> case op of
+      OTimes _ -> return $ Just $ VInt $ n1 * n2
+      ODiv _ -> if n2 /= 0 then return $ Just $ VInt $ n1 `div` n2 else throwError "Division by zero"
+      OMod _ -> return $ Just $ VInt $  n1 `mod` n2
     _ -> return Nothing
 tryEvalExpr (EAdd pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
