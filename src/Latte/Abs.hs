@@ -43,31 +43,6 @@ data ClassElem' a
     | ClassMethodDef a (Type' a) Ident [Arg' a] (Block' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
-type ArrayElem = ArrayElem' BNFC'Position
-data ArrayElem' a = ArrayElem a (Lvalue' a) (Expr' a)
-  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
-
-type ClassAttr = ClassAttr' BNFC'Position
-data ClassAttr' a = ClassAttr a (Lvalue' a) Ident
-  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
-
-type MethodCall = MethodCall' BNFC'Position
-data MethodCall' a = MethodCall a (Lvalue' a) Ident [Expr' a]
-  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
-
-type FunctionCall = FunctionCall' BNFC'Position
-data FunctionCall' a = FunctionCall a Ident [Expr' a]
-  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
-
-type Lvalue = Lvalue' BNFC'Position
-data Lvalue' a
-    = LVar a Ident
-    | LArrayElem a (ArrayElem' a)
-    | LClassAttr a (ClassAttr' a)
-    | LMethodCall a (MethodCall' a)
-    | LFuntionCall a (FunctionCall' a)
-  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
-
 type Block = Block' BNFC'Position
 data Block' a = SBlock a [Stmt' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
@@ -77,9 +52,9 @@ data Stmt' a
     = SEmpty a
     | SBStmt a (Block' a)
     | SDecl a (Type' a) [Item' a]
-    | SAss a (Lvalue' a) (Expr' a)
-    | SIncr a (Lvalue' a)
-    | SDecr a (Lvalue' a)
+    | SAss a (Expr' a) (Expr' a)
+    | SIncr a (Expr' a)
+    | SDecr a (Expr' a)
     | SRet a (Expr' a)
     | SVRet a
     | SCond a (Expr' a) (Stmt' a)
@@ -112,12 +87,12 @@ data Expr' a
     | ELitFalse a
     | EString a String
     | ECastNull a (Type' a)
+    | EArrayElem a (Expr' a) (Expr' a)
+    | EClassAttr a (Expr' a) Ident
+    | EMethodCall a (Expr' a) Ident [Expr' a]
+    | EFuntionCall a Ident [Expr' a]
     | EArrayNew a (Type' a) (Expr' a)
-    | EArrayElem a (ArrayElem' a)
     | EClassNew a Ident
-    | EClassAttr a (ClassAttr' a)
-    | EMethodCall a (MethodCall' a)
-    | EFuntionCall a (FunctionCall' a)
     | ENeg a (Expr' a)
     | ENot a (Expr' a)
     | EMul a (Expr' a) (MulOp' a) (Expr' a)
@@ -180,30 +155,6 @@ instance HasPosition ClassElem where
     ClassAttrDef p _ _ -> p
     ClassMethodDef p _ _ _ _ -> p
 
-instance HasPosition ArrayElem where
-  hasPosition = \case
-    ArrayElem p _ _ -> p
-
-instance HasPosition ClassAttr where
-  hasPosition = \case
-    ClassAttr p _ _ -> p
-
-instance HasPosition MethodCall where
-  hasPosition = \case
-    MethodCall p _ _ _ -> p
-
-instance HasPosition FunctionCall where
-  hasPosition = \case
-    FunctionCall p _ _ -> p
-
-instance HasPosition Lvalue where
-  hasPosition = \case
-    LVar p _ -> p
-    LArrayElem p _ -> p
-    LClassAttr p _ -> p
-    LMethodCall p _ -> p
-    LFuntionCall p _ -> p
-
 instance HasPosition Block where
   hasPosition = \case
     SBlock p _ -> p
@@ -247,12 +198,12 @@ instance HasPosition Expr where
     ELitFalse p -> p
     EString p _ -> p
     ECastNull p _ -> p
+    EArrayElem p _ _ -> p
+    EClassAttr p _ _ -> p
+    EMethodCall p _ _ _ -> p
+    EFuntionCall p _ _ -> p
     EArrayNew p _ _ -> p
-    EArrayElem p _ -> p
     EClassNew p _ -> p
-    EClassAttr p _ -> p
-    EMethodCall p _ -> p
-    EFuntionCall p _ -> p
     ENeg p _ -> p
     ENot p _ -> p
     EMul p _ _ _ -> p

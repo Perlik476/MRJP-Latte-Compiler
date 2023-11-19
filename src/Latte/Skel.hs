@@ -42,30 +42,6 @@ transClassElem x = case x of
   Latte.Abs.ClassAttrDef _ type_ ident -> failure x
   Latte.Abs.ClassMethodDef _ type_ ident args block -> failure x
 
-transArrayElem :: Show a => Latte.Abs.ArrayElem' a -> Result
-transArrayElem x = case x of
-  Latte.Abs.ArrayElem _ lvalue expr -> failure x
-
-transClassAttr :: Show a => Latte.Abs.ClassAttr' a -> Result
-transClassAttr x = case x of
-  Latte.Abs.ClassAttr _ lvalue ident -> failure x
-
-transMethodCall :: Show a => Latte.Abs.MethodCall' a -> Result
-transMethodCall x = case x of
-  Latte.Abs.MethodCall _ lvalue ident exprs -> failure x
-
-transFunctionCall :: Show a => Latte.Abs.FunctionCall' a -> Result
-transFunctionCall x = case x of
-  Latte.Abs.FunctionCall _ ident exprs -> failure x
-
-transLvalue :: Show a => Latte.Abs.Lvalue' a -> Result
-transLvalue x = case x of
-  Latte.Abs.LVar _ ident -> failure x
-  Latte.Abs.LArrayElem _ arrayelem -> failure x
-  Latte.Abs.LClassAttr _ classattr -> failure x
-  Latte.Abs.LMethodCall _ methodcall -> failure x
-  Latte.Abs.LFuntionCall _ functioncall -> failure x
-
 transBlock :: Show a => Latte.Abs.Block' a -> Result
 transBlock x = case x of
   Latte.Abs.SBlock _ stmts -> failure x
@@ -75,9 +51,9 @@ transStmt x = case x of
   Latte.Abs.SEmpty _ -> failure x
   Latte.Abs.SBStmt _ block -> failure x
   Latte.Abs.SDecl _ type_ items -> failure x
-  Latte.Abs.SAss _ lvalue expr -> failure x
-  Latte.Abs.SIncr _ lvalue -> failure x
-  Latte.Abs.SDecr _ lvalue -> failure x
+  Latte.Abs.SAss _ expr1 expr2 -> failure x
+  Latte.Abs.SIncr _ expr -> failure x
+  Latte.Abs.SDecr _ expr -> failure x
   Latte.Abs.SRet _ expr -> failure x
   Latte.Abs.SVRet _ -> failure x
   Latte.Abs.SCond _ expr stmt -> failure x
@@ -109,12 +85,12 @@ transExpr x = case x of
   Latte.Abs.ELitFalse _ -> failure x
   Latte.Abs.EString _ string -> failure x
   Latte.Abs.ECastNull _ type_ -> failure x
+  Latte.Abs.EArrayElem _ expr1 expr2 -> failure x
+  Latte.Abs.EClassAttr _ expr ident -> failure x
+  Latte.Abs.EMethodCall _ expr ident exprs -> failure x
+  Latte.Abs.EFuntionCall _ ident exprs -> failure x
   Latte.Abs.EArrayNew _ type_ expr -> failure x
-  Latte.Abs.EArrayElem _ arrayelem -> failure x
   Latte.Abs.EClassNew _ ident -> failure x
-  Latte.Abs.EClassAttr _ classattr -> failure x
-  Latte.Abs.EMethodCall _ methodcall -> failure x
-  Latte.Abs.EFuntionCall _ functioncall -> failure x
   Latte.Abs.ENeg _ expr -> failure x
   Latte.Abs.ENot _ expr -> failure x
   Latte.Abs.EMul _ expr1 mulop expr2 -> failure x

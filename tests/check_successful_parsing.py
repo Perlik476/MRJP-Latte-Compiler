@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 # latte_dir = "tests/lattests/good"
 latte_dir = "tests/mrjp-tests/good"
-test_latte = "./Frontend"
+test_latte = "./Test"
 
 errs = 0
 for file in tqdm([f for f in os.listdir(latte_dir) if f.endswith(".lat")]):

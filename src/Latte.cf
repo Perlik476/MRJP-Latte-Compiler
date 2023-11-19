@@ -26,28 +26,6 @@ ClassMethodDef. ClassElem ::= Type Ident "(" [Arg] ")" Block ;
 
 separator       ClassElem "" ;
 
--- lvalue expressions --------------------------------------
-
-ArrayElem.     ArrayElem ::= Lvalue "[" Expr "]" ;
-
-ClassAttr.     ClassAttr ::= Lvalue "." Ident ;
-
-MethodCall.    MethodCall ::= Lvalue "." Ident "(" [Expr] ")" ;
-
-FunctionCall.  FunctionCall ::= Ident "(" [Expr] ")" ;
-
--- lvalues -------------------------------------------------
-
-LVar.          Lvalue ::= Ident ;
-
-LArrayElem.    Lvalue ::= ArrayElem ;
-
-LClassAttr.    Lvalue ::= ClassAttr ;
-
-LMethodCall.   Lvalue ::= MethodCall ;
-
-LFuntionCall.  Lvalue ::= FunctionCall ;
-
 -- statements ----------------------------------------------
 
 SBlock.     Block ::= "{" [Stmt] "}" ;
@@ -66,11 +44,11 @@ SInit.      Item ::= Ident "=" Expr ;
 
 separator nonempty Item "," ;
 
-SAss.       Stmt ::= Lvalue "=" Expr  ";" ;
+SAss.       Stmt ::= Expr6 "=" Expr  ";" ;
 
-SIncr.      Stmt ::= Lvalue "++"  ";" ;
+SIncr.      Stmt ::= Expr6 "++"  ";" ;
 
-SDecr.      Stmt ::= Lvalue "--"  ";" ;
+SDecr.      Stmt ::= Expr6 "--"  ";" ;
 
 SRet.       Stmt ::= "return" Expr ";" ;
 
@@ -118,21 +96,21 @@ EString.      Expr6 ::= String ;
 
 ECastNull.    Expr6 ::= "(" Type ")null" ;
 
-EArrayNew.    Expr6 ::= "new" Type "[" Expr "]" ;
+EArrayElem.   Expr6 ::= Expr6 "[" Expr "]" ;
 
-EArrayElem.   Expr6 ::= ArrayElem ;
+EClassAttr.   Expr6 ::= Expr6 "." Ident ;
 
-EClassNew.    Expr6 ::= "new" Ident ;
+EMethodCall.  Expr6 ::= Expr6 "." Ident "(" [Expr] ")" ;
 
-EClassAttr.   Expr6 ::= ClassAttr ;
+EFuntionCall. Expr6 ::= Ident "(" [Expr] ")" ;
 
-EMethodCall.  Expr6 ::= MethodCall ;
+EArrayNew.    Expr5 ::= "new" Type "[" Expr "]" ;
 
-EFuntionCall. Expr6 ::= FunctionCall ;
+EClassNew.    Expr5 ::= "new" Ident ;
 
-ENeg.         Expr5 ::= "-" Expr6 ;
+ENeg.         Expr5 ::= "-" Expr5 ;
 
-ENot.         Expr5 ::= "!" Expr6 ;
+ENot.         Expr5 ::= "!" Expr5 ;
 
 EMul.         Expr4 ::= Expr4 MulOp Expr5 ;
 
