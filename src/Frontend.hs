@@ -338,11 +338,18 @@ checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToEnv ident t
   checkValType t
   depth <- asks snd
+  case item of
+    SNoInit {} -> return ()
+    SInit _ _ expr -> do
+      (t'', _) <- checkExpr expr
+      unless (sameType t t'') $ throwError $ ErrWrongType t t''
+      tryEvalExpr expr
+      return ()
   local (insertToEnv depth ident t) (checkStmts stmts' t')
   where
     stmts' = case item of
       SNoInit {} -> SDecl (hasPosition item) t items:stmts
-      SInit pos _ expr -> SAss pos (EVar pos ident) expr:SDecl pos t items:stmts
+      SInit _ _ expr -> SDecl (hasPosition item) t items:stmts
     ident = getIdent item
     getIdent (SNoInit _ ident) = ident
     getIdent (SInit _ ident _) = ident
@@ -382,7 +389,7 @@ checkStmts (SVRet pos:stmts) t = do
 checkStmts (SCond pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
-  mt1 <- checkStmts [stmt] t
+  mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
   case mb of
@@ -396,8 +403,8 @@ checkStmts (SCond pos expr stmt:stmts) t = do
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   (t', _) <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
-  mt1 <- checkStmts [stmt1] t
-  mt2 <- checkStmts [stmt2] t
+  mt1 <- checkStmts [addBlockIfNecessary stmt1] t
+  mt2 <- checkStmts [addBlockIfNecessary stmt2] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
   case mb of
@@ -412,7 +419,7 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
 checkStmts (SWhile pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
   unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
-  mt1 <- checkStmts [stmt] t
+  mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
   case mb of
@@ -428,16 +435,19 @@ checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType (TArray (hasPosition expr) t') t''
   local increaseDepth $ tryInsertToEnv ident t'
   d <- asks snd
-  local (insertToEnv (d + 1) ident t') (checkStmts [
-    case stmt of
-      SBStmt {} -> stmt
-      _ -> SBStmt (hasPosition stmt) (SBlock (hasPosition stmt) [stmt])
-    ] t)
+  local (insertToEnv (d + 1) ident t') (checkStmts [addBlockIfNecessary stmt] t)
   checkStmts stmts t
 checkStmts (SExp _ expr:stmts) t = do
   checkExpr expr
   tryEvalExpr expr
   checkStmts stmts t
+
+
+addBlockIfNecessary :: Stmt -> Stmt
+addBlockIfNecessary stmt = case stmt of
+  SBStmt {} -> stmt
+  _ -> SBStmt (hasPosition stmt) (SBlock (hasPosition stmt) [stmt])
+
 
 
 maxInt = 2^31 - 1
@@ -674,6 +684,6 @@ sameType (TInt _) (TInt _) = True
 sameType (TStr _) (TStr _) = True
 sameType (TBool _) (TBool _) = True
 sameType (TVoid _) (TVoid _) = True
-sameType (TClass _ ident) (TClass _ ident') = ident == ident'
+sameType (TClass _ ident) (TClass _ ident') = fromIIdent ident == fromIIdent ident'
 sameType (TArray _ t) (TArray _ t') = sameType t t'
 sameType _ _ = False
