@@ -389,7 +389,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
+        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return Nothing
     _ -> error "checkStmts: impossible"
@@ -405,7 +405,7 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
       case (mt1, mt2, mt'') of
         (Just _, Just _, _) -> return $ Just t
         (_, _, Just _) -> return $ Just t
-        _ -> throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
+        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt2
     _ -> error "checkStmts: impossible"
@@ -419,7 +419,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> throwError $ ErrWhileLoopNotReturningInEveryCase pos
+        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrWhileLoopNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
