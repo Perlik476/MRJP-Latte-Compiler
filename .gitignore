@@ -1,4 +1,5 @@
 tests/lattests-benek
+tests/mrjp-tests*
 Test
 Frontend
 *.hi

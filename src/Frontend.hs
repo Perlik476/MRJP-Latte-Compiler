@@ -233,7 +233,8 @@ checkStmts (SDecr pos expr:stmts) t' = do
   unless ass $ throwError "Not assignable"
   unless (sameType t (TInt pos)) $ throwError "Wrong type"
   checkStmts stmts t'
-checkStmts (SRet _ expr:stmts) t = do
+checkStmts (SRet pos expr:stmts) t = do
+  when (sameType t (TVoid pos)) $ throwError "Return value with void type"
   (t', _) <- checkExpr expr
   unless (sameType t t') $ throwError "Wrong type"
   tryEvalExpr expr
