@@ -23,15 +23,19 @@ transProgram :: Show a => Latte.Abs.Program' a -> Result
 transProgram x = case x of
   Latte.Abs.PProgram _ topdefs -> failure x
 
+transIIdent :: Show a => Latte.Abs.IIdent' a -> Result
+transIIdent x = case x of
+  Latte.Abs.IIdent _ ident -> failure x
+
 transTopDef :: Show a => Latte.Abs.TopDef' a -> Result
 transTopDef x = case x of
-  Latte.Abs.PFunDef _ type_ ident args block -> failure x
-  Latte.Abs.PClassDef _ ident classdef -> failure x
-  Latte.Abs.PClassDefExt _ ident1 ident2 classdef -> failure x
+  Latte.Abs.PFunDef _ type_ iident args block -> failure x
+  Latte.Abs.PClassDef _ iident classdef -> failure x
+  Latte.Abs.PClassDefExt _ iident1 iident2 classdef -> failure x
 
 transArg :: Show a => Latte.Abs.Arg' a -> Result
 transArg x = case x of
-  Latte.Abs.PArg _ type_ ident -> failure x
+  Latte.Abs.PArg _ type_ iident -> failure x
 
 transClassDef :: Show a => Latte.Abs.ClassDef' a -> Result
 transClassDef x = case x of
@@ -40,11 +44,11 @@ transClassDef x = case x of
 transClassElem :: Show a => Latte.Abs.ClassElem' a -> Result
 transClassElem x = case x of
   Latte.Abs.ClassAttrDef _ type_ classitems -> failure x
-  Latte.Abs.ClassMethodDef _ type_ ident args block -> failure x
+  Latte.Abs.ClassMethodDef _ type_ iident args block -> failure x
 
 transClassItem :: Show a => Latte.Abs.ClassItem' a -> Result
 transClassItem x = case x of
-  Latte.Abs.ClassItem _ ident -> failure x
+  Latte.Abs.ClassItem _ iident -> failure x
 
 transBlock :: Show a => Latte.Abs.Block' a -> Result
 transBlock x = case x of
@@ -63,13 +67,13 @@ transStmt x = case x of
   Latte.Abs.SCond _ expr stmt -> failure x
   Latte.Abs.SCondElse _ expr stmt1 stmt2 -> failure x
   Latte.Abs.SWhile _ expr stmt -> failure x
-  Latte.Abs.SFor _ type_ ident expr stmt -> failure x
+  Latte.Abs.SFor _ type_ iident expr stmt -> failure x
   Latte.Abs.SExp _ expr -> failure x
 
 transItem :: Show a => Latte.Abs.Item' a -> Result
 transItem x = case x of
-  Latte.Abs.SNoInit _ ident -> failure x
-  Latte.Abs.SInit _ ident expr -> failure x
+  Latte.Abs.SNoInit _ iident -> failure x
+  Latte.Abs.SInit _ iident expr -> failure x
 
 transType :: Show a => Latte.Abs.Type' a -> Result
 transType x = case x of
@@ -78,23 +82,23 @@ transType x = case x of
   Latte.Abs.TBool _ -> failure x
   Latte.Abs.TVoid _ -> failure x
   Latte.Abs.TArray _ type_ -> failure x
-  Latte.Abs.TClass _ ident -> failure x
+  Latte.Abs.TClass _ iident -> failure x
   Latte.Abs.TFun _ type_ types -> failure x
 
 transExpr :: Show a => Latte.Abs.Expr' a -> Result
 transExpr x = case x of
-  Latte.Abs.EVar _ ident -> failure x
+  Latte.Abs.EVar _ iident -> failure x
   Latte.Abs.ELitInt _ integer -> failure x
   Latte.Abs.ELitTrue _ -> failure x
   Latte.Abs.ELitFalse _ -> failure x
   Latte.Abs.EString _ string -> failure x
   Latte.Abs.ECastNull _ type_ -> failure x
   Latte.Abs.EArrayElem _ expr1 expr2 -> failure x
-  Latte.Abs.EClassAttr _ expr ident -> failure x
-  Latte.Abs.EMethodCall _ expr ident exprs -> failure x
-  Latte.Abs.EFuntionCall _ ident exprs -> failure x
+  Latte.Abs.EClassAttr _ expr iident -> failure x
+  Latte.Abs.EMethodCall _ expr iident exprs -> failure x
+  Latte.Abs.EFuntionCall _ iident exprs -> failure x
   Latte.Abs.EArrayNew _ type_ expr -> failure x
-  Latte.Abs.EClassNew _ ident -> failure x
+  Latte.Abs.EClassNew _ iident -> failure x
   Latte.Abs.ENeg _ expr -> failure x
   Latte.Abs.ENot _ expr -> failure x
   Latte.Abs.EMul _ expr1 mulop expr2 -> failure x

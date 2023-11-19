@@ -22,15 +22,19 @@ type Program = Program' BNFC'Position
 data Program' a = PProgram a [TopDef' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
+type IIdent = IIdent' BNFC'Position
+data IIdent' a = IIdent a Ident
+  deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
+
 type TopDef = TopDef' BNFC'Position
 data TopDef' a
-    = PFunDef a (Type' a) Ident [Arg' a] (Block' a)
-    | PClassDef a Ident (ClassDef' a)
-    | PClassDefExt a Ident Ident (ClassDef' a)
+    = PFunDef a (Type' a) (IIdent' a) [Arg' a] (Block' a)
+    | PClassDef a (IIdent' a) (ClassDef' a)
+    | PClassDefExt a (IIdent' a) (IIdent' a) (ClassDef' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Arg = Arg' BNFC'Position
-data Arg' a = PArg a (Type' a) Ident
+data Arg' a = PArg a (Type' a) (IIdent' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type ClassDef = ClassDef' BNFC'Position
@@ -40,11 +44,11 @@ data ClassDef' a = ClassDef a [ClassElem' a]
 type ClassElem = ClassElem' BNFC'Position
 data ClassElem' a
     = ClassAttrDef a (Type' a) [ClassItem' a]
-    | ClassMethodDef a (Type' a) Ident [Arg' a] (Block' a)
+    | ClassMethodDef a (Type' a) (IIdent' a) [Arg' a] (Block' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type ClassItem = ClassItem' BNFC'Position
-data ClassItem' a = ClassItem a Ident
+data ClassItem' a = ClassItem a (IIdent' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Block = Block' BNFC'Position
@@ -64,12 +68,13 @@ data Stmt' a
     | SCond a (Expr' a) (Stmt' a)
     | SCondElse a (Expr' a) (Stmt' a) (Stmt' a)
     | SWhile a (Expr' a) (Stmt' a)
-    | SFor a (Type' a) Ident (Expr' a) (Stmt' a)
+    | SFor a (Type' a) (IIdent' a) (Expr' a) (Stmt' a)
     | SExp a (Expr' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Item = Item' BNFC'Position
-data Item' a = SNoInit a Ident | SInit a Ident (Expr' a)
+data Item' a
+    = SNoInit a (IIdent' a) | SInit a (IIdent' a) (Expr' a)
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Type = Type' BNFC'Position
@@ -79,24 +84,24 @@ data Type' a
     | TBool a
     | TVoid a
     | TArray a (Type' a)
-    | TClass a Ident
+    | TClass a (IIdent' a)
     | TFun a (Type' a) [Type' a]
   deriving (C.Eq, C.Ord, C.Show, C.Read, C.Functor, C.Foldable, C.Traversable)
 
 type Expr = Expr' BNFC'Position
 data Expr' a
-    = EVar a Ident
+    = EVar a (IIdent' a)
     | ELitInt a Integer
     | ELitTrue a
     | ELitFalse a
     | EString a String
     | ECastNull a (Type' a)
     | EArrayElem a (Expr' a) (Expr' a)
-    | EClassAttr a (Expr' a) Ident
-    | EMethodCall a (Expr' a) Ident [Expr' a]
-    | EFuntionCall a Ident [Expr' a]
+    | EClassAttr a (Expr' a) (IIdent' a)
+    | EMethodCall a (Expr' a) (IIdent' a) [Expr' a]
+    | EFuntionCall a (IIdent' a) [Expr' a]
     | EArrayNew a (Type' a) (Expr' a)
-    | EClassNew a Ident
+    | EClassNew a (IIdent' a)
     | ENeg a (Expr' a)
     | ENot a (Expr' a)
     | EMul a (Expr' a) (MulOp' a) (Expr' a)
@@ -139,6 +144,10 @@ class HasPosition a where
 instance HasPosition Program where
   hasPosition = \case
     PProgram p _ -> p
+
+instance HasPosition IIdent where
+  hasPosition = \case
+    IIdent p _ -> p
 
 instance HasPosition TopDef where
   hasPosition = \case

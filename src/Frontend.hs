@@ -79,19 +79,90 @@ type RType = (Type, Bool)  -- (Type, isAssignable)
 data ExprVal = VInt Integer | VBool Bool
   deriving (Eq, Ord, Show, Read)
 
-type Error = String
+type Pos = BNFC'Position
+data Error =
+  ErrUnknownVariable IIdent
+  | ErrUnknownFunction IIdent
+  | ErrUnknownClass IIdent
+  | ErrUnknownClassAttribute IIdent
+  | ErrUnknownClassMethod IIdent
+  | ErrDuplicateVariable IIdent
+  | ErrDuplicateFunction IIdent
+  | ErrDuplicateClass IIdent
+  | ErrDuplicateClassAttribute IIdent
+  | ErrDuplicateClassMethod IIdent
+  | ErrDuplicateFunctionArgumentName IIdent
+  | ErrWrongType Type Type -- (expected, got)
+  | ErrWrongNumberOfArguments IIdent Int Int -- (function name, expected, got)
+  | ErrWrongTypeOfArgument IIdent Int Type Type -- (function name, arg number, expected, got)
+  | ErrVoidReturnValue Pos
+  | ErrNoMain
+  | ErrMultipleMain Pos
+  | ErrWrongMainType Type
+  | ErrMainNotAFunction Pos
+  | ErrNotAssignable Type
+  | ErrArithmeticInt Type
+  | ErrBooleanOperation Type
+  | ErrInequalityOperation Type
+  | ErrIfElseBranchesNotReturningInEveryCase Pos
+  | ErrWhileLoopNotReturningInEveryCase Pos
+  | ErrIntegerOutOfRange Pos Integer
+  | ErrDivisionByZero Pos
+  | ErrCannotCastTo Type
+  | ErrNotAnArray Type
+  | ErrNotAClass Type
+  | ErrNotAFunction Type
+  | ErrVoidValue Pos
+  | ErrFunctionValue Pos
 
-type VEnv = Map Ident Type
-type FEnv = Map Ident Type
-type CEnv = Map Ident (ClassType, VEnv)
-type ClassType = ([ClassElem], Maybe Ident)
+-- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
+
+instance Show Error where
+  show (ErrUnknownVariable ident) = "Unknown variable " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrUnknownFunction ident) = "Unknown function " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrUnknownClass ident) = "Unknown class " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrUnknownClassAttribute ident) = "Unknown class attribute " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrUnknownClassMethod ident) = "Unknown class method " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateVariable ident) = "Duplicate variable " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateFunction ident) = "Duplicate function " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateClass ident) = "Duplicate class " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateClassAttribute ident) = "Duplicate class attribute " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateClassMethod ident) = "Duplicate class method " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrDuplicateFunctionArgumentName ident) = "Duplicate function argument name " ++ show ident ++ " at " ++ show (hasPosition ident)
+  show (ErrWrongType t t') = "Wrong type " ++ show t' ++ " at " ++ show (hasPosition t) ++ ", expected " ++ show t
+  show (ErrWrongNumberOfArguments ident n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ show (hasPosition ident) ++ " of function " ++ show ident ++ ", expected " ++ show n
+  show (ErrWrongTypeOfArgument ident n t t') = "Wrong type " ++ show t' ++ " at " ++ show (hasPosition ident) ++ " of argument " ++ show n ++ " of function " ++ show ident ++ ", expected " ++ show t
+  show (ErrVoidReturnValue pos) = "Void return value at " ++ show pos
+  show ErrNoMain = "No main function"
+  show (ErrMultipleMain pos) = "Multiple main functions at " ++ show pos
+  show (ErrWrongMainType t) = "Wrong main function type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
+  show (ErrMainNotAFunction pos) = "Main is not a function at " ++ show pos
+  show (ErrNotAssignable t) = "Not assignable type " ++ show t ++ " at " ++ show (hasPosition t)
+  show (ErrArithmeticInt t) = "Arithmetic operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
+  show (ErrBooleanOperation t) = "Boolean operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected bool"
+  show (ErrInequalityOperation t) = "Inequality operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
+  show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ show pos
+  show (ErrWhileLoopNotReturningInEveryCase pos) = "While loop doesn't return in every case with no return after at " ++ show pos
+  show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ show pos ++ ": " ++ show n
+  show (ErrDivisionByZero pos) = "Division by zero at " ++ show pos
+  show (ErrCannotCastTo t) = "Cannot cast to type " ++ show t ++ " at " ++ show (hasPosition t)
+  show (ErrNotAnArray t) = "Not an array type " ++ show t ++ " at " ++ show (hasPosition t)
+  show (ErrNotAClass t) = "Not a class type " ++ show t ++ " at " ++ show (hasPosition t)
+  show (ErrNotAFunction t) = "Not a function type " ++ show t ++ " at " ++ show (hasPosition t)
+  show (ErrVoidValue pos) = "Void value at " ++ show pos
+  show (ErrFunctionValue pos) = "Function value at " ++ show pos
+
+type VEnv = Map IIdent Type
+type FEnv = Map IIdent Type
+type CEnv = Map IIdent (ClassType, VEnv, FEnv)
+type ClassType = ([ClassElem], Maybe IIdent)
 type Env = (VEnv, FEnv, CEnv)
 emptyEnv = (Data.Map.empty, Data.Map.empty)
 
 checkProgram :: Program -> FMonad
 checkProgram (PProgram _ topDefs) = do
   let idents = map getTopDefIdent topDefs
-  checkNoDuplicateIdents idents
+  checkNoDuplicateIdents idents ErrDuplicateFunction
   checkMain topDefs
   let fenv = functionDeclarationsToVEnv topDefs
   let cenv = classDeclarationsToCEnv topDefs
@@ -99,24 +170,32 @@ checkProgram (PProgram _ topDefs) = do
   local (const env) (mapM_ checkTopDef topDefs)
   return Nothing
 
-getTopDefIdent :: TopDef -> Ident
+getTopDefIdent :: TopDef -> IIdent
 getTopDefIdent (PFunDef _ _ ident _ _) = ident
 getTopDefIdent (PClassDef _ ident _) = ident
 getTopDefIdent (PClassDefExt _ ident _ _) = ident
 
-checkNoDuplicateIdents :: [Ident] -> FMonad
-checkNoDuplicateIdents idents = do
-  if length idents == length (Data.List.nub idents) then return Nothing else throwError "Duplicate idents"
+sameIdent :: IIdent -> IIdent -> Bool
+sameIdent (IIdent _ ident) (IIdent _ ident') = ident == ident'
+
+checkNoDuplicateIdents :: [IIdent] -> (IIdent -> Error) -> FMonad
+checkNoDuplicateIdents idents err = do
+  if length idents == length (Data.List.nub idents) then return Nothing else
+    let dup = head $ idents Data.List.\\ Data.List.nub idents in
+    throwError $ err dup
 
 checkMain :: [TopDef] -> FMonad
 checkMain topDefs = do
-  let mains = filter (\def -> getTopDefIdent def == Ident "main") topDefs
-  when (null mains) $ throwError "No main function"
-  when (length mains > 1) $ throwError "More than one main function"
-  case head mains of
+  let mains = filter (\def -> sameIdent (getTopDefIdent def) (IIdent BNFC'NoPosition (Ident "main"))) topDefs
+  when (null mains) $ throwError ErrNoMain
+  when (length mains > 1) $ throwError $ ErrMultipleMain (hasPosition $ head mains)
+  let main = head mains
+  case main of
     PFunDef _ t ident args _ ->
-      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError "Wrong main function"
-    _ -> throwError "Main is not a functions"
+      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType mainType
+      where
+        mainType = TFun (hasPosition main) (TInt $ hasPosition main) []
+    _ -> throwError $ ErrMainNotAFunction (hasPosition main)
   return Nothing
 
 functionDeclarationsToVEnv :: [TopDef] -> VEnv
@@ -132,16 +211,15 @@ classDeclarationsToCEnv topDefs =
   Data.Map.fromList $ map f (filter isClassDef topDefs)
   where
     f (PClassDef _ ident (ClassDef _ elems)) =
-      let elemIdents = classElemsToIdents elems
-          elemTypes = classElemsToTypes elems
-          venv = Data.Map.fromList $ zip elemIdents elemTypes in
-      (ident, ((elems, Nothing), venv))
+      let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+          varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+          venv = Data.Map.fromList $ zip (classElemsToIdents varElems) (classElemsToTypes varElems)
+          fenv = Data.Map.fromList $ zip (classElemsToIdents funElems) (classElemsToTypes funElems)
+      in
+      (ident, ((elems, Nothing), venv, fenv))
     f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
+      f (PClassDef BNFC'NoPosition ident (ClassDef BNFC'NoPosition elems))
       -- TODO
-      let elemIdents = classElemsToIdents elems
-          elemTypes = classElemsToTypes elems
-          venv = Data.Map.fromList $ zip elemIdents elemTypes in
-      (ident, ((elems, Just ident'), venv))
     f _ = error "classDeclarationsToCEnv: impossible"
 
     isClassDef PClassDef {} = True
@@ -155,22 +233,22 @@ checkTopDef (PFunDef _ t ident args block) = do
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
   let argIdents = map (\(PArg _ _ ident) -> ident) args
-  checkNoDuplicateIdents argIdents
+  checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   let envFun = \(venv, fenv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, fenv, cenv)
   mt' <- local envFun (checkBlock block t)
   case mt' of
-    Just t' -> if sameType t t' then return Nothing else throwError "Wrong return type"
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError "Wrong return type"
+    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongType t (TVoid BNFC'NoPosition)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
   mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
   let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
-  checkNoDuplicateIdents $ classElemsToIdents funElems
+  checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
   let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
   mapM_ checkValType $ classElemsToTypes varElems
-  checkNoDuplicateIdents $ classElemsToIdents varElems
+  checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
   let envClass = \(venv, fenv, cenv) -> (aux venv varElems, aux fenv funElems, cenv)
       aux env' elems' = Data.Map.union env' $ Data.Map.fromList $ zip (classElemsToIdents elems') (classElemsToTypes elems')
   local envClass (mapM_ checkClassElem elems)
@@ -184,7 +262,7 @@ checkClassElem (ClassAttrDef _ t ident) = return Nothing
 checkClassElem (ClassMethodDef pos t ident args block) = do
   checkTopDef (PFunDef pos t ident args block)
 
-classElemsToIdents :: [ClassElem] -> [Ident]
+classElemsToIdents :: [ClassElem] -> [IIdent]
 classElemsToIdents [] = []
 classElemsToIdents ((ClassAttrDef _ t items):elems) = map (\(ClassItem _ ident) -> ident) items ++ classElemsToIdents elems
 classElemsToIdents ((ClassMethodDef _ t ident args _):elems) = ident:classElemsToIdents elems
@@ -201,10 +279,13 @@ checkBlock (SBlock _ stmts) = checkStmts stmts
 checkStmts :: [Stmt] -> Type -> FMonad
 checkStmts [] _ = return Nothing
 checkStmts (SEmpty _:stmts) t = checkStmts stmts t
-checkStmts [SBStmt _ block] t = do
-  checkBlock block t
 checkStmts (SBStmt _ block:stmts) t = do
-  error "SBStmt: impossible"
+  mt' <- checkBlock block t
+  mt'' <- checkStmts stmts t
+  case (mt', mt'') of
+    (Just t', _) -> return $ Just t
+    (_, Just t'') -> return $ Just t
+    (Nothing, Nothing) -> return Nothing
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToEnv ident t
   checkValType t
@@ -219,40 +300,39 @@ checkStmts (SDecl _ t (item:items):stmts) t' = do
 checkStmts (SDecl _ _ []:stmts) t = checkStmts stmts t
 checkStmts (SAss _ expr expr':stmts) t'' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError "Not assignable"
+  unless ass $ throwError $ ErrNotAssignable t
   (t', _) <- checkExpr expr'
-  liftIO $ print (t, t')
-  unless (sameType t t') $ throwError "Wrong type"
+  unless (sameType t t') $ throwError $ ErrWrongType t t'
   tryEvalExpr expr'
   checkStmts stmts t''
 checkStmts (SIncr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError "Not assignable"
-  unless (sameType t (TInt pos)) $ throwError "Wrong type"
+  unless ass $ throwError $ ErrNotAssignable t
+  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
   checkStmts stmts t'
 checkStmts (SDecr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError "Not assignable"
-  unless (sameType t (TInt pos)) $ throwError "Wrong type"
+  unless ass $ throwError $ ErrNotAssignable t
+  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
   checkStmts stmts t'
 checkStmts (SRet pos expr:stmts) t = do
-  when (sameType t (TVoid pos)) $ throwError "Return value with void type"
+  when (sameType t (TVoid pos)) $ throwError $ ErrVoidReturnValue pos
   (t', _) <- checkExpr expr
-  unless (sameType t t') $ throwError "Wrong type"
+  unless (sameType t t') $ throwError $ ErrWrongType t t'
   tryEvalExpr expr
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError "Wrong return type"
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType t t''
     Nothing -> return $ Just t
 checkStmts (SVRet pos:stmts) t = do
-  unless (sameType t (TVoid pos)) $ throwError "Wrong type"
+  unless (sameType t (TVoid pos)) $ throwError $ ErrWrongType (TVoid $ hasPosition t) t
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError "Wrong return type"
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType (TVoid $ hasPosition t'') t''
     Nothing -> return $ Just t
 checkStmts (SCond pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
   mt1 <- checkStmts [stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
@@ -260,13 +340,13 @@ checkStmts (SCond pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> throwError "If branch doesn't return and there is no return after"
+        _ -> throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return Nothing
     _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
   mt1 <- checkStmts [stmt1] t
   mt2 <- checkStmts [stmt2] t
   mt'' <- checkStmts stmts t
@@ -276,13 +356,13 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
       case (mt1, mt2, mt'') of
         (Just _, Just _, _) -> return $ Just t
         (_, _, Just _) -> return $ Just t
-        _ -> throwError "If else branches don't return and there is no return after"
+        _ -> throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt2
     _ -> error "checkStmts: impossible"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
   mt1 <- checkStmts [stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
@@ -290,13 +370,13 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> throwError "No return after while loop with undetermined conditions"
+        _ -> throwError $ ErrWhileLoopNotReturningInEveryCase pos
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   (t'', _) <- checkExpr expr
-  unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
+  unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType (TArray (hasPosition expr) t') t''
   tryInsertToEnv ident t'
   local (insertToEnv ident t') (checkStmts [stmt] t)
   checkStmts stmts t
@@ -308,17 +388,17 @@ checkStmts (SExp _ expr:stmts) t = do
 
 maxInt = 2^31 - 1
 minInt = -2^31
-checkInt :: Integer -> TEMonad
-checkInt n = if minInt <= n && n <= maxInt then return $ Just $ VInt n else throwError "Integer out of range"
+checkInt :: Pos -> Integer -> TEMonad
+checkInt pos n = if minInt <= n && n <= maxInt then return $ Just $ VInt n else throwError $ ErrIntegerOutOfRange pos n
 
 tryEvalExpr :: Expr -> TEMonad
-tryEvalExpr (ELitInt pos n) = checkInt n
+tryEvalExpr (ELitInt pos n) = checkInt pos n
 tryEvalExpr (ELitTrue pos) = return $ Just $ VBool True
 tryEvalExpr (ELitFalse pos) = return $ Just $ VBool False
 tryEvalExpr (ENeg pos expr) = do
   mn <- tryEvalExpr expr
   case mn of
-    Just (VInt n) -> checkInt (-n)
+    Just (VInt n) -> checkInt pos (-n)
     _ -> return Nothing
 tryEvalExpr (ENot pos expr) = do
   mb <- tryEvalExpr expr
@@ -330,17 +410,17 @@ tryEvalExpr (EMul pos expr1 op expr2) = do
   mn2 <- tryEvalExpr expr2
   case (mn1, mn2) of
     (Just (VInt n1), Just (VInt n2)) -> case op of
-      OTimes _ -> checkInt $ n1 * n2
-      ODiv _ -> if n2 /= 0 then checkInt $ n1 `div` n2 else throwError "Division by zero"
-      OMod _ -> if n2 /= 0 then checkInt $ n1 `mod` n2 else throwError "Mod by zero"
+      OTimes _ -> checkInt pos $ n1 * n2
+      ODiv _ -> if n2 /= 0 then checkInt pos $ n1 `div` n2 else throwError $ ErrDivisionByZero pos
+      OMod _ -> if n2 /= 0 then checkInt pos $ n1 `mod` n2 else throwError $ ErrDivisionByZero pos
     _ -> return Nothing
 tryEvalExpr (EAdd pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
   mn2 <- tryEvalExpr expr2
   case (mn1, mn2) of
     (Just (VInt n1), Just (VInt n2)) -> case op of
-      OPlus _ -> checkInt $ n1 + n2
-      OMinus _ -> checkInt $ n1 - n2
+      OPlus _ -> checkInt pos $ n1 + n2
+      OMinus _ -> checkInt pos $ n1 - n2
     _ -> return Nothing
 tryEvalExpr (ERel pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
@@ -378,7 +458,7 @@ checkExpr (EVar _ ident) = do
   (venv, _, _) <- ask
   case Data.Map.lookup ident venv of
     Just t -> return (t, True)
-    Nothing -> throwError "Unknown ident"
+    Nothing -> throwError $ ErrUnknownVariable ident
 checkExpr (ELitInt pos _) = return (TInt pos, False)
 checkExpr (ELitTrue pos) = return (TBool pos, False)
 checkExpr (ELitFalse pos) = return (TBool pos, False)
@@ -389,98 +469,104 @@ checkExpr (ECastNull pos t) = do
       (venv, _, cenv) <- ask
       case Data.Map.lookup ident cenv of
         Just _ -> return (t, False)
-        Nothing -> throwError "Unknown class"
+        Nothing -> throwError $ ErrUnknownClass ident
     TArray {} -> return (t, False)
-    _ -> throwError "Wrong type"
+    _ -> throwError $ ErrCannotCastTo t
 checkExpr (EArrayNew pos t expr) = do
   checkValType t
   (t', _) <- checkExpr expr
-  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
+  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType (TInt $ hasPosition t') t'
   return (TArray pos t, False)
 checkExpr (EArrayElem pos expr val) = do
   (t, _) <- checkExpr expr
   checkValType t
   (t', _) <- checkExpr val
-  unless (sameType t' (TInt pos)) $ throwError "Wrong type"
+  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType (TInt $ hasPosition t') t'
   case t of
     TArray _ t'' -> return (t'', True)
-    _ -> throwError "Wrong type"
+    _ -> throwError $ ErrNotAnArray t
 checkExpr (EClassAttr pos expr ident) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
-      (venv, _, cenv) <- ask
+      (_, _, cenv) <- ask
       case Data.Map.lookup ident' cenv of
-        Just (_, cvenv) -> do
+        Just (_, cvenv, _) -> do
           case Data.Map.lookup ident cvenv of
             Just t -> return (t, True)
-            Nothing -> throwError "Unknown class attribute"
-        Nothing -> throwError "Unknown class"
-    _ -> throwError "Wrong type"
+            Nothing -> throwError $ ErrUnknownClassAttribute ident
+        Nothing -> throwError $ ErrUnknownClass ident'
+    _ -> throwError $ ErrNotAClass t
 checkExpr (EClassNew pos ident) = do
   (_, _, cenv) <- ask
   case Data.Map.lookup ident cenv of
     Just _ -> return (TClass pos ident, False)
-    Nothing -> throwError "Class not defined"
+    Nothing -> throwError $ ErrUnknownClass ident
 checkExpr (EMethodCall pos expr ident exprs) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
       (_, _, cenv) <- ask
       case Data.Map.lookup ident' cenv of
-        Just (_, cvenv) -> do
-          case Data.Map.lookup ident cvenv of
+        Just (_, _, cfenv) -> do
+          case Data.Map.lookup ident cfenv of
             Just (TFun pos' t' ts) -> do
-              let methodEnv = (\(venv, fenv, cenv) -> (cvenv, fenv, cenv))
+              let methodEnv = (\(venv, fenv, cenv) -> (venv, cfenv, cenv))
               local methodEnv $ checkExpr (EFuntionCall pos ident exprs)
-            Just _ -> throwError "Not a method"
-            Nothing -> throwError "Unknown class attribute"
-        Nothing -> throwError "Unknown class"
-    _ -> throwError "Wrong type"
+            Just _ -> throwError $ ErrNotAFunction t
+            Nothing -> throwError $ ErrUnknownClassMethod ident
+        Nothing -> throwError $ ErrUnknownClass ident'
+    _ -> throwError $ ErrNotAClass t
 checkExpr (EFuntionCall pos ident exprs) = do
   (_, fenv, _) <- ask
   case Data.Map.lookup ident fenv of
     Just (TFun _ t ts) -> do
-      when (length ts /= length exprs) $ throwError "Wrong number of arguments"
+      when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments ident (length ts) (length exprs)
       argTypes' <- mapM checkExpr exprs
       let argTypes = map fst argTypes'
-      if all (== True) $ zipWith sameType argTypes ts then return (t, False) else throwError "Wrong type of arguments"
-    _ -> throwError "Unknown function"
+      if all (== True) $ zipWith sameType argTypes ts then return (t, False) else
+        throwError $ ErrWrongTypeOfArgument ident (length ts) (head ts) (head argTypes)
+    _ -> throwError $ ErrUnknownFunction ident
 checkExpr (ENeg pos expr) = do
   (t, _) <- checkExpr expr
-  unless (sameType t (TInt pos)) $ throwError "Wrong type"
+  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
   return (t, False)
 checkExpr (ENot pos expr) = do
   (t, _) <- checkExpr expr
-  unless (sameType t (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t (TBool pos)) $ throwError $ ErrBooleanOperation t
   return (t, False)
 checkExpr (EMul pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TInt pos) && sameType t2 (TInt pos)) $ throwError "Wrong type"
+  unless (sameType t1 (TInt pos)) $ throwError $ ErrArithmeticInt t1
+  unless (sameType t2 (TInt pos)) $ throwError $ ErrArithmeticInt t2
   return (TInt pos, False)
 checkExpr (EAdd pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TInt pos) && sameType t2 (TInt pos)) $ throwError "Wrong type"
+  unless (sameType t1 (TInt pos)) $ throwError $ ErrArithmeticInt t1
+  unless (sameType t2 (TInt pos)) $ throwError $ ErrArithmeticInt t2
   return (TInt pos, False)
 checkExpr (ERel pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 t2 && not (sameType t1 (TVoid pos))) $ throwError "Wrong type"
+  unless (sameType t1 t2) $ throwError $ ErrWrongType t1 t2
+  when (sameType t1 (TVoid pos)) $ throwError $ ErrVoidValue pos
   case op of
     OEQU {} -> return (TBool pos, False)
     ONE {} -> return (TBool pos, False)
-    _ -> if sameType t1 (TInt pos) then return (TBool pos, False) else throwError "Only ints can be compared"
+    _ -> if sameType t1 (TInt pos) then return (TBool pos, False) else throwError $ ErrInequalityOperation t1
 checkExpr (EAnd pos expr1 expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TBool pos) && sameType t2 (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation t1
+  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation t2
   return (TBool pos, False)
 checkExpr (EOr pos expr1 expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TBool pos) && sameType t2 (TBool pos)) $ throwError "Wrong type"
+  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation t1
+  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation t2
   return (TBool pos, False)
 
 
@@ -490,9 +576,9 @@ checkValType (TClass _ ident) = do
   (_, _, cenv) <- ask
   case Data.Map.lookup ident cenv of
     Just _ -> return ()
-    Nothing -> throwError "Unknown class"
-checkValType TFun {} = throwError "Function type in variable"
-checkValType (TVoid _) = throwError "Void type in variable"
+    Nothing -> throwError $ ErrUnknownClass ident
+checkValType t@TFun {} = throwError $ ErrFunctionValue (hasPosition t)
+checkValType (TVoid pos) = throwError $ ErrVoidValue pos
 checkValType _ = return ()
 
 checkFunRetType :: Type -> FMonad' ()
@@ -501,21 +587,21 @@ checkFunRetType (TClass _ ident) = do
   (_, _, cenv) <- ask
   case Data.Map.lookup ident cenv of
     Just _ -> return ()
-    Nothing -> throwError "Unknown class"
-checkFunRetType TFun {} = throwError "Function type in function return type"
+    Nothing -> throwError $ ErrUnknownClass ident
+checkFunRetType t@TFun {} = throwError $ ErrFunctionValue (hasPosition t)
 checkFunRetType _ = return ()
 
 
-tryInsertToEnv :: Ident -> Type -> FMonad
+tryInsertToEnv :: IIdent -> Type -> FMonad
 tryInsertToEnv ident t = do
   (venv, fenv, _) <- ask
   case t of
-    TFun {} -> when (Data.Map.member ident fenv) $ throwError "Duplicate ident"
-    _ -> when (Data.Map.member ident venv) $ throwError "Duplicate ident"
-  when (sameType t (TVoid $ hasPosition t)) $ throwError "Void type"
+    TFun {} -> when (Data.Map.member ident fenv) $ throwError $ ErrDuplicateFunction ident
+    _ -> when (Data.Map.member ident venv) $ throwError $ ErrDuplicateVariable ident
+  when (sameType t (TVoid $ hasPosition t)) $ throwError $ ErrVoidValue (hasPosition t)
   return Nothing
 
-insertToEnv :: Ident -> Type -> Env -> Env
+insertToEnv :: IIdent -> Type -> Env -> Env
 insertToEnv ident t (venv, fenv, cenv) =
   case t of
     TFun {} -> (venv, Data.Map.insert ident t fenv, cenv)

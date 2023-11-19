@@ -4,17 +4,19 @@ entrypoints Program ;
 
 PProgram.   Program ::= [TopDef] ;
 
+IIdent.     IIdent ::= Ident ;
+
 -- definitions ---------------------------------------------
 
-PFunDef.      TopDef ::= Type Ident "(" [Arg] ")" Block ;
+PFunDef.      TopDef ::= Type IIdent "(" [Arg] ")" Block ;
 
-PClassDef.    TopDef ::= "class" Ident ClassDef ;
+PClassDef.    TopDef ::= "class" IIdent ClassDef ;
 
-PClassDefExt. TopDef ::= "class" Ident "extends" Ident ClassDef ;
+PClassDefExt. TopDef ::= "class" IIdent "extends" IIdent ClassDef ;
 
 separator nonempty TopDef "" ;
 
-PArg.      Arg ::= Type Ident;
+PArg.      Arg ::= Type IIdent;
 
 separator  Arg "," ;
 
@@ -22,11 +24,11 @@ ClassDef.       ClassDef ::= "{" [ClassElem] "}" ;
 
 ClassAttrDef.   ClassElem ::= Type [ClassItem] ";" ;
 
-ClassItem.      ClassItem ::= Ident ;
+ClassItem.      ClassItem ::= IIdent ;
 
 separator nonempty ClassItem "," ;
 
-ClassMethodDef. ClassElem ::= Type Ident "(" [Arg] ")" Block ;
+ClassMethodDef. ClassElem ::= Type IIdent "(" [Arg] ")" Block ;
 
 separator       ClassElem "" ;
 
@@ -42,9 +44,9 @@ SBStmt.     Stmt ::= Block ;
 
 SDecl.      Stmt ::= Type [Item] ";" ;
 
-SNoInit.    Item ::= Ident ; 
+SNoInit.    Item ::= IIdent ; 
 
-SInit.      Item ::= Ident "=" Expr ;
+SInit.      Item ::= IIdent "=" Expr ;
 
 separator nonempty Item "," ;
 
@@ -64,7 +66,7 @@ SCondElse.  Stmt ::= "if" "(" Expr ")" Stmt "else" Stmt  ;
 
 SWhile.     Stmt ::= "while" "(" Expr ")" Stmt ;
 
-SFor.       Stmt ::= "for" "(" Type Ident ":" Expr ")" Stmt ;
+SFor.       Stmt ::= "for" "(" Type IIdent ":" Expr ")" Stmt ;
 
 SExp.       Stmt ::= Expr  ";" ;
 
@@ -80,7 +82,7 @@ TVoid.     Type ::= "void" ;
 
 TArray.    Type ::= Type "[]" ;
 
-TClass.    Type ::= Ident ;
+TClass.    Type ::= IIdent ;
 
 internal   TFun. Type ::= Type "(" [Type] ")" ;
 
@@ -88,7 +90,7 @@ separator  Type "," ;
 
 -- Expressions ---------------------------------------------
 
-EVar.         Expr6 ::= Ident ;
+EVar.         Expr6 ::= IIdent ;
 
 ELitInt.      Expr6 ::= Integer ;
 
@@ -102,15 +104,15 @@ ECastNull.    Expr6 ::= "(" Type ")null" ;
 
 EArrayElem.   Expr6 ::= Expr6 "[" Expr "]" ;
 
-EClassAttr.   Expr6 ::= Expr6 "." Ident ;
+EClassAttr.   Expr6 ::= Expr6 "." IIdent ;
 
-EMethodCall.  Expr6 ::= Expr6 "." Ident "(" [Expr] ")" ;
+EMethodCall.  Expr6 ::= Expr6 "." IIdent "(" [Expr] ")" ;
 
-EFuntionCall. Expr6 ::= Ident "(" [Expr] ")" ;
+EFuntionCall. Expr6 ::= IIdent "(" [Expr] ")" ;
 
 EArrayNew.    Expr5 ::= "new" Type "[" Expr "]" ;
 
-EClassNew.    Expr5 ::= "new" Ident ;
+EClassNew.    Expr5 ::= "new" IIdent ;
 
 ENeg.         Expr5 ::= "-" Expr5 ;
 

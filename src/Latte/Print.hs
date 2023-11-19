@@ -144,11 +144,15 @@ instance Print (Latte.Abs.Program' a) where
   prt i = \case
     Latte.Abs.PProgram _ topdefs -> prPrec i 0 (concatD [prt 0 topdefs])
 
+instance Print (Latte.Abs.IIdent' a) where
+  prt i = \case
+    Latte.Abs.IIdent _ id_ -> prPrec i 0 (concatD [prt 0 id_])
+
 instance Print (Latte.Abs.TopDef' a) where
   prt i = \case
-    Latte.Abs.PFunDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
-    Latte.Abs.PClassDef _ id_ classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_, prt 0 classdef])
-    Latte.Abs.PClassDefExt _ id_1 id_2 classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 id_1, doc (showString "extends"), prt 0 id_2, prt 0 classdef])
+    Latte.Abs.PFunDef _ type_ iident args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 iident, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+    Latte.Abs.PClassDef _ iident classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 iident, prt 0 classdef])
+    Latte.Abs.PClassDefExt _ iident1 iident2 classdef -> prPrec i 0 (concatD [doc (showString "class"), prt 0 iident1, doc (showString "extends"), prt 0 iident2, prt 0 classdef])
 
 instance Print [Latte.Abs.TopDef' a] where
   prt _ [] = concatD []
@@ -157,7 +161,7 @@ instance Print [Latte.Abs.TopDef' a] where
 
 instance Print (Latte.Abs.Arg' a) where
   prt i = \case
-    Latte.Abs.PArg _ type_ id_ -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_])
+    Latte.Abs.PArg _ type_ iident -> prPrec i 0 (concatD [prt 0 type_, prt 0 iident])
 
 instance Print [Latte.Abs.Arg' a] where
   prt _ [] = concatD []
@@ -171,11 +175,11 @@ instance Print (Latte.Abs.ClassDef' a) where
 instance Print (Latte.Abs.ClassElem' a) where
   prt i = \case
     Latte.Abs.ClassAttrDef _ type_ classitems -> prPrec i 0 (concatD [prt 0 type_, prt 0 classitems, doc (showString ";")])
-    Latte.Abs.ClassMethodDef _ type_ id_ args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 id_, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
+    Latte.Abs.ClassMethodDef _ type_ iident args block -> prPrec i 0 (concatD [prt 0 type_, prt 0 iident, doc (showString "("), prt 0 args, doc (showString ")"), prt 0 block])
 
 instance Print (Latte.Abs.ClassItem' a) where
   prt i = \case
-    Latte.Abs.ClassItem _ id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Latte.Abs.ClassItem _ iident -> prPrec i 0 (concatD [prt 0 iident])
 
 instance Print [Latte.Abs.ClassItem' a] where
   prt _ [] = concatD []
@@ -207,13 +211,13 @@ instance Print (Latte.Abs.Stmt' a) where
     Latte.Abs.SCond _ expr stmt -> prPrec i 0 (concatD [doc (showString "if"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt])
     Latte.Abs.SCondElse _ expr stmt1 stmt2 -> prPrec i 0 (concatD [doc (showString "if"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt1, doc (showString "else"), prt 0 stmt2])
     Latte.Abs.SWhile _ expr stmt -> prPrec i 0 (concatD [doc (showString "while"), doc (showString "("), prt 0 expr, doc (showString ")"), prt 0 stmt])
-    Latte.Abs.SFor _ type_ id_ expr stmt -> prPrec i 0 (concatD [doc (showString "for"), doc (showString "("), prt 0 type_, prt 0 id_, doc (showString ":"), prt 0 expr, doc (showString ")"), prt 0 stmt])
+    Latte.Abs.SFor _ type_ iident expr stmt -> prPrec i 0 (concatD [doc (showString "for"), doc (showString "("), prt 0 type_, prt 0 iident, doc (showString ":"), prt 0 expr, doc (showString ")"), prt 0 stmt])
     Latte.Abs.SExp _ expr -> prPrec i 0 (concatD [prt 0 expr, doc (showString ";")])
 
 instance Print (Latte.Abs.Item' a) where
   prt i = \case
-    Latte.Abs.SNoInit _ id_ -> prPrec i 0 (concatD [prt 0 id_])
-    Latte.Abs.SInit _ id_ expr -> prPrec i 0 (concatD [prt 0 id_, doc (showString "="), prt 0 expr])
+    Latte.Abs.SNoInit _ iident -> prPrec i 0 (concatD [prt 0 iident])
+    Latte.Abs.SInit _ iident expr -> prPrec i 0 (concatD [prt 0 iident, doc (showString "="), prt 0 expr])
 
 instance Print [Latte.Abs.Item' a] where
   prt _ [] = concatD []
@@ -227,7 +231,7 @@ instance Print (Latte.Abs.Type' a) where
     Latte.Abs.TBool _ -> prPrec i 0 (concatD [doc (showString "boolean")])
     Latte.Abs.TVoid _ -> prPrec i 0 (concatD [doc (showString "void")])
     Latte.Abs.TArray _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
-    Latte.Abs.TClass _ id_ -> prPrec i 0 (concatD [prt 0 id_])
+    Latte.Abs.TClass _ iident -> prPrec i 0 (concatD [prt 0 iident])
     Latte.Abs.TFun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
 
 instance Print [Latte.Abs.Type' a] where
@@ -237,18 +241,18 @@ instance Print [Latte.Abs.Type' a] where
 
 instance Print (Latte.Abs.Expr' a) where
   prt i = \case
-    Latte.Abs.EVar _ id_ -> prPrec i 6 (concatD [prt 0 id_])
+    Latte.Abs.EVar _ iident -> prPrec i 6 (concatD [prt 0 iident])
     Latte.Abs.ELitInt _ n -> prPrec i 6 (concatD [prt 0 n])
     Latte.Abs.ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
     Latte.Abs.ELitFalse _ -> prPrec i 6 (concatD [doc (showString "false")])
     Latte.Abs.EString _ str -> prPrec i 6 (concatD [printString str])
     Latte.Abs.ECastNull _ type_ -> prPrec i 6 (concatD [doc (showString "("), prt 0 type_, doc (showString ")null")])
     Latte.Abs.EArrayElem _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
-    Latte.Abs.EClassAttr _ expr id_ -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_])
-    Latte.Abs.EMethodCall _ expr id_ exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 id_, doc (showString "("), prt 0 exprs, doc (showString ")")])
-    Latte.Abs.EFuntionCall _ id_ exprs -> prPrec i 6 (concatD [prt 0 id_, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    Latte.Abs.EClassAttr _ expr iident -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 iident])
+    Latte.Abs.EMethodCall _ expr iident exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 iident, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    Latte.Abs.EFuntionCall _ iident exprs -> prPrec i 6 (concatD [prt 0 iident, doc (showString "("), prt 0 exprs, doc (showString ")")])
     Latte.Abs.EArrayNew _ type_ expr -> prPrec i 5 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
-    Latte.Abs.EClassNew _ id_ -> prPrec i 5 (concatD [doc (showString "new"), prt 0 id_])
+    Latte.Abs.EClassNew _ iident -> prPrec i 5 (concatD [doc (showString "new"), prt 0 iident])
     Latte.Abs.ENeg _ expr -> prPrec i 5 (concatD [doc (showString "-"), prt 5 expr])
     Latte.Abs.ENot _ expr -> prPrec i 5 (concatD [doc (showString "!"), prt 5 expr])
     Latte.Abs.EMul _ expr1 mulop expr2 -> prPrec i 4 (concatD [prt 4 expr1, prt 0 mulop, prt 5 expr2])

@@ -1,8 +1,8 @@
 int main() {
-    A a = new A;
-    a.set_x(5);
-    a.get_x();
-    a.inc();
+    int x = 0;
+    {
+        boolean x = "dupa";
+    }
     return 0;
 }
 
