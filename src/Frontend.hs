@@ -151,6 +151,7 @@ classDeclarationsToCEnv topDefs =
 
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef _ t ident args block) = do
+  checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   let envFun = \(venv, fenv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, fenv, cenv)
@@ -164,7 +165,9 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
   let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
   checkNoDuplicateIdents $ classElemsToIdents funElems
+  mapM_ checkFunRetType $ classElemsToTypes funElems
   let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+  mapM_ checkValType $ classElemsToTypes varElems
   checkNoDuplicateIdents $ classElemsToIdents varElems
   let envClass = \(venv, fenv, cenv) -> (aux venv varElems, aux fenv funElems, cenv)
       aux env' elems' = Data.Map.union env' $ Data.Map.fromList $ zip (classElemsToIdents elems') (classElemsToTypes elems')
@@ -202,6 +205,7 @@ checkStmts (SBStmt _ block:stmts) t = do
   error "SBStmt: impossible"
 checkStmts (SDecl _ t (item:items):stmts) t' = do
   tryInsertToEnv ident t
+  checkValType t
   local (insertToEnv ident t) (checkStmts stmts' t')
   where
     stmts' = case item of
@@ -360,29 +364,6 @@ tryEvalExpr (EOr pos expr1 expr2) = do
 tryEvalExpr _ = return Nothing
 
 
--- checkExpr :: Lvalue -> EMonad
--- checkExpr (LVar _ ident) = do
---   (venv, cenv) <- ask
---   case Data.Map.lookup ident venv of
---     Just t -> return $ Just (t, True)
---     Nothing -> throwError "Unknown ident"
--- checkExpr (LArrayElem _ (ArrayElem pos lvalue expr)) = do
---   Just (t, _) <- checkExpr lvalue
---   Just t' <- checkExpr expr
---   unless (sameType t' (TInt pos)) $ throwError "Wrong type"
---   case t of
---     TArray _ t'' -> return $ Just (t'', True)
---     _ -> throwError "Wrong type"
--- checkExpr (LClassAttr pos attr@(ClassAttr _ lvalue ident)) = do
---   Just t <- checkExpr (EClassAttr pos attr)
---   return $ Just (t, True)
--- checkExpr (LMethodCall pos method@(MethodCall _ lvalue ident exprs)) = do
---   Just t <- checkExpr (EMethodCall pos method)
---   return $ Just (t, isAssignableType t)
--- checkExpr (LFuntionCall pos fun) = do
---   Just t <- checkExpr (EFuntionCall pos fun)
---   return $ Just (t, isAssignableType t)
-
 checkExpr :: Expr -> EMonad
 checkExpr (EVar _ ident) = do
   (venv, _, _) <- ask
@@ -403,11 +384,13 @@ checkExpr (ECastNull pos t) = do
     TArray {} -> return (t, False)
     _ -> throwError "Wrong type"
 checkExpr (EArrayNew pos t expr) = do
+  checkValType t
   (t', _) <- checkExpr expr
   unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   return (TArray pos t, False)
 checkExpr (EArrayElem pos expr val) = do
   (t, _) <- checkExpr expr
+  checkValType t
   (t', _) <- checkExpr val
   unless (sameType t' (TInt pos)) $ throwError "Wrong type"
   case t of
@@ -490,6 +473,28 @@ checkExpr (EOr pos expr1 expr2) = do
   (t2, _) <- checkExpr expr2
   unless (sameType t1 (TBool pos) && sameType t2 (TBool pos)) $ throwError "Wrong type"
   return (TBool pos, False)
+
+
+checkValType :: Type -> FMonad' ()
+checkValType (TArray _ t) = checkValType t
+checkValType (TClass _ ident) = do
+  (_, _, cenv) <- ask
+  case Data.Map.lookup ident cenv of
+    Just _ -> return ()
+    Nothing -> throwError "Unknown class"
+checkValType TFun {} = throwError "Function type in variable"
+checkValType (TVoid _) = throwError "Void type in variable"
+checkValType _ = return ()
+
+checkFunRetType :: Type -> FMonad' ()
+checkFunRetType arr@(TArray _ t) = checkValType arr
+checkFunRetType (TClass _ ident) = do
+  (_, _, cenv) <- ask
+  case Data.Map.lookup ident cenv of
+    Just _ -> return ()
+    Nothing -> throwError "Unknown class"
+checkFunRetType TFun {} = throwError "Function type in function return type"
+checkFunRetType _ = return ()
 
 
 tryInsertToEnv :: Ident -> Type -> FMonad
