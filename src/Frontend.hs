@@ -324,7 +324,7 @@ tryEvalExpr (EMul pos expr1 op expr2) = do
     (Just (VInt n1), Just (VInt n2)) -> case op of
       OTimes _ -> return $ Just $ VInt $ n1 * n2
       ODiv _ -> if n2 /= 0 then return $ Just $ VInt $ n1 `div` n2 else throwError "Division by zero"
-      OMod _ -> return $ Just $ VInt $  n1 `mod` n2
+      OMod _ -> if n2 /= 0 then return $ Just $ VInt $  n1 `mod` n2 else throwError "Mod by zero"
     _ -> return Nothing
 tryEvalExpr (EAdd pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
