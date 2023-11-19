@@ -109,10 +109,13 @@ checkNoDuplicateIdents idents = do
 
 checkMain :: [TopDef] -> FMonad
 checkMain topDefs = do
-  let mainFun = filter (\(PFunDef _ _ ident _ _) -> ident == Ident "main") topDefs
-  when (null mainFun) $ throwError "No main function"
-  let (PFunDef _ t _ args _) = head mainFun
-  when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError "Wrong main function"
+  let mains = filter (\def -> getTopDefIdent def == Ident "main") topDefs
+  when (null mains) $ throwError "No main function"
+  when (length mains > 1) $ throwError "More than one main function"
+  case head mains of
+    PFunDef _ t ident args _ ->
+      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError "Wrong main function"
+    _ -> throwError "Main is not a functions"
   return Nothing
 
 functionDeclarationsToVEnv :: [TopDef] -> VEnv
