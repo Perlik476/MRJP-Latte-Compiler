@@ -43,11 +43,10 @@ run v p s =
     Right tree -> do
       val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty, Data.Map.empty)
       case val of
-        Right _ -> putStrLn "Frontend check successful."
+        Right _ -> putStrLn "OK"
         Left err -> do
           hPutStrLn stderr "ERROR"
-          hPutStrLn stderr "Frontend check failed."
-          hPutStrLn stderr $ "error: " ++ show err
+          hPutStrLn stderr $ "Error: " ++ show err
           exitFailure
   where
   ts = myLexer s
@@ -118,39 +117,59 @@ data Error =
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
 instance Show Error where
-  show (ErrUnknownVariable ident) = "Unknown variable " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrUnknownFunction ident) = "Unknown function " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrUnknownClass ident) = "Unknown class " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrUnknownClassAttribute ident) = "Unknown class attribute " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrUnknownClassMethod ident) = "Unknown class method " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateVariable ident) = "Duplicate variable " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateFunction ident) = "Duplicate function " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateClass ident) = "Duplicate class " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateClassAttribute ident) = "Duplicate class attribute " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateClassMethod ident) = "Duplicate class method " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrDuplicateFunctionArgumentName ident) = "Duplicate function argument name " ++ show ident ++ " at " ++ show (hasPosition ident)
-  show (ErrWrongType t t') = "Wrong type " ++ show t' ++ " at " ++ show (hasPosition t) ++ ", expected " ++ show t
-  show (ErrWrongNumberOfArguments ident n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ show (hasPosition ident) ++ " of function " ++ show ident ++ ", expected " ++ show n
-  show (ErrWrongTypeOfArgument ident n t t') = "Wrong type " ++ show t' ++ " at " ++ show (hasPosition ident) ++ " of argument " ++ show n ++ " of function " ++ show ident ++ ", expected " ++ show t
-  show (ErrVoidReturnValue pos) = "Void return value at " ++ show pos
+  show (ErrUnknownVariable ident) = "Unknown variable " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrUnknownFunction ident) = "Unknown function " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrUnknownClass ident) = "Unknown class " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrUnknownClassAttribute ident) = "Unknown class attribute " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrUnknownClassMethod ident) = "Unknown class method " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateVariable ident) = "Duplicate variable " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateFunction ident) = "Duplicate function " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateClass ident) = "Duplicate class " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateClassAttribute ident) = "Duplicate class attribute " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateClassMethod ident) = "Duplicate class method " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrDuplicateFunctionArgumentName ident) = "Duplicate function argument name " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrWrongType t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition t) ++ ", expected " ++ showType t
+  show (ErrWrongNumberOfArguments ident n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos (hasPosition ident) ++ " of function " ++ showIdent ident ++ ", expected " ++ show n
+  show (ErrWrongTypeOfArgument ident n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition ident) ++ " of argument " ++ show n ++ " of function " ++ showIdent ident ++ ", expected " ++ showType t
+  show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
   show ErrNoMain = "No main function"
-  show (ErrMultipleMain pos) = "Multiple main functions at " ++ show pos
-  show (ErrWrongMainType t) = "Wrong main function type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
-  show (ErrMainNotAFunction pos) = "Main is not a function at " ++ show pos
-  show (ErrNotAssignable t) = "Not assignable type " ++ show t ++ " at " ++ show (hasPosition t)
-  show (ErrArithmeticInt t) = "Arithmetic operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
-  show (ErrBooleanOperation t) = "Boolean operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected bool"
-  show (ErrInequalityOperation t) = "Inequality operation on type " ++ show t ++ " at " ++ show (hasPosition t) ++ ", expected int"
-  show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ show pos
-  show (ErrWhileLoopNotReturningInEveryCase pos) = "While loop doesn't return in every case with no return after at " ++ show pos
-  show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ show pos ++ ": " ++ show n
-  show (ErrDivisionByZero pos) = "Division by zero at " ++ show pos
-  show (ErrCannotCastTo t) = "Cannot cast to type " ++ show t ++ " at " ++ show (hasPosition t)
-  show (ErrNotAnArray t) = "Not an array type " ++ show t ++ " at " ++ show (hasPosition t)
-  show (ErrNotAClass t) = "Not a class type " ++ show t ++ " at " ++ show (hasPosition t)
-  show (ErrNotAFunction t) = "Not a function type " ++ show t ++ " at " ++ show (hasPosition t)
-  show (ErrVoidValue pos) = "Void value at " ++ show pos
-  show (ErrFunctionValue pos) = "Function value at " ++ show pos
+  show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
+  show (ErrWrongMainType t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrMainNotAFunction pos) = "Main is not a function at " ++ showPos pos
+  show (ErrNotAssignable t) = "Not assignable type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrArithmeticInt t) = "Arithmetic operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrBooleanOperation t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected bool"
+  show (ErrInequalityOperation t) = "Inequality operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ showPos pos
+  show (ErrWhileLoopNotReturningInEveryCase pos) = "While loop doesn't return in every case with no return after at " ++ showPos pos
+  show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ showPos pos ++ ": " ++ show n
+  show (ErrDivisionByZero pos) = "Division by zero at " ++ showPos pos
+  show (ErrCannotCastTo t) = "Cannot cast to type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrNotAnArray t) = "Not an array type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrNotAClass t) = "Not a class type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrNotAFunction t) = "Not a function type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrVoidValue pos) = "Void value at " ++ showPos pos
+  show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
+
+
+showIdent :: IIdent -> String
+showIdent (IIdent _ (Ident ident)) = show ident
+
+showType :: Type -> String
+showType (TInt _) = "int"
+showType (TStr _) = "string"
+showType (TBool _) = "bool"
+showType (TVoid _) = "void"
+showType (TArray _ t) = showType t ++ "[]"
+showType (TClass _ ident) = showIdent ident
+showType (TFun _ t ts) = showType t ++ "(" ++ Data.List.intercalate ", " (map showType ts) ++ ")"
+
+showPos :: Pos -> String
+showPos (BNFC'Position l c) = show l ++ ":" ++ show c
+showPos BNFC'NoPosition = "unknown"
+showPos _ = error "showPos: impossible"
+
+
 
 type VEnv = Map IIdent Type
 type FEnv = Map IIdent Type
