@@ -41,7 +41,7 @@ run v p s =
       hPutStrLn stderr err
       exitFailure
     Right tree -> do
-      val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty)
+      val <- runReaderT (runExceptT (checkProgram tree)) (Data.Map.empty, Data.Map.empty, Data.Map.empty)
       case val of
         Right _ -> putStrLn "Frontend check successful."
         Left err -> do
@@ -82,9 +82,10 @@ data ExprVal = VInt Integer | VBool Bool
 type Error = String
 
 type VEnv = Map Ident Type
+type FEnv = Map Ident Type
 type CEnv = Map Ident (ClassType, VEnv)
 type ClassType = ([ClassElem], Maybe Ident)
-type Env = (VEnv, CEnv)
+type Env = (VEnv, FEnv, CEnv)
 emptyEnv = (Data.Map.empty, Data.Map.empty)
 
 checkProgram :: Program -> FMonad
@@ -92,9 +93,9 @@ checkProgram (PProgram _ topDefs) = do
   let idents = map getTopDefIdent topDefs
   checkNoDuplicateIdents idents
   checkMain topDefs
-  let venv = functionDeclarationsToVEnv topDefs
+  let fenv = functionDeclarationsToVEnv topDefs
   let cenv = classDeclarationsToCEnv topDefs
-  let env = (venv, cenv)
+  let env = (Data.Map.empty, fenv, cenv)
   local (const env) (mapM_ checkTopDef topDefs)
   return Nothing
 
@@ -132,13 +133,13 @@ classDeclarationsToCEnv topDefs =
   where
     f (PClassDef _ ident (ClassDef _ elems)) =
       let elemIdents = classElemsToIdents elems
-          elemTypes = map getClassElemType elems
+          elemTypes = classElemsToTypes elems
           venv = Data.Map.fromList $ zip elemIdents elemTypes in
       (ident, ((elems, Nothing), venv))
     f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
       -- TODO
       let elemIdents = classElemsToIdents elems
-          elemTypes = map getClassElemType elems
+          elemTypes = classElemsToTypes elems
           venv = Data.Map.fromList $ zip elemIdents elemTypes in
       (ident, ((elems, Just ident'), venv))
     f _ = error "classDeclarationsToCEnv: impossible"
@@ -152,17 +153,20 @@ checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef _ t ident args block) = do
   let argTypes = map (\(PArg _ t _) -> t) args
   let argIdents = map (\(PArg _ _ ident) -> ident) args
-  let envFun = \(venv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, cenv)
+  let envFun = \(venv, fenv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip argIdents argTypes, fenv, cenv)
   mt' <- local envFun (checkBlock block t)
   case mt' of
     Just t' -> if sameType t t' then return Nothing else throwError "Wrong return type"
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError "Wrong return type"
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
-  checkNoDuplicateIdents elemIdents
-  let elemTypes = map getClassElemType elems
-  mapM_ (uncurry tryInsertToVEnv) (elemIdents `zip` elemTypes)
-  let envClass = \(venv, cenv) -> (Data.Map.union venv $ Data.Map.fromList $ zip elemIdents elemTypes, cenv)
+  -- checkNoDuplicateIdents elemIdents -- TODO?
+  let elemTypes = classElemsToTypes elems
+  mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
+  let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+  let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+  let envClass = \(venv, fenv, cenv) -> (aux venv varElems, aux fenv funElems, cenv)
+      aux env' elems' = Data.Map.union env' $ Data.Map.fromList $ zip (classElemsToIdents elems') (classElemsToTypes elems')
   local envClass (mapM_ checkClassElem elems)
   return Nothing
 checkTopDef (PClassDefExt pos ident ident' (ClassDef pos' elems)) = do
@@ -179,9 +183,10 @@ classElemsToIdents [] = []
 classElemsToIdents ((ClassAttrDef _ t items):elems) = map (\(ClassItem _ ident) -> ident) items ++ classElemsToIdents elems
 classElemsToIdents ((ClassMethodDef _ t ident args _):elems) = ident:classElemsToIdents elems
 
-getClassElemType :: ClassElem -> Type
-getClassElemType (ClassAttrDef _ t _) = t
-getClassElemType (ClassMethodDef pos t _ args _) = TFun pos t $ map (\(PArg _ t _) -> t) args
+classElemsToTypes :: [ClassElem] -> [Type]
+classElemsToTypes [] = []
+classElemsToTypes ((ClassAttrDef _ t items):elems) = [t | _ <- items] ++ classElemsToTypes elems
+classElemsToTypes ((ClassMethodDef pos t _ args _):elems) = TFun pos t (map (\(PArg _ t _) -> t) args):classElemsToTypes elems
 
 
 checkBlock :: Block -> Type -> FMonad
@@ -195,7 +200,7 @@ checkStmts [SBStmt _ block] t = do
 checkStmts (SBStmt _ block:stmts) t = do
   error "SBStmt: impossible"
 checkStmts (SDecl _ t (item:items):stmts) t' = do
-  tryInsertToVEnv ident t
+  tryInsertToEnv ident t
   local (insertToEnv ident t) (checkStmts stmts' t')
   where
     stmts' = case item of
@@ -284,7 +289,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   (t'', _) <- checkExpr expr
   unless (sameType t'' (TArray pos t')) $ throwError "Wrong type"
-  tryInsertToVEnv ident t'
+  tryInsertToEnv ident t'
   local (insertToEnv ident t') (checkStmts [stmt] t)
   checkStmts stmts t
 checkStmts (SExp _ expr:stmts) t = do
@@ -379,7 +384,7 @@ tryEvalExpr _ = return Nothing
 
 checkExpr :: Expr -> EMonad
 checkExpr (EVar _ ident) = do
-  (venv, cenv) <- ask
+  (venv, _, _) <- ask
   case Data.Map.lookup ident venv of
     Just t -> return (t, True)
     Nothing -> throwError "Unknown ident"
@@ -390,7 +395,7 @@ checkExpr (EString pos _) = return (TStr pos, False)
 checkExpr (ECastNull pos t) = do
   case t of
     TClass _ ident -> do
-      (venv, cenv) <- ask
+      (venv, _, cenv) <- ask
       case Data.Map.lookup ident cenv of
         Just _ -> return (t, False)
         Nothing -> throwError "Unknown class"
@@ -411,7 +416,7 @@ checkExpr (EClassAttr pos expr ident) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
-      (venv, cenv) <- ask
+      (venv, _, cenv) <- ask
       case Data.Map.lookup ident' cenv of
         Just (_, cvenv) -> do
           case Data.Map.lookup ident cvenv of
@@ -420,7 +425,7 @@ checkExpr (EClassAttr pos expr ident) = do
         Nothing -> throwError "Unknown class"
     _ -> throwError "Wrong type"
 checkExpr (EClassNew pos ident) = do
-  (_, cenv) <- ask
+  (_, _, cenv) <- ask
   case Data.Map.lookup ident cenv of
     Just _ -> return (TClass pos ident, False)
     Nothing -> throwError "Class not defined"
@@ -428,20 +433,20 @@ checkExpr (EMethodCall pos expr ident exprs) = do
   (t, _) <- checkExpr expr
   case t of
     TClass _ ident' -> do
-      (venv, cenv) <- ask
+      (_, _, cenv) <- ask
       case Data.Map.lookup ident' cenv of
         Just (_, cvenv) -> do
           case Data.Map.lookup ident cvenv of
             Just (TFun pos' t' ts) -> do
-              let methodEnv = (\(venv, cenv) -> (cvenv, cenv))
+              let methodEnv = (\(venv, fenv, cenv) -> (cvenv, fenv, cenv))
               local methodEnv $ checkExpr (EFuntionCall pos ident exprs)
             Just _ -> throwError "Not a method"
             Nothing -> throwError "Unknown class attribute"
         Nothing -> throwError "Unknown class"
     _ -> throwError "Wrong type"
 checkExpr (EFuntionCall pos ident exprs) = do
-  (venv, _) <- ask
-  case Data.Map.lookup ident venv of
+  (_, fenv, _) <- ask
+  case Data.Map.lookup ident fenv of
     Just (TFun _ t ts) -> do
       when (length ts /= length exprs) $ throwError "Wrong number of arguments"
       argTypes' <- mapM checkExpr exprs
@@ -486,16 +491,20 @@ checkExpr (EOr pos expr1 expr2) = do
   return (TBool pos, False)
 
 
-tryInsertToVEnv :: Ident -> Type -> FMonad
-tryInsertToVEnv ident t = do
-  (venv, cenv) <- ask
-  when (Data.Map.member ident venv) $ throwError "Duplicate ident"
-  when (Data.Map.member ident cenv) $ throwError "Duplicate ident"
+tryInsertToEnv :: Ident -> Type -> FMonad
+tryInsertToEnv ident t = do
+  (venv, fenv, _) <- ask
+  case t of
+    TFun {} -> when (Data.Map.member ident fenv) $ throwError "Duplicate ident"
+    _ -> when (Data.Map.member ident venv) $ throwError "Duplicate ident"
   when (sameType t (TVoid $ hasPosition t)) $ throwError "Void type"
   return Nothing
 
 insertToEnv :: Ident -> Type -> Env -> Env
-insertToEnv ident t (venv, cenv) = (Data.Map.insert ident t venv, cenv)
+insertToEnv ident t (venv, fenv, cenv) =
+  case t of
+    TFun {} -> (venv, Data.Map.insert ident t fenv, cenv)
+    _ -> (Data.Map.insert ident t venv, fenv, cenv)
 
 
 sameType :: Type -> Type -> Bool
