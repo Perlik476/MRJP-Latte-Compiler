@@ -3,6 +3,10 @@ int main() {
     {
         boolean x = true;
     }
+
+    B b = new B;
+    // b.inc();
+
     return 0;
 }
 
@@ -26,4 +30,8 @@ class B extends A {
     int get_x() {
         return 0;
     }
+
+    // int set_x() {
+    //     return 1;
+    // }
 }
