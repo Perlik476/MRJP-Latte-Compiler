@@ -21,3 +21,9 @@ class A {
         set_x(get_x() + 1);
     }
 }
+
+class B extends A {
+    int get_x() {
+        return 0;
+    }
+}

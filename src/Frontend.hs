@@ -116,6 +116,8 @@ data Error =
   | ErrVoidValue Pos
   | ErrFunctionValue Pos
   | ErrRedefinitionOfBuiltinFunction Pos Ident
+  | ErrFieldShadowing IIdent
+  | ErrOverridingMethodWrongType IIdent Type Type -- (method name, expected, got)
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -154,6 +156,8 @@ instance Show Error where
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
   show (ErrRedefinitionOfBuiltinFunction pos ident) = "Redefinition of builtin function " ++ showIdent' ident ++ " at " ++ showPos pos
+  show (ErrFieldShadowing ident) = "Field shadowing " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident)
+  show (ErrOverridingMethodWrongType ident t t') = "Overriding method " ++ showIdent ident ++ " at " ++ showPos (hasPosition ident) ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
 
 
 showIdent :: IIdent -> String
@@ -279,7 +283,7 @@ checkTopDef (PFunDef pos t ident args block) = do
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   let envFun = \((venv, fenv, cenv), d) -> (
-          (Data.Map.union venv $ Data.Map.fromList $ zip (map fromIIdent argIdents) $ zip argTypes $ repeat (d + 1), fenv, cenv), (d + 1)
+          (Data.Map.union venv $ Data.Map.fromList $ zip (map fromIIdent argIdents) $ zip argTypes $ repeat (d + 1), fenv, cenv), d + 1
         )
   mt' <- local envFun (checkBlock block t)
   case mt' of
@@ -301,14 +305,45 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
         in ((venv', fenv', cenv), d)
   local envClass (mapM_ checkClassElem elems)
   return Nothing
-checkTopDef (PClassDefExt pos ident ident' (ClassDef pos' elems)) = do
-  -- TODO
-  checkTopDef (PClassDef pos ident (ClassDef pos' elems))
+checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
+  let (IIdent _ extendsIdent') = extendsIdent
+  ((_, _, cenv), _) <- ask
+  case Data.Map.lookup extendsIdent' cenv of
+    Nothing -> throwError $ ErrUnknownClass extendsIdent
+    Just ((_, mExtendsIdent2), cvenv, cfenv) -> do
+      let elemIdents = classElemsToIdents elems
+      let elemTypes = classElemsToTypes elems
+      mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
+      let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+      checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
+      mapM_ checkFunRetType $ classElemsToTypes funElems
+      mapM_ (checkOverridingMethod cfenv) $ classElemsToIdents funElems `zip` classElemsToTypes funElems
+      let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+      mapM_ checkValType $ classElemsToTypes varElems
+      checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
+      mapM_ (checkNoShadowing cvenv) (classElemsToIdents varElems)
+      let envClass = \((venv, fenv, cenv), d) ->
+            let venv' = Data.Map.union venv $ Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat d)
+                fenv' = Data.Map.union fenv $ Data.Map.fromList $ zip (map fromIIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
+            in ((venv', fenv', cenv), d)
+      local envClass (mapM_ checkClassElem elems)
+      return Nothing
+
+checkNoShadowing :: VEnv -> IIdent -> FMonad
+checkNoShadowing venv iident@(IIdent _ ident) = do
+  when (Data.Map.member ident venv) $ throwError $ ErrDuplicateVariable iident
+  return Nothing
+
+checkOverridingMethod :: FEnv -> (IIdent, Type) -> FMonad
+checkOverridingMethod fenv (iident@(IIdent _ ident), t) = do
+  case Data.Map.lookup ident fenv of
+    Nothing -> return ()
+    Just t' -> unless (sameType t t') $ throwError $ ErrOverridingMethodWrongType iident t' t
+  return Nothing
 
 checkClassElem :: ClassElem -> FMonad
 checkClassElem (ClassAttrDef _ t ident) = return Nothing
-checkClassElem (ClassMethodDef pos t ident args block) = do
-  checkTopDef (PFunDef pos t ident args block)
+checkClassElem (ClassMethodDef pos t ident args block) = checkTopDef (PFunDef pos t ident args block)
 
 classElemsToIdents :: [ClassElem] -> [IIdent]
 classElemsToIdents [] = []
@@ -686,4 +721,5 @@ sameType (TBool _) (TBool _) = True
 sameType (TVoid _) (TVoid _) = True
 sameType (TClass _ ident) (TClass _ ident') = fromIIdent ident == fromIIdent ident'
 sameType (TArray _ t) (TArray _ t') = sameType t t'
+sameType (TFun _ t ts) (TFun _ t' ts') = sameType t t' && all (uncurry sameType) (ts `zip` ts')
 sameType _ _ = False
