@@ -12,7 +12,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys)
+import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys, difference, intersection)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -76,8 +76,8 @@ data ExprVal = VInt Integer | VBool Bool
 
 type VEnv = Map String (Type, Integer)
 type FEnv = Map String Type
-type CEnv = Map String ClassType
-data ClassType = ClassType 
+type CEnv = Map String ClassData
+data ClassData = ClassData 
   {
     getClassElems :: [ClassElem],
     getExtends :: Maybe String,
@@ -266,10 +266,10 @@ classDeclarationsToCEnv topDefs =
   where
     f (PClassDef _ ident (ClassDef _ elems)) =
       let (venv, fenv) = createEnvs elems in
-      (fromIdent ident, ClassType elems Nothing venv fenv)
+      (fromIdent ident, ClassData elems Nothing venv fenv)
     f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
       let (venv, fenv) = createEnvs elems in
-      (fromIdent ident, ClassType elems (Just $ fromIdent ident') venv fenv)
+      (fromIdent ident, ClassData elems (Just $ fromIdent ident') venv fenv)
     f _ = error "classDeclarationsToCEnv: impossible"
 
     createEnvs :: [ClassElem] -> (VEnv, FEnv)
@@ -312,10 +312,10 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   mapM_ checkValType $ classElemsToTypes varElems
   checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
   let envClass = \env -> env {
-    getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat (getDepth env)),
+    getVenv = Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat (getDepth env)),
     getFenv = Data.Map.union (getFenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
   }
-  local envClass (mapM_ checkClassElem elems)
+  local envClass (mapM_ (checkClassElem ident) elems)
   return Nothing
 checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
   cenv <- asks getCenv
@@ -337,7 +337,7 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
         getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat (getDepth env)),
         getFenv = Data.Map.union (getFenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
       }
-      local envClass (mapM_ checkClassElem elems)
+      local envClass (mapM_ (checkClassElem ident) elems)
       return Nothing
 
 checkNoShadowing :: VEnv -> IIdent -> FMonad
@@ -352,10 +352,52 @@ checkOverridingMethod fenv (ident, t) = do
     Just t' -> unless (sameType t t') $ throwError $ ErrOverridingMethodWrongType (hasPosition ident) (fromIdent ident) t' t
   return Nothing
 
-checkClassElem :: ClassElem -> FMonad
-checkClassElem (ClassAttrDef _ t ident) = return Nothing
-checkClassElem (ClassMethodDef pos t ident args block) = checkTopDef (PFunDef pos t ident args block)
+checkClassElem :: IIdent -> ClassElem -> FMonad
+checkClassElem _ (ClassAttrDef _ t ident) = return Nothing
+checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
+  cenv <- asks getCenv
+  let Just cls = Data.Map.lookup (fromIdent classIdent) cenv
+  when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
+  checkFunRetType t
+  let argTypes = map (\(PArg _ t _) -> t) args
+  mapM_ checkValType argTypes
+  let argIdents = map (\(PArg _ _ ident) -> ident) args
+  checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
+  cvenv <- createCVenv classIdent
+  let envFun = \env -> env {
+    getVenv = cvenv,
+    getDepth = getDepth env + 1
+  }
+  mt' <- local envFun (checkBlock block t)
+  case mt' of
+    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongType t (TVoid BNFC'NoPosition)
 
+
+createCVenv :: IIdent -> FMonad' VEnv
+createCVenv ident = do
+  cenv <- asks getCenv
+  let Just cls = Data.Map.lookup (fromIdent ident) cenv
+  cvenv <- createCVenv' cls
+  return $ Data.Map.insert "self" (TClass (hasPosition ident) ident, 0) cvenv
+createCVenv' :: ClassData -> FMonad' VEnv
+createCVenv' cls = do
+  case getExtends cls of
+    Nothing -> return $ getCVenv cls
+    Just extendsIdent -> do
+      cenv <- asks getCenv
+      let Just cls' = Data.Map.lookup extendsIdent cenv
+      let cvenv = getCVenv cls'
+      cvenv' <- createCVenv' cls'
+      let dups = Data.Map.intersection cvenv cvenv'
+      unless (null $ Data.Map.toList dups) (
+          let 
+            elems = classElemsToIdents $ filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) $ getClassElems cls
+            pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` Data.Map.keys dups) elems in
+          throwError $ ErrFieldShadowing pos (head $ Data.Map.keys dups)
+        )
+      return $ Data.Map.union cvenv' $ Data.Map.union (getCVenv cls) cvenv
+        
 classElemsToIdents :: [ClassElem] -> [IIdent]
 classElemsToIdents [] = []
 classElemsToIdents ((ClassAttrDef _ t items):elems) = map (\(ClassItem _ ident) -> ident) items ++ classElemsToIdents elems
