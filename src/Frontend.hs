@@ -334,7 +334,6 @@ checkTopDef (PFunDef pos t ident args block) = do
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
-  mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
   let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
   checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
@@ -354,7 +353,6 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
     Just cls -> do
       let elemIdents = classElemsToIdents elems
       let elemTypes = classElemsToTypes elems
-      mapM_ (uncurry tryInsertToEnv) (elemIdents `zip` elemTypes)
       let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
       checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
       mapM_ checkFunRetType $ classElemsToTypes funElems
@@ -375,7 +373,7 @@ checkClassElem _ (ClassAttrDef _ t ident) = return Nothing
 checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   cenv <- asks getCenv
   let Just cls = Data.Map.lookup (fromIdent classIdent) cenv
-  when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
+  -- when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
