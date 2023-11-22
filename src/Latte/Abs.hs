@@ -99,7 +99,7 @@ data Expr' a
     | EArrayElem a (Expr' a) (Expr' a)
     | EClassAttr a (Expr' a) (IIdent' a)
     | EMethodCall a (Expr' a) (IIdent' a) [Expr' a]
-    | EFuntionCall a (IIdent' a) [Expr' a]
+    | EFunctionCall a (IIdent' a) [Expr' a]
     | EArrayNew a (Type' a) (Expr' a)
     | EClassNew a (IIdent' a)
     | ENeg a (Expr' a)
@@ -218,7 +218,7 @@ instance HasPosition Expr where
     EArrayElem p _ _ -> p
     EClassAttr p _ _ -> p
     EMethodCall p _ _ _ -> p
-    EFuntionCall p _ _ -> p
+    EFunctionCall p _ _ -> p
     EArrayNew p _ _ -> p
     EClassNew p _ -> p
     ENeg p _ -> p

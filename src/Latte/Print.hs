@@ -250,7 +250,7 @@ instance Print (Latte.Abs.Expr' a) where
     Latte.Abs.EArrayElem _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
     Latte.Abs.EClassAttr _ expr iident -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 iident])
     Latte.Abs.EMethodCall _ expr iident exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 iident, doc (showString "("), prt 0 exprs, doc (showString ")")])
-    Latte.Abs.EFuntionCall _ iident exprs -> prPrec i 6 (concatD [prt 0 iident, doc (showString "("), prt 0 exprs, doc (showString ")")])
+    Latte.Abs.EFunctionCall _ iident exprs -> prPrec i 6 (concatD [prt 0 iident, doc (showString "("), prt 0 exprs, doc (showString ")")])
     Latte.Abs.EArrayNew _ type_ expr -> prPrec i 5 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     Latte.Abs.EClassNew _ iident -> prPrec i 5 (concatD [doc (showString "new"), prt 0 iident])
     Latte.Abs.ENeg _ expr -> prPrec i 5 (concatD [doc (showString "-"), prt 5 expr])

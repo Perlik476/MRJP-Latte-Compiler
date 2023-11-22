@@ -17,7 +17,6 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Data.List
-import Control.Exception (try)
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -120,7 +119,7 @@ data Error =
   | ErrWrongMainType Type
   | ErrMainNotAFunction Pos
   | ErrNotAssignable Type
-  | ErrArithmeticInt Type
+  | ErrAddition Type
   | ErrBooleanOperation Type
   | ErrInequalityOperation Type
   | ErrIfElseBranchesNotReturningInEveryCase Pos
@@ -138,6 +137,7 @@ data Error =
   | ErrOverridingMethodWrongType Pos String Type Type -- (method name, expected, got)
   | ErrCyclicInheritance String String
   | ErrSelfDeclaration Pos
+  | ErrExpectedSameType Type Type
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -153,7 +153,7 @@ instance Show Error where
   show (ErrDuplicateClassAttribute pos ident) = "Duplicate class attribute " ++ ident ++ " at " ++ showPos pos
   show (ErrDuplicateClassMethod pos ident) = "Duplicate class method " ++ ident ++ " at " ++ showPos pos
   show (ErrDuplicateFunctionArgumentName pos ident) = "Duplicate function argument name " ++ ident ++ " at " ++ showPos pos
-  show (ErrWrongType t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition t) ++ ", expected " ++ showType t
+  show (ErrWrongType t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ ", expected " ++ showType t
   show (ErrWrongNumberOfArguments pos name n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos pos ++ " of function " ++ name ++ ", expected " ++ show n
   show (ErrWrongTypeOfArgument pos name n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos pos ++ " of argument " ++ show n ++ " of function " ++ name ++ ", expected " ++ showType t
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
@@ -162,7 +162,7 @@ instance Show Error where
   show (ErrWrongMainType t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
   show (ErrMainNotAFunction pos) = "Main is not a function at " ++ showPos pos
   show (ErrNotAssignable t) = "Not assignable type " ++ showType t ++ " at " ++ showPos (hasPosition t)
-  show (ErrArithmeticInt t) = "Arithmetic operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrAddition t) = "Addition on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int/string"
   show (ErrBooleanOperation t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected bool"
   show (ErrInequalityOperation t) = "Inequality operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
   show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ showPos pos
@@ -180,6 +180,7 @@ instance Show Error where
   show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
+  show (ErrExpectedSameType t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
 
 showIdent :: IIdent -> String
 showIdent (IIdent _ (Ident ident)) = show ident
@@ -483,18 +484,19 @@ checkStmts (SAss _ expr expr':stmts) t'' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
   (t', _) <- checkExpr expr'
-  unless (sameType t t') $ throwError $ ErrWrongType t t'
+  cenv <- asks getCenv
+  unless (castsTo cenv t' t) $ throwError $ ErrWrongType t t'
   tryEvalExpr expr'
   checkStmts stmts t''
 checkStmts (SIncr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
-  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
   checkStmts stmts t'
 checkStmts (SDecr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
-  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
   checkStmts stmts t'
 checkStmts (SRet pos expr:stmts) t = do
   when (sameType t (TVoid pos)) $ throwError $ ErrVoidReturnValue pos
@@ -699,13 +701,13 @@ checkExpr (EMethodCall pos expr ident exprs) = do
               when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
               argTypes' <- mapM checkExpr exprs
               let argTypes = map fst argTypes'
-              if all (== True) $ zipWith sameType argTypes ts then return (t, False) else
+              if all (== True) $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
                 throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
             Just _ -> throwError $ ErrNotAFunction t
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
         Nothing -> throwError $ ErrUnknownClass (hasPosition ident') (fromIdent ident)
     _ -> throwError $ ErrNotAClass t
-checkExpr (EFuntionCall pos ident exprs) = do
+checkExpr (EFunctionCall pos ident exprs) = do
   fenv <- asks getFenv
   case Data.Map.lookup (fromIdent ident) fenv of
     Just (TFun _ t ts) -> do
@@ -713,12 +715,12 @@ checkExpr (EFuntionCall pos ident exprs) = do
       argTypes' <- mapM checkExpr exprs
       let argTypes = map fst argTypes'
       cenv <- asks getCenv
-      if all (== True) $ zipWith (castsTo cenv) ts argTypes then return (t, False) else
+      if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
         throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
     _ -> throwError $ ErrUnknownFunction (hasPosition ident) (fromIdent ident)
 checkExpr (ENeg pos expr) = do
   (t, _) <- checkExpr expr
-  unless (sameType t (TInt pos)) $ throwError $ ErrArithmeticInt t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
   return (t, False)
 checkExpr (ENot pos expr) = do
   (t, _) <- checkExpr expr
@@ -727,15 +729,20 @@ checkExpr (ENot pos expr) = do
 checkExpr (EMul pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TInt pos)) $ throwError $ ErrArithmeticInt t1
-  unless (sameType t2 (TInt pos)) $ throwError $ ErrArithmeticInt t2
+  unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t1
+  unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t2
   return (TInt pos, False)
 checkExpr (EAdd pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TInt pos)) $ throwError $ ErrArithmeticInt t1
-  unless (sameType t2 (TInt pos)) $ throwError $ ErrArithmeticInt t2
-  return (TInt pos, False)
+  case op of
+    OPlus _ -> do
+      unless (sameType t1 t2) $ throwError $ ErrExpectedSameType t1 t2
+      unless (sameType t1 (TInt pos) || sameType t2 (TStr pos)) $ throwError $ ErrAddition t1
+    OMinus _ -> do
+      unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t1
+      unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t2
+  return (t1, False)
 checkExpr (ERel pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
@@ -851,7 +858,7 @@ castsTo _ (TInt _) (TInt _) = True
 castsTo _ (TStr _) (TStr _) = True
 castsTo _ (TBool _) (TBool _) = True
 castsTo _ (TVoid _) (TVoid _) = True
-castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident `elem` getAncestors cenv (fromIdent ident')
+castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident' `elem` getAncestors cenv (fromIdent ident')
   where
     getAncestors :: CEnv -> String -> [String]
     getAncestors cenv ident = case Data.Map.lookup ident cenv of

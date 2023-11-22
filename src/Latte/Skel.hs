@@ -96,7 +96,7 @@ transExpr x = case x of
   Latte.Abs.EArrayElem _ expr1 expr2 -> failure x
   Latte.Abs.EClassAttr _ expr iident -> failure x
   Latte.Abs.EMethodCall _ expr iident exprs -> failure x
-  Latte.Abs.EFuntionCall _ iident exprs -> failure x
+  Latte.Abs.EFunctionCall _ iident exprs -> failure x
   Latte.Abs.EArrayNew _ type_ expr -> failure x
   Latte.Abs.EClassNew _ iident -> failure x
   Latte.Abs.ENeg _ expr -> failure x

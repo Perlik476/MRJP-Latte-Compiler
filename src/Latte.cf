@@ -108,7 +108,7 @@ EClassAttr.   Expr6 ::= Expr6 "." IIdent ;
 
 EMethodCall.  Expr6 ::= Expr6 "." IIdent "(" [Expr] ")" ;
 
-EFuntionCall. Expr6 ::= IIdent "(" [Expr] ")" ;
+EFunctionCall. Expr6 ::= IIdent "(" [Expr] ")" ;
 
 EArrayNew.    Expr5 ::= "new" Type "[" Expr "]" ;
 

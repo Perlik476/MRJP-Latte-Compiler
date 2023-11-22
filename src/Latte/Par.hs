@@ -949,7 +949,7 @@ happyReduction_61 (happy_x_4 `HappyStk`
 	 = case happyOut8 happy_x_1 of { (HappyWrap8 happy_var_1) -> 
 	case happyOut32 happy_x_3 of { (HappyWrap32 happy_var_3) -> 
 	happyIn25
-		 ((fst happy_var_1, Latte.Abs.EFuntionCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
+		 ((fst happy_var_1, Latte.Abs.EFunctionCall (fst happy_var_1) (snd happy_var_1) (snd happy_var_3))
 	) `HappyStk` happyRest}}
 
 happyReduce_62 = happySpecReduce_3  21# happyReduction_62
