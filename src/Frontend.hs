@@ -12,7 +12,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys, difference, intersection)
+import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys, difference, intersection, elems, (!), intersectionWith)
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -358,9 +358,10 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
       mapM_ checkValType $ classElemsToTypes varElems
       checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
       cvenv <- createCVenv ident
+      cfenv <- createCFenv ident
       let envClass = \env -> env {
         getVenv = cvenv,
-        getFenv = Data.Map.union (getFenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
+        getFenv = Data.Map.union (getFenv env) cfenv
       }
       local envClass (mapM_ (checkClassElem ident) elems)
       return Nothing
@@ -409,6 +410,29 @@ createCVenv' cls = do
           throwError $ ErrFieldShadowing pos (head $ Data.Map.keys dups)
         )
       return $ Data.Map.union cvenv' $ Data.Map.union (getCVenv cls) cvenv
+
+createCFenv :: IIdent -> FMonad' FEnv
+createCFenv ident = do
+  cenv <- asks getCenv
+  let Just cls = Data.Map.lookup (fromIdent ident) cenv
+  cfenv <- createCFenv' cls
+  return $ Data.Map.union (getCFenv cls) cfenv
+createCFenv' :: ClassData -> FMonad' FEnv
+createCFenv' cls = do
+  case getExtends cls of
+    Nothing -> return $ getCFenv cls
+    Just extendsIdent -> do
+      cenv <- asks getCenv
+      let cfenv = getCFenv cls
+      let Just cls' = Data.Map.lookup extendsIdent cenv
+      cfenv' <- createCFenv' cls'
+      let dupsIdents = Data.Map.keys $ Data.Map.intersection cfenv cfenv'
+      let sameTypes = map (\ident -> getCFenv cls Data.Map.! ident == cfenv' Data.Map.! ident) dupsIdents
+      let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` dupsIdents) $ classElemsToIdents $ filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) $ getClassElems cls
+      let t = getCFenv cls Data.Map.! head dupsIdents
+      let t' = cfenv' Data.Map.! head dupsIdents
+      unless (and sameTypes) $ throwError $ ErrOverridingMethodWrongType pos (head dupsIdents) t t'
+      return $ Data.Map.union cfenv' $ Data.Map.union (getCFenv cls) cfenv
 
 classElemsToIdents :: [ClassElem] -> [IIdent]
 classElemsToIdents [] = []
@@ -669,8 +693,14 @@ checkExpr (EMethodCall pos expr ident exprs) = do
       cenv <- asks getCenv
       case Data.Map.lookup (fromIdent ident') cenv of
         Just cls -> do
-          case Data.Map.lookup (fromIdent ident) (getCFenv cls) of
-            Just (TFun pos' t' ts) -> checkExpr (EFuntionCall pos ident exprs)
+          cfenv <- createCFenv ident'
+          case Data.Map.lookup (fromIdent ident) cfenv of
+            Just (TFun pos' t' ts) -> do
+              when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
+              argTypes' <- mapM checkExpr exprs
+              let argTypes = map fst argTypes'
+              if all (== True) $ zipWith sameType argTypes ts then return (t, False) else
+                throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
             Just _ -> throwError $ ErrNotAFunction t
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
         Nothing -> throwError $ ErrUnknownClass (hasPosition ident') (fromIdent ident)
