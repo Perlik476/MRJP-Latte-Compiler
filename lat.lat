@@ -7,9 +7,9 @@ int main() {
         a = b;
     }
 
-    B b = new A;
+    B b = new B;
     b.inc();
-    b.self;
+    b;
 
     return 0;
 }
@@ -18,7 +18,7 @@ class A {
     int x;
 
     int get_x() {
-        return x;
+        return self.x;
     }
 
     void set_x(int y) {
@@ -40,12 +40,6 @@ class B extends A {
     void set_x() {
         return;
     }
-
-    void set_x() {
-
-    }
 }
 
-A fun() {
-    return (new B);
-}
+void error() {}

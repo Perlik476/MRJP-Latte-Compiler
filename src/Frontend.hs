@@ -52,16 +52,16 @@ run v p s =
 
 showCode :: String -> Pos -> String
 showCode s (Just (l,c)) =
-  getLines 3 (l - 3) ++
+  getLines (min 3 l) (max 0 (l - 3)) ++
   replicate (c + maxLineNumberLenght) ' ' ++ "^\n" ++
-  getLines 3 l
+  getLines (min 3 (length s - l)) l
   where getLines k from = unlines (map (
           \(n, s) -> 
             show n 
             ++ replicate (maxLineNumberLenght - length (show n)) ' ' 
             ++ "|"
             ++ s
-          ) (take k $ zip [from..] $ drop from $ lines s))
+          ) (take k $ zip [(from+1)..] $ drop from $ lines s))
         maxLineNumberLenght = length $ show $ l + 3
 showCode _ Nothing = ""
 
