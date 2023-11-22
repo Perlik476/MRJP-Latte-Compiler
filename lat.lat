@@ -37,3 +37,7 @@ class B extends A {
         return;
     }
 }
+
+A fun() {
+    return (new B);
+}

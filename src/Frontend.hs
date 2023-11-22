@@ -110,7 +110,7 @@ data Error =
   | ErrDuplicateClassAttribute Pos String
   | ErrDuplicateClassMethod Pos String
   | ErrDuplicateFunctionArgumentName Pos String
-  | ErrWrongType Type Type -- (expected, got)
+  | ErrWrongType Pos Type Type -- (expected, got)
   | ErrWrongNumberOfArguments Pos String Int Int -- (function name, expected, got)
   | ErrWrongTypeOfArgument Pos String Int Type Type -- (function name, arg number, expected, got)
   | ErrVoidReturnValue Pos
@@ -139,6 +139,7 @@ data Error =
   | ErrSelfDeclaration Pos
   | ErrExpectedSameType Type Type
   | ErrFunctionNotAlwaysReturning String
+  | ErrWrongReturnType IIdent Type Type -- (function name, expected, got)
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -154,7 +155,7 @@ instance Show Error where
   show (ErrDuplicateClassAttribute pos ident) = "Duplicate class attribute " ++ ident ++ " at " ++ showPos pos
   show (ErrDuplicateClassMethod pos ident) = "Duplicate class method " ++ ident ++ " at " ++ showPos pos
   show (ErrDuplicateFunctionArgumentName pos ident) = "Duplicate function argument name " ++ ident ++ " at " ++ showPos pos
-  show (ErrWrongType t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ ", expected " ++ showType t
+  show (ErrWrongType pos t t') = "Wrong type at " ++ showPos pos ++ ": got " ++ showType t' ++ " from " ++ showPos (hasPosition t') ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
   show (ErrWrongNumberOfArguments pos name n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos pos ++ " of function " ++ name ++ ", expected " ++ show n
   show (ErrWrongTypeOfArgument pos name n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos pos ++ " of argument " ++ show n ++ " of function " ++ name ++ ", expected " ++ showType t
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
@@ -183,6 +184,7 @@ instance Show Error where
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
   show (ErrFunctionNotAlwaysReturning ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
+  show (ErrWrongReturnType ident t t') = "Wrong return type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ " of function " ++ fromIdent ident ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
 
 showIdent :: IIdent -> String
 showIdent (IIdent _ (Ident ident)) = show ident
@@ -314,7 +316,6 @@ checkClassNoCircularInheritance' visited cls = do
           return Nothing
 
 
--- TODO ADD CASTING TO RETURN TYPES
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
   when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
@@ -328,8 +329,9 @@ checkTopDef (PFunDef pos t ident args block) = do
     getDepth = getDepth env + 1
   }
   mt' <- local envFun (checkBlock block t)
+  cenv <- asks getCenv
   case mt' of
-    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
+    Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrWrongReturnType ident t t'
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
@@ -386,8 +388,8 @@ checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   }
   mt' <- local envFun (checkBlock block t)
   case mt' of
-    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongType t (TVoid BNFC'NoPosition)
+    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongReturnType ident t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongReturnType ident t (TVoid BNFC'NoPosition)
 
 
 createCVenv :: IIdent -> FMonad' VEnv
@@ -470,7 +472,7 @@ checkStmts (SDecl pos t (item:items):stmts) t' = do
     SInit _ _ expr -> do
       (t'', _) <- checkExpr expr
       cenv <- asks getCenv
-      unless (castsTo cenv t'' t) $ throwError $ ErrWrongType t t''
+      unless (castsTo cenv t'' t) $ throwError $ ErrWrongType pos t t''
       tryEvalExpr expr
       return ()
   local (insertToEnv depth ident t) (checkStmts stmts' t')
@@ -482,42 +484,43 @@ checkStmts (SDecl pos t (item:items):stmts) t' = do
     getIdent (SNoInit _ ident) = ident
     getIdent (SInit _ ident _) = ident
 checkStmts (SDecl _ _ []:stmts) t = checkStmts stmts t
-checkStmts (SAss _ expr expr':stmts) t'' = do
+checkStmts (SAss pos expr expr':stmts) t'' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
   (t', _) <- checkExpr expr'
   cenv <- asks getCenv
-  unless (castsTo cenv t' t) $ throwError $ ErrWrongType t t'
+  unless (castsTo cenv t' t) $ throwError $ ErrWrongType pos t t'
   tryEvalExpr expr'
   checkStmts stmts t''
 checkStmts (SIncr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
-  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   checkStmts stmts t'
 checkStmts (SDecr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
   unless ass $ throwError $ ErrNotAssignable t
-  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   checkStmts stmts t'
 checkStmts (SRet pos expr:stmts) t = do
   when (sameType t (TVoid pos)) $ throwError $ ErrVoidReturnValue pos
   (t', _) <- checkExpr expr
-  unless (sameType t t') $ throwError $ ErrWrongType t t'
+  cenv <- asks getCenv
+  unless (castsTo cenv t' t) $ throwError $ ErrWrongType pos t t'
   tryEvalExpr expr
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType t t''
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType pos t t''
     Nothing -> return $ Just t
 checkStmts (SVRet pos:stmts) t = do
-  unless (sameType t (TVoid pos)) $ throwError $ ErrWrongType (TVoid $ hasPosition t) t
+  unless (sameType t (TVoid pos)) $ throwError $ ErrWrongType pos (TVoid $ hasPosition t) t
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType (TVoid $ hasPosition t'') t''
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType pos (TVoid $ hasPosition t'') t''
     Nothing -> return $ Just t
 checkStmts (SCond pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
   mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
@@ -531,7 +534,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
   mt1 <- checkStmts [addBlockIfNecessary stmt1] t
   mt2 <- checkStmts [addBlockIfNecessary stmt2] t
   mt'' <- checkStmts stmts t
@@ -547,7 +550,7 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
   mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
@@ -561,7 +564,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   (t'', _) <- checkExpr expr
-  unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType (TArray (hasPosition expr) t') t''
+  unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType pos (TArray (hasPosition expr) t') t''
   local increaseDepth $ tryInsertToEnv ident t'
   d <- asks getDepth
   local (insertToEnv (d + 1) ident t') (checkStmts [addBlockIfNecessary stmt] t)
@@ -677,13 +680,13 @@ checkExpr (ECastNull pos t) = do
 checkExpr (EArrayNew pos t expr) = do
   checkValType t
   (t', _) <- checkExpr expr
-  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType (TInt $ hasPosition t') t'
+  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
   return (TArray pos t, False)
 checkExpr (EArrayElem pos expr val) = do
   (t, _) <- checkExpr expr
   checkValType t
   (t', _) <- checkExpr val
-  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType (TInt $ hasPosition t') t'
+  unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
   case t of
     TArray _ t'' -> return (t'', True)
     _ -> throwError $ ErrNotAnArray t
@@ -733,7 +736,7 @@ checkExpr (EFunctionCall pos ident exprs) = do
     _ -> throwError $ ErrUnknownFunction (hasPosition ident) (fromIdent ident)
 checkExpr (ENeg pos expr) = do
   (t, _) <- checkExpr expr
-  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t
+  unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   return (t, False)
 checkExpr (ENot pos expr) = do
   (t, _) <- checkExpr expr
@@ -742,8 +745,8 @@ checkExpr (ENot pos expr) = do
 checkExpr (EMul pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t1
-  unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t2
+  unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t1
+  unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t2
   return (TInt pos, False)
 checkExpr (EAdd pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
@@ -753,13 +756,14 @@ checkExpr (EAdd pos expr1 op expr2) = do
       unless (sameType t1 t2) $ throwError $ ErrExpectedSameType t1 t2
       unless (sameType t1 (TInt pos) || sameType t2 (TStr pos)) $ throwError $ ErrAddition t1
     OMinus _ -> do
-      unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t1
-      unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType (TInt pos) t2
+      unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t1
+      unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t2
   return (t1, False)
 checkExpr (ERel pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 t2) $ throwError $ ErrWrongType t1 t2
+  cenv <- asks getCenv
+  unless (castsTo cenv t1 t2 || castsTo cenv t2 t1) $ throwError $ ErrWrongType pos t1 t2
   when (sameType t1 (TVoid pos)) $ throwError $ ErrVoidValue pos
   case op of
     OEQU {} -> return (TBool pos, False)
