@@ -286,8 +286,8 @@ classDeclarationsToCEnv topDefs =
     createEnvs :: [ClassElem] -> (VEnv, FEnv)
     createEnvs elems = (venv, fenv)
       where
-        funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
-        varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+        funElems = filter isMethod elems
+        varElems = filter isAttr elems
         venv = Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat 0)
         fenv = Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
 
@@ -336,10 +336,10 @@ checkTopDef (PFunDef pos t ident args block) = do
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
-  let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+  let funElems = filter isMethod elems
   checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
-  let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+  let varElems = filter isAttr elems
   mapM_ checkValType $ classElemsToTypes varElems
   checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
   let envClass = \env -> env {
@@ -355,10 +355,10 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
     Just cls -> do
       let elemIdents = classElemsToIdents elems
       let elemTypes = classElemsToTypes elems
-      let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
+      let funElems = filter isMethod elems
       checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
       mapM_ checkFunRetType $ classElemsToTypes funElems
-      let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
+      let varElems = filter isAttr elems
       mapM_ checkValType $ classElemsToTypes varElems
       checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
       cvenv <- createCVenv ident
@@ -409,7 +409,7 @@ createCVenv' cls = do
       cvenv' <- createCVenv' cls'
       let dups = Data.Map.intersection cvenv cvenv'
       unless (null $ Data.Map.toList dups) (do
-          let elems = classElemsToIdents $ filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) $ getClassElems cls
+          let elems = classElemsToIdents $ filter isAttr $ getClassElems cls
           let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` Data.Map.keys dups) elems
           throwError $ ErrFieldShadowing pos (head $ Data.Map.keys dups)
         )
@@ -432,7 +432,7 @@ createCFenv' cls = do
       cfenv' <- createCFenv' cls'
       let dupsIdents = Data.Map.keys $ Data.Map.intersection cfenv cfenv'
       let sameTypes = map (\ident -> sameType (cfenv Data.Map.! ident) (cfenv' Data.Map.! ident)) dupsIdents
-      let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` dupsIdents) $ classElemsToIdents $ filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) $ getClassElems cls
+      let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` dupsIdents) $ classElemsToIdents $ filter isMethod $ getClassElems cls
       let t = getCFenv cls Data.Map.! head dupsIdents
       let t' = cfenv' Data.Map.! head dupsIdents
       unless (and sameTypes) $ throwError $ ErrOverridingMethodWrongType pos (head dupsIdents) t t'
@@ -447,6 +447,13 @@ classElemsToTypes :: [ClassElem] -> [Type]
 classElemsToTypes [] = []
 classElemsToTypes ((ClassAttrDef _ t items):elems) = [t | _ <- items] ++ classElemsToTypes elems
 classElemsToTypes ((ClassMethodDef pos t _ args _):elems) = TFun pos t (map (\(PArg _ t _) -> t) args):classElemsToTypes elems
+
+isMethod :: ClassElem -> Bool
+isMethod ClassMethodDef {} = True
+isMethod _ = False
+
+isAttr :: ClassElem -> Bool
+isAttr = not . isMethod
 
 
 checkBlock :: Block -> Type -> FMonad
@@ -695,7 +702,7 @@ checkExpr (EClassAttr pos expr ident) = do
   case t of
     TClass _ ident' -> do
       checkClassAttr (fromIdent ident') ident
-    TArray _ t' -> do 
+    TArray _ t' -> do
       unless (fromIdent ident == "length") $ throwError $ ErrUnknownClassAttribute (hasPosition ident) (fromIdent ident)
       return (TInt pos, False)
     _ -> throwError $ ErrNotAClass t
