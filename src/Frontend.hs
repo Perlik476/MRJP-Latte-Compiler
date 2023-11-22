@@ -312,6 +312,7 @@ checkClassNoCircularInheritance' visited cls = do
           return Nothing
 
 
+-- TODO ADD CASTING TO RETURN TYPES
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
   when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
@@ -701,7 +702,7 @@ checkExpr (EMethodCall pos expr ident exprs) = do
               when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
               argTypes' <- mapM checkExpr exprs
               let argTypes = map fst argTypes'
-              if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
+              if and $ zipWith (castsTo cenv) argTypes ts then return (t', False) else
                 throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
             Just _ -> throwError $ ErrNotAFunction t
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
