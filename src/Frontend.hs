@@ -694,6 +694,9 @@ checkExpr (EClassAttr pos expr ident) = do
   case t of
     TClass _ ident' -> do
       checkClassAttr (fromIdent ident') ident
+    TArray _ t' -> do 
+      unless (fromIdent ident == "length") $ throwError $ ErrUnknownClassAttribute (hasPosition ident) (fromIdent ident)
+      return (TInt pos, False)
     _ -> throwError $ ErrNotAClass t
 checkExpr (EClassNew pos ident) = do
   cenv <- asks getCenv
