@@ -72,7 +72,7 @@ type FMonad = FMonad' (Maybe Type)
 type TEMonad = FMonad' (Maybe ExprVal)
 type EMonad = FMonad' RType
 type RType = (Type, Bool)  -- (Type, isAssignable)
-data ExprVal = VInt Integer | VBool Bool
+data ExprVal = VInt Integer | VBool Bool | VStr String
   deriving (Eq, Ord, Show, Read)
 
 type VEnv = Map String (Type, Integer)
@@ -590,6 +590,7 @@ tryEvalExpr :: Expr -> TEMonad
 tryEvalExpr (ELitInt pos n) = checkInt pos n
 tryEvalExpr (ELitTrue pos) = return $ Just $ VBool True
 tryEvalExpr (ELitFalse pos) = return $ Just $ VBool False
+tryEvalExpr (EString pos s) = return $ Just $ VStr s
 tryEvalExpr (ENeg pos expr) = do
   mn <- tryEvalExpr expr
   case mn of
@@ -616,6 +617,9 @@ tryEvalExpr (EAdd pos expr1 op expr2) = do
     (Just (VInt n1), Just (VInt n2)) -> case op of
       OPlus _ -> checkInt pos $ n1 + n2
       OMinus _ -> checkInt pos $ n1 - n2
+    (Just (VStr s1), Just (VStr s2)) -> case op of
+      OPlus _ -> return $ Just $ VStr $ s1 ++ s2
+      _ -> return Nothing
     _ -> return Nothing
 tryEvalExpr (ERel pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
@@ -631,6 +635,10 @@ tryEvalExpr (ERel pos expr1 op expr2) = do
     (Just (VBool b1), Just (VBool b2)) -> return $ Just $ VBool $ case op of
       OEQU _ -> b1 == b2
       ONE _ -> b1 /= b2
+      _ -> error "tryEvalExpr: impossible"
+    (Just (VStr s1), Just (VStr s2)) -> return $ Just $ VBool $ case op of
+      OEQU _ -> s1 == s2
+      ONE _ -> s1 /= s2
       _ -> error "tryEvalExpr: impossible"
     _ -> return Nothing
 tryEvalExpr (EAnd pos expr1 expr2) = do
