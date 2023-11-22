@@ -79,17 +79,17 @@ data ExprVal = VInt Integer | VBool Bool
 type VEnv = Map String (Type, Integer)
 type FEnv = Map String Type
 type CEnv = Map String ClassData
-data ClassData = ClassData 
+data ClassData = ClassData
   {
     getClassElems :: [ClassElem],
     getExtends :: Maybe String,
     getCVenv :: VEnv,
     getCFenv :: FEnv
   }
-data Env = Env 
+data Env = Env
   {
     getVenv :: VEnv,
-    getFenv :: FEnv, 
+    getFenv :: FEnv,
     getCenv :: CEnv,
     getDepth :: Integer,
     getClass :: Maybe String
@@ -137,6 +137,7 @@ data Error =
   | ErrFieldShadowing Pos String
   | ErrOverridingMethodWrongType Pos String Type Type -- (method name, expected, got)
   | ErrCyclicInheritance String String
+  | ErrSelfDeclaration Pos
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -178,7 +179,7 @@ instance Show Error where
   show (ErrFieldShadowing pos ident) = "Field shadowing " ++ ident ++ " at " ++ showPos pos
   show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
-
+  show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
 
 showIdent :: IIdent -> String
 showIdent (IIdent _ (Ident ident)) = show ident
@@ -303,9 +304,11 @@ checkClassNoCircularInheritance' visited cls = do
     Just extendsIdent -> do
       when (extendsIdent `elem` visited) $ throwError $ ErrCyclicInheritance (head visited) extendsIdent
       cenv <- asks getCenv
-      let Just cls' = Data.Map.lookup extendsIdent cenv
-      checkClassNoCircularInheritance' (extendsIdent:visited) cls'
-      return Nothing
+      case Data.Map.lookup extendsIdent cenv of
+        Nothing -> throwError $ ErrUnknownClass (BNFC'NoPosition) extendsIdent -- TODO
+        Just cls' -> do
+          checkClassNoCircularInheritance' (extendsIdent:visited) cls'
+          return Nothing
 
 
 checkTopDef :: TopDef -> FMonad
@@ -406,7 +409,7 @@ createCVenv' cls = do
           throwError $ ErrFieldShadowing pos (head $ Data.Map.keys dups)
         )
       return $ Data.Map.union cvenv' $ Data.Map.union (getCVenv cls) cvenv
-        
+
 classElemsToIdents :: [ClassElem] -> [IIdent]
 classElemsToIdents [] = []
 classElemsToIdents ((ClassAttrDef _ t items):elems) = map (\(ClassItem _ ident) -> ident) items ++ classElemsToIdents elems
@@ -431,7 +434,8 @@ checkStmts (SBStmt _ block:stmts) t = do
     (Just t', _) -> return $ Just t
     (_, Just t'') -> return $ Just t
     (Nothing, Nothing) -> return Nothing
-checkStmts (SDecl _ t (item:items):stmts) t' = do
+checkStmts (SDecl pos t (item:items):stmts) t' = do
+  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration pos
   tryInsertToEnv ident t
   checkValType t
   depth <- asks getDepth
@@ -618,7 +622,7 @@ checkExpr :: Expr -> EMonad
 checkExpr (EVar _ ident) = do
   venv <- asks getVenv
   case Data.Map.lookup (fromIdent ident) venv of
-    Just (t, _) -> return (t, True)
+    Just (t, _) -> return (t, fromIdent ident /= "self")
     Nothing -> throwError $ ErrUnknownVariable (hasPosition ident) (fromIdent ident)
 checkExpr (ELitInt pos _) = return (TInt pos, False)
 checkExpr (ELitTrue pos) = return (TBool pos, False)
@@ -731,9 +735,9 @@ checkClassAttr ident field = do
     Just cls -> do
       case Data.Map.lookup (fromIdent field) (getCVenv cls) of
         Just (t, _) -> return (t, True)
-        Nothing -> 
+        Nothing ->
           case getExtends cls of
-            Just nameExtends -> 
+            Just nameExtends ->
               checkClassAttr nameExtends field
             Nothing -> throwError $ ErrUnknownClassAttribute (hasPosition field) (fromIdent field)
     Nothing -> error "checkClassAttr: impossible"
@@ -746,9 +750,9 @@ checkClassMethod ident method = do
     Just cls -> do
       case Data.Map.lookup (fromIdent method) (getCFenv cls) of
         Just t -> return (t, False)
-        Nothing -> 
+        Nothing ->
           case getExtends cls of
-            Just nameExtends -> 
+            Just nameExtends ->
               checkClassMethod nameExtends method
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition method) (fromIdent method)
     Nothing -> error "checkClassMethod: impossible"

@@ -13,27 +13,26 @@ int main() {
 class A {
     int x;
 
-    // int get_x() {
-    //     return x;
-    // }
+    int get_x() {
+        return x;
+    }
 
-    // void set_x(int y) {
-    //     x = y;
-    // }
+    void set_x(int y) {
+        x = y;
+    }
 
-    // void inc() {
-    //     set_x(get_x() + 1);
-    // }
+    void inc() {
+        self.set_x(self.get_x() + 1);
+    }
 }
 
-class B extends A {
-    string x;
+class B extends C {
 
-    // int get_x() {
-    //     return 0;
-    // }
+    int get_x() {
+        return 0;
+    }
 
-    // int set_x() {
-    //     return 1;
-    // }
+    int set_x() {
+        return 1;
+    }
 }
