@@ -138,6 +138,7 @@ data Error =
   | ErrCyclicInheritance String String
   | ErrSelfDeclaration Pos
   | ErrExpectedSameType Type Type
+  | ErrFunctionNotAlwaysReturning String
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -181,6 +182,7 @@ instance Show Error where
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
+  show (ErrFunctionNotAlwaysReturning ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
 
 showIdent :: IIdent -> String
 showIdent (IIdent _ (Ident ident)) = show ident
@@ -328,7 +330,7 @@ checkTopDef (PFunDef pos t ident args block) = do
   mt' <- local envFun (checkBlock block t)
   case mt' of
     Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongType t (TVoid BNFC'NoPosition)
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
@@ -525,7 +527,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
+        _ -> return Nothing
     Just (VBool True) -> return mt1
     Just (VBool False) -> return Nothing
     _ -> error "checkStmts: impossible"
@@ -541,7 +543,7 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
       case (mt1, mt2, mt'') of
         (Just _, Just _, _) -> return $ Just t
         (_, _, Just _) -> return $ Just t
-        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrIfElseBranchesNotReturningInEveryCase pos
+        _ -> return Nothing
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt2
     _ -> error "checkStmts: impossible"
@@ -555,7 +557,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     Nothing ->
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
-        _ -> if sameType (TVoid pos) t then return Nothing else throwError $ ErrWhileLoopNotReturningInEveryCase pos
+        _ -> return Nothing
     Just (VBool True) -> return mt1
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
