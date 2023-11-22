@@ -52,9 +52,17 @@ run v p s =
 
 showCode :: String -> Pos -> String
 showCode s (Just (l,c)) =
-  unlines (take 3 $ drop (l-3) $ lines s) ++
-  replicate (c-1) ' ' ++ "^" ++ replicate 5 '~' ++ "\n" ++
-  unlines (take 3 $ drop l $ lines s)
+  getLines 3 (l - 3) ++
+  replicate (c - 1) ' ' ++ "^\n" ++
+  getLines 3 l
+  where getLines k from = unlines (map (
+          \(n, s) -> 
+            show n 
+            ++ replicate (maxLineNumberLenght - length (show n)) ' ' 
+            ++ "|"
+            ++ s
+          ) (take k $ zip [from..] $ drop from $ lines s))
+        maxLineNumberLenght = length $ show $ l + 3
 showCode _ Nothing = ""
 
 

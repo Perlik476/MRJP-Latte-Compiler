@@ -5,10 +5,9 @@ int main() {
         B b = new B;
         A a = new A;
         a = b;
-        b = a;
     }
 
-    B b = new B;
+    B b = new c;
     b.inc();
 
     return 0;
@@ -39,6 +38,10 @@ class B extends A {
 
     void set_x() {
         return;
+    }
+
+    void set_x() {
+
     }
 }
 
