@@ -701,7 +701,7 @@ checkExpr (EMethodCall pos expr ident exprs) = do
               when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
               argTypes' <- mapM checkExpr exprs
               let argTypes = map fst argTypes'
-              if all (== True) $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
+              if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
                 throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
             Just _ -> throwError $ ErrNotAFunction t
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
@@ -858,7 +858,7 @@ castsTo _ (TInt _) (TInt _) = True
 castsTo _ (TStr _) (TStr _) = True
 castsTo _ (TBool _) (TBool _) = True
 castsTo _ (TVoid _) (TVoid _) = True
-castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident' `elem` getAncestors cenv (fromIdent ident')
+castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident' `elem` getAncestors cenv (fromIdent ident)
   where
     getAncestors :: CEnv -> String -> [String]
     getAncestors cenv ident = case Data.Map.lookup ident cenv of
