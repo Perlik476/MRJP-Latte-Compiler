@@ -469,7 +469,8 @@ checkStmts (SDecl pos t (item:items):stmts) t' = do
     SNoInit {} -> return ()
     SInit _ _ expr -> do
       (t'', _) <- checkExpr expr
-      unless (sameType t t'') $ throwError $ ErrWrongType t t''
+      cenv <- asks getCenv
+      unless (castsTo cenv t'' t) $ throwError $ ErrWrongType t t''
       tryEvalExpr expr
       return ()
   local (insertToEnv depth ident t) (checkStmts stmts' t')
