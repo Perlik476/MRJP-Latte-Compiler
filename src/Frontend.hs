@@ -628,7 +628,11 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
   (t'', _) <- checkExpr expr
-  unless (sameType t'' (TArray pos t')) $ throwError $ ErrWrongType pos (TArray (hasPosition expr) t') t''
+  cenv <- asks getCenv
+  case t'' of
+    TArray pos t''' -> do
+      unless (castsTo cenv t''' t') $ throwError $ ErrCannotCastTo pos t''' t'
+    _ -> throwError $ ErrWrongType pos (TArray (hasPosition expr) t') t''
   local increaseDepth $ tryInsertToEnv ident t'
   d <- asks getDepth
   local (insertToEnv (d + 1) ident t') (checkStmts [addBlockIfNecessary stmt] t)
