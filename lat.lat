@@ -7,8 +7,9 @@ int main() {
         a = b;
     }
 
-    B b = new c;
+    B b = new A;
     b.inc();
+    b.self;
 
     return 0;
 }

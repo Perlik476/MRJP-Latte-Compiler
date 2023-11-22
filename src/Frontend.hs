@@ -53,7 +53,7 @@ run v p s =
 showCode :: String -> Pos -> String
 showCode s (Just (l,c)) =
   getLines 3 (l - 3) ++
-  replicate (c - 1) ' ' ++ "^\n" ++
+  replicate (c + maxLineNumberLenght) ' ' ++ "^\n" ++
   getLines 3 l
   where getLines k from = unlines (map (
           \(n, s) -> 
