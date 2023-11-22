@@ -712,7 +712,8 @@ checkExpr (EFuntionCall pos ident exprs) = do
       when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
       argTypes' <- mapM checkExpr exprs
       let argTypes = map fst argTypes'
-      if all (== True) $ zipWith sameType argTypes ts then return (t, False) else
+      cenv <- asks getCenv
+      if all (== True) $ zipWith (castsTo cenv) ts argTypes then return (t, False) else
         throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
     _ -> throwError $ ErrUnknownFunction (hasPosition ident) (fromIdent ident)
 checkExpr (ENeg pos expr) = do
@@ -844,3 +845,20 @@ sameType (TClass _ ident) (TClass _ ident') = fromIdent ident == fromIdent ident
 sameType (TArray _ t) (TArray _ t') = sameType t t'
 sameType (TFun _ t ts) (TFun _ t' ts') = sameType t t' && all (uncurry sameType) (ts `zip` ts')
 sameType _ _ = False
+
+castsTo :: CEnv -> Type -> Type -> Bool
+castsTo _ (TInt _) (TInt _) = True
+castsTo _ (TStr _) (TStr _) = True
+castsTo _ (TBool _) (TBool _) = True
+castsTo _ (TVoid _) (TVoid _) = True
+castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident `elem` getAncestors cenv (fromIdent ident')
+  where
+    getAncestors :: CEnv -> String -> [String]
+    getAncestors cenv ident = case Data.Map.lookup ident cenv of
+      Just cls -> case getExtends cls of
+        Nothing -> [ident]
+        Just ident' -> ident:getAncestors cenv ident'
+      Nothing -> error "castsTo: impossible"
+castsTo cenv (TArray _ t) (TArray _ t') = sameType t t'
+castsTo cenv (TFun _ t ts) (TFun _ t' ts') = sameType t t' && all (uncurry sameType) (ts `zip` ts')
+castsTo _ _ _ = False
