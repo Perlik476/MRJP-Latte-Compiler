@@ -2,6 +2,10 @@ int main() {
     int x = 0;
     {
         boolean x = true;
+        B b = new B;
+        A a = new A;
+        a = b;
+        b = a;
     }
 
     B b = new B;
@@ -23,7 +27,7 @@ class A {
 
     void inc() {
         self.get_x() + 1;
-        // self.set_x(self.get_x() + 1);
+        self.set_x(self.get_x() + 1);
     }
 }
 

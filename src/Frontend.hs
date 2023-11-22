@@ -44,10 +44,19 @@ run v p s =
         Left err -> do
           hPutStrLn stderr "ERROR"
           hPutStrLn stderr $ "Error: " ++ show err
+          hPutStrLn stderr $ showCode s (getErrPosition err)
           exitFailure
   where
   ts = myLexer s
   showPosToken ((l,c),t) = concat [ show l, ":", show c, "\t", show t ]
+
+showCode :: String -> Pos -> String
+showCode s (Just (l,c)) =
+  unlines (take 3 $ drop (l-3) $ lines s) ++
+  replicate (c-1) ' ' ++ "^" ++ replicate 5 '~' ++ "\n" ++
+  unlines (take 3 $ drop l $ lines s)
+showCode _ Nothing = ""
+
 
 usage :: IO ()
 usage = do
@@ -116,20 +125,20 @@ data Error =
   | ErrVoidReturnValue Pos
   | ErrNoMain
   | ErrMultipleMain Pos
-  | ErrWrongMainType Type
+  | ErrWrongMainType Pos Type
   | ErrMainNotAFunction Pos
-  | ErrNotAssignable Type
-  | ErrAddition Type
-  | ErrBooleanOperation Type
-  | ErrInequalityOperation Type
+  | ErrNotAssignable Pos Type
+  | ErrAddition Pos Type
+  | ErrBooleanOperation Pos Type
+  | ErrInequalityOperation Pos Type
   | ErrIfElseBranchesNotReturningInEveryCase Pos
   | ErrWhileLoopNotReturningInEveryCase Pos
   | ErrIntegerOutOfRange Pos Integer
   | ErrDivisionByZero Pos
-  | ErrCannotCastTo Type
-  | ErrNotAnArray Type
-  | ErrNotAClass Type
-  | ErrNotAFunction Type
+  | ErrCannotCastTo Pos Type Type
+  | ErrNotAnArray Pos Type
+  | ErrNotAClass Pos Type
+  | ErrNotAFunction Pos Type
   | ErrVoidValue Pos
   | ErrFunctionValue Pos
   | ErrRedefinitionOfBuiltinFunction Pos String
@@ -137,9 +146,9 @@ data Error =
   | ErrOverridingMethodWrongType Pos String Type Type -- (method name, expected, got)
   | ErrCyclicInheritance String String
   | ErrSelfDeclaration Pos
-  | ErrExpectedSameType Type Type
-  | ErrFunctionNotAlwaysReturning String
-  | ErrWrongReturnType IIdent Type Type -- (function name, expected, got)
+  | ErrExpectedSameType Pos Type Type
+  | ErrFunctionNotAlwaysReturning Pos String
+  | ErrWrongReturnType Pos IIdent Type Type -- (function name, expected, got)
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -161,20 +170,20 @@ instance Show Error where
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
   show ErrNoMain = "No main function"
   show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
-  show (ErrWrongMainType t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrWrongMainType pos t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int"
   show (ErrMainNotAFunction pos) = "Main is not a function at " ++ showPos pos
-  show (ErrNotAssignable t) = "Not assignable type " ++ showType t ++ " at " ++ showPos (hasPosition t)
-  show (ErrAddition t) = "Addition on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int/string"
-  show (ErrBooleanOperation t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected bool"
-  show (ErrInequalityOperation t) = "Inequality operation on type " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ ", expected int"
+  show (ErrNotAssignable pos t) = "Not assignable type " ++ showType t ++ " at " ++ showPos pos
+  show (ErrAddition pos t) = "Addition on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int/string"
+  show (ErrBooleanOperation pos t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected bool"
+  show (ErrInequalityOperation pos t) = "Inequality operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int"
   show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ showPos pos
   show (ErrWhileLoopNotReturningInEveryCase pos) = "While loop doesn't return in every case with no return after at " ++ showPos pos
   show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ showPos pos ++ ": " ++ show n
   show (ErrDivisionByZero pos) = "Division by zero at " ++ showPos pos
-  show (ErrCannotCastTo t) = "Cannot cast to type " ++ showType t ++ " at " ++ showPos (hasPosition t)
-  show (ErrNotAnArray t) = "Not an array type " ++ showType t ++ " at " ++ showPos (hasPosition t)
-  show (ErrNotAClass t) = "Not a class type " ++ showType t ++ " at " ++ showPos (hasPosition t)
-  show (ErrNotAFunction t) = "Not a function type " ++ showType t ++ " at " ++ showPos (hasPosition t)
+  show (ErrCannotCastTo pos t t') = "Cannot cast to type " ++ showType t ++ " from " ++ showType t' ++ " at " ++ showPos pos
+  show (ErrNotAnArray pos t) = "Not an array type " ++ showType t ++ " at " ++ showPos pos
+  show (ErrNotAClass pos t) = "Not a class type " ++ showType t ++ " at " ++ showPos pos
+  show (ErrNotAFunction pos t) = "Not a function type " ++ showType t ++ " at " ++ showPos pos
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
   show (ErrRedefinitionOfBuiltinFunction pos name) = "Redefinition of builtin function " ++ name ++ " at " ++ showPos pos
@@ -182,15 +191,55 @@ instance Show Error where
   show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
-  show (ErrExpectedSameType t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
-  show (ErrFunctionNotAlwaysReturning ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
-  show (ErrWrongReturnType ident t t') = "Wrong return type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ " of function " ++ fromIdent ident ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
+  show (ErrExpectedSameType pos t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
+  show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
+  show (ErrWrongReturnType pos ident t t') = "Wrong return type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ " of function " ++ fromIdent ident ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
 
-showIdent :: IIdent -> String
-showIdent (IIdent _ (Ident ident)) = show ident
 
-showIdent' :: Ident -> String
-showIdent' (Ident ident) = show ident
+getErrPosition :: Error -> Pos
+getErrPosition (ErrUnknownVariable pos _) = pos
+getErrPosition (ErrUnknownFunction pos _) = pos
+getErrPosition (ErrUnknownClass pos _) = pos
+getErrPosition (ErrUnknownClassAttribute pos _) = pos
+getErrPosition (ErrUnknownClassMethod pos _) = pos
+getErrPosition (ErrDuplicateVariable pos _) = pos
+getErrPosition (ErrDuplicateFunction pos _) = pos
+getErrPosition (ErrDuplicateClass pos _) = pos
+getErrPosition (ErrDuplicateClassAttribute pos _) = pos
+getErrPosition (ErrDuplicateClassMethod pos _) = pos
+getErrPosition (ErrDuplicateFunctionArgumentName pos _) = pos
+getErrPosition (ErrWrongType pos _ _) = pos
+getErrPosition (ErrWrongNumberOfArguments pos _ _ _) = pos
+getErrPosition (ErrWrongTypeOfArgument pos _ _ _ _) = pos
+getErrPosition (ErrVoidReturnValue pos) = pos
+getErrPosition ErrNoMain = BNFC'NoPosition
+getErrPosition (ErrMultipleMain pos) = pos
+getErrPosition (ErrWrongMainType pos _) = pos
+getErrPosition (ErrMainNotAFunction pos) = pos
+getErrPosition (ErrNotAssignable pos _) = pos
+getErrPosition (ErrAddition pos _) = pos
+getErrPosition (ErrBooleanOperation pos _) = pos
+getErrPosition (ErrInequalityOperation pos _) = pos
+getErrPosition (ErrIfElseBranchesNotReturningInEveryCase pos) = pos
+getErrPosition (ErrWhileLoopNotReturningInEveryCase pos) = pos
+getErrPosition (ErrIntegerOutOfRange pos _) = pos
+getErrPosition (ErrDivisionByZero pos) = pos
+getErrPosition (ErrCannotCastTo pos _ _) = pos
+getErrPosition (ErrNotAnArray pos _) = pos
+getErrPosition (ErrNotAClass pos _) = pos
+getErrPosition (ErrNotAFunction pos _) = pos
+getErrPosition (ErrVoidValue pos) = pos
+getErrPosition (ErrFunctionValue pos) = pos
+getErrPosition (ErrRedefinitionOfBuiltinFunction pos _) = pos
+getErrPosition (ErrFieldShadowing pos _) = pos
+getErrPosition (ErrOverridingMethodWrongType pos _ _ _) = pos
+getErrPosition (ErrCyclicInheritance _ _) = BNFC'NoPosition
+getErrPosition (ErrSelfDeclaration pos) = pos
+getErrPosition (ErrExpectedSameType pos _ _) = pos
+getErrPosition (ErrFunctionNotAlwaysReturning pos _) = pos
+getErrPosition (ErrWrongReturnType pos _ _ _) = pos
+
+
 
 fromIdent :: IIdent -> String
 fromIdent (IIdent _ (Ident name)) = name
@@ -201,7 +250,7 @@ showType (TStr _) = "string"
 showType (TBool _) = "bool"
 showType (TVoid _) = "void"
 showType (TArray _ t) = showType t ++ "[]"
-showType (TClass _ ident) = showIdent ident
+showType (TClass _ ident) = fromIdent ident
 showType (TFun _ t ts) = showType t ++ "(" ++ Data.List.intercalate ", " (map showType ts) ++ ")"
 
 showPos :: Pos -> String
@@ -254,8 +303,8 @@ checkMain topDefs = do
   when (length mains > 1) $ throwError $ ErrMultipleMain (hasPosition $ head mains)
   let main = head mains
   case main of
-    PFunDef _ t ident args _ ->
-      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType mainType
+    PFunDef pos t ident args _ ->
+      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType pos mainType
       where
         mainType = TFun (hasPosition main) (TInt $ hasPosition main) []
     _ -> throwError $ ErrMainNotAFunction (hasPosition main)
@@ -331,8 +380,8 @@ checkTopDef (PFunDef pos t ident args block) = do
   mt' <- local envFun (checkBlock block t)
   cenv <- asks getCenv
   case mt' of
-    Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrWrongReturnType ident t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning (fromIdent ident)
+    Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrWrongReturnType pos ident t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning pos (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
@@ -388,8 +437,8 @@ checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   }
   mt' <- local envFun (checkBlock block t)
   case mt' of
-    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongReturnType ident t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongReturnType ident t (TVoid BNFC'NoPosition)
+    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongReturnType pos ident t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongReturnType pos ident t (TVoid BNFC'NoPosition)
 
 
 createCVenv :: IIdent -> FMonad' VEnv
@@ -493,7 +542,7 @@ checkStmts (SDecl pos t (item:items):stmts) t' = do
 checkStmts (SDecl _ _ []:stmts) t = checkStmts stmts t
 checkStmts (SAss pos expr expr':stmts) t'' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError $ ErrNotAssignable t
+  unless ass $ throwError $ ErrNotAssignable pos t
   (t', _) <- checkExpr expr'
   cenv <- asks getCenv
   unless (castsTo cenv t' t) $ throwError $ ErrWrongType pos t t'
@@ -501,12 +550,12 @@ checkStmts (SAss pos expr expr':stmts) t'' = do
   checkStmts stmts t''
 checkStmts (SIncr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError $ ErrNotAssignable t
+  unless ass $ throwError $ ErrNotAssignable pos t
   unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   checkStmts stmts t'
 checkStmts (SDecr pos expr:stmts) t' = do
   (t, ass) <- checkExpr expr
-  unless ass $ throwError $ ErrNotAssignable t
+  unless ass $ throwError $ ErrNotAssignable pos t
   unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   checkStmts stmts t'
 checkStmts (SRet pos expr:stmts) t = do
@@ -683,7 +732,7 @@ checkExpr (ECastNull pos t) = do
         Just _ -> return (t, False)
         Nothing -> throwError $ ErrUnknownClass (hasPosition ident) (fromIdent ident)
     TArray {} -> return (t, False)
-    _ -> throwError $ ErrCannotCastTo t
+    _ -> throwError $ ErrCannotCastTo pos t t -- TODO
 checkExpr (EArrayNew pos t expr) = do
   checkValType t
   (t', _) <- checkExpr expr
@@ -696,7 +745,7 @@ checkExpr (EArrayElem pos expr val) = do
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
   case t of
     TArray _ t'' -> return (t'', True)
-    _ -> throwError $ ErrNotAnArray t
+    _ -> throwError $ ErrNotAnArray pos t
 checkExpr (EClassAttr pos expr ident) = do
   (t, _) <- checkExpr expr
   case t of
@@ -705,7 +754,7 @@ checkExpr (EClassAttr pos expr ident) = do
     TArray _ t' -> do
       unless (fromIdent ident == "length") $ throwError $ ErrUnknownClassAttribute (hasPosition ident) (fromIdent ident)
       return (TInt pos, False)
-    _ -> throwError $ ErrNotAClass t
+    _ -> throwError $ ErrNotAClass pos t
 checkExpr (EClassNew pos ident) = do
   cenv <- asks getCenv
   case Data.Map.lookup (fromIdent ident) cenv of
@@ -726,10 +775,10 @@ checkExpr (EMethodCall pos expr ident exprs) = do
               let argTypes = map fst argTypes'
               if and $ zipWith (castsTo cenv) argTypes ts then return (t', False) else
                 throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
-            Just _ -> throwError $ ErrNotAFunction t
+            Just _ -> throwError $ ErrNotAFunction pos t
             Nothing -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
         Nothing -> throwError $ ErrUnknownClass (hasPosition ident') (fromIdent ident)
-    _ -> throwError $ ErrNotAClass t
+    _ -> throwError $ ErrNotAClass pos t
 checkExpr (EFunctionCall pos ident exprs) = do
   fenv <- asks getFenv
   case Data.Map.lookup (fromIdent ident) fenv of
@@ -747,7 +796,7 @@ checkExpr (ENeg pos expr) = do
   return (t, False)
 checkExpr (ENot pos expr) = do
   (t, _) <- checkExpr expr
-  unless (sameType t (TBool pos)) $ throwError $ ErrBooleanOperation t
+  unless (sameType t (TBool pos)) $ throwError $ ErrBooleanOperation pos t
   return (t, False)
 checkExpr (EMul pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
@@ -760,8 +809,8 @@ checkExpr (EAdd pos expr1 op expr2) = do
   (t2, _) <- checkExpr expr2
   case op of
     OPlus _ -> do
-      unless (sameType t1 t2) $ throwError $ ErrExpectedSameType t1 t2
-      unless (sameType t1 (TInt pos) || sameType t2 (TStr pos)) $ throwError $ ErrAddition t1
+      unless (sameType t1 t2) $ throwError $ ErrExpectedSameType pos t1 t2
+      unless (sameType t1 (TInt pos) || sameType t2 (TStr pos)) $ throwError $ ErrAddition pos t1
     OMinus _ -> do
       unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t1
       unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t2
@@ -775,18 +824,18 @@ checkExpr (ERel pos expr1 op expr2) = do
   case op of
     OEQU {} -> return (TBool pos, False)
     ONE {} -> return (TBool pos, False)
-    _ -> if sameType t1 (TInt pos) then return (TBool pos, False) else throwError $ ErrInequalityOperation t1
+    _ -> if sameType t1 (TInt pos) then return (TBool pos, False) else throwError $ ErrInequalityOperation pos t1
 checkExpr (EAnd pos expr1 expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation t1
-  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation t2
+  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation pos t1
+  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation pos t2
   return (TBool pos, False)
 checkExpr (EOr pos expr1 expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
-  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation t1
-  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation t2
+  unless (sameType t1 (TBool pos)) $ throwError $ ErrBooleanOperation pos t1
+  unless (sameType t2 (TBool pos)) $ throwError $ ErrBooleanOperation pos t2
   return (TBool pos, False)
 
 
