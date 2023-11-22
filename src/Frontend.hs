@@ -427,7 +427,7 @@ createCFenv' cls = do
       let Just cls' = Data.Map.lookup extendsIdent cenv
       cfenv' <- createCFenv' cls'
       let dupsIdents = Data.Map.keys $ Data.Map.intersection cfenv cfenv'
-      let sameTypes = map (\ident -> getCFenv cls Data.Map.! ident == cfenv' Data.Map.! ident) dupsIdents
+      let sameTypes = map (\ident -> sameType (cfenv Data.Map.! ident) (cfenv' Data.Map.! ident)) dupsIdents
       let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` dupsIdents) $ classElemsToIdents $ filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) $ getClassElems cls
       let t = getCFenv cls Data.Map.! head dupsIdents
       let t' = cfenv' Data.Map.! head dupsIdents

@@ -1,14 +1,38 @@
-class X {}
-class Y extends X {
-        int x;
-        void foo() {
-                printInt(x);
-        }
+int main() {
+    int x = 0;
+    {
+        boolean x = true;
+    }
+
+    B b = new B;
+    // b.inc();
+
+    return 0;
 }
 
-int main() {
-        Y y = new Y;
-        y.x = 142;
-        y.foo();
+class A {
+    int x;
+
+    int get_x() {
+        return x;
+    }
+
+    void set_x(int y) {
+        x = y;
+    }
+
+    void inc() {
+        set_x(get_x() + 1);
+    }
+}
+
+class B extends A {
+
+    int get_x() {
         return 0;
+    }
+
+    void set_x() {
+        return;
+    }
 }
