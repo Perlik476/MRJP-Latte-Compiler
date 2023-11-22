@@ -2,7 +2,7 @@ module Main where
 
 import Prelude
 import System.Environment ( getArgs )
-import System.Exit        ( exitFailure )
+import System.Exit        ( exitFailure, exitSuccess )
 import System.IO          ( hPutStrLn, stderr )
 import Control.Monad      ( when )
 
@@ -39,7 +39,9 @@ run v p s =
     Right tree -> do
       val <- runReaderT (runExceptT (checkProgram tree)) emptyEnv
       case val of
-        Right _ -> putStrLn "OK"
+        Right _ -> do
+          hPutStrLn stderr "OK"
+          exitSuccess
         Left err -> do
           hPutStrLn stderr "ERROR"
           hPutStrLn stderr $ "Error: " ++ show err
@@ -134,6 +136,7 @@ data Error =
   | ErrRedefinitionOfBuiltinFunction Pos String
   | ErrFieldShadowing Pos String
   | ErrOverridingMethodWrongType Pos String Type Type -- (method name, expected, got)
+  | ErrCyclicInheritance String String
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -174,6 +177,7 @@ instance Show Error where
   show (ErrRedefinitionOfBuiltinFunction pos name) = "Redefinition of builtin function " ++ name ++ " at " ++ showPos pos
   show (ErrFieldShadowing pos ident) = "Field shadowing " ++ ident ++ " at " ++ showPos pos
   show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
+  show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
 
 
 showIdent :: IIdent -> String
@@ -217,6 +221,7 @@ checkProgram (PProgram _ topDefs) = do
   let fenv = functionDeclarationsToFEnv topDefs
   let cenv = classDeclarationsToCEnv topDefs
   let newEnv = (\env' -> env' {getFenv = Data.Map.union (getFenv env') fenv, getCenv = Data.Map.union (getCenv env') cenv})
+  local newEnv checkClassNoCircularInheritance
   local newEnv (mapM_ checkTopDef topDefs)
   return Nothing
 
@@ -285,6 +290,24 @@ classDeclarationsToCEnv topDefs =
     isClassDef _ = False
 
 
+checkClassNoCircularInheritance :: FMonad
+checkClassNoCircularInheritance = do
+  mapM_ (checkClassNoCircularInheritance' []) =<< asks getCenv
+  return Nothing
+
+checkClassNoCircularInheritance' :: [String] -> ClassData -> FMonad
+checkClassNoCircularInheritance' visited cls = do
+  let extends = getExtends cls
+  case extends of
+    Nothing -> return Nothing
+    Just extendsIdent -> do
+      when (extendsIdent `elem` visited) $ throwError $ ErrCyclicInheritance (head visited) extendsIdent
+      cenv <- asks getCenv
+      let Just cls' = Data.Map.lookup extendsIdent cenv
+      checkClassNoCircularInheritance' (extendsIdent:visited) cls'
+      return Nothing
+
+
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
   when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
@@ -328,29 +351,16 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
       let funElems = filter (\elem -> case elem of {ClassMethodDef {} -> True; _ -> False}) elems
       checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
       mapM_ checkFunRetType $ classElemsToTypes funElems
-      mapM_ (checkOverridingMethod (getCFenv cls)) $ classElemsToIdents funElems `zip` classElemsToTypes funElems
       let varElems = filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) elems
       mapM_ checkValType $ classElemsToTypes varElems
       checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
-      mapM_ (checkNoShadowing (getCVenv cls)) (classElemsToIdents varElems)
+      cvenv <- createCVenv ident
       let envClass = \env -> env {
-        getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents varElems) (classElemsToTypes varElems `zip` repeat (getDepth env)),
+        getVenv = cvenv,
         getFenv = Data.Map.union (getFenv env) $ Data.Map.fromList $ zip (map fromIdent $ classElemsToIdents funElems) (classElemsToTypes funElems)
       }
       local envClass (mapM_ (checkClassElem ident) elems)
       return Nothing
-
-checkNoShadowing :: VEnv -> IIdent -> FMonad
-checkNoShadowing venv ident = do
-  when (Data.Map.member (fromIdent ident) venv) $ throwError $ ErrDuplicateVariable (hasPosition ident) (fromIdent ident)
-  return Nothing
-
-checkOverridingMethod :: FEnv -> (IIdent, Type) -> FMonad
-checkOverridingMethod fenv (ident, t) = do
-  case Data.Map.lookup (fromIdent ident) fenv of
-    Nothing -> return ()
-    Just t' -> unless (sameType t t') $ throwError $ ErrOverridingMethodWrongType (hasPosition ident) (fromIdent ident) t' t
-  return Nothing
 
 checkClassElem :: IIdent -> ClassElem -> FMonad
 checkClassElem _ (ClassAttrDef _ t ident) = return Nothing
@@ -365,7 +375,7 @@ checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   cvenv <- createCVenv classIdent
   let envFun = \env -> env {
-    getVenv = cvenv,
+    getVenv = Data.Map.union (Data.Map.fromList $ zip (map fromIdent argIdents) $ zip argTypes $ repeat (getDepth env + 1)) cvenv,
     getDepth = getDepth env + 1
   }
   mt' <- local envFun (checkBlock block t)
@@ -386,14 +396,13 @@ createCVenv' cls = do
     Nothing -> return $ getCVenv cls
     Just extendsIdent -> do
       cenv <- asks getCenv
+      let cvenv = getCVenv cls
       let Just cls' = Data.Map.lookup extendsIdent cenv
-      let cvenv = getCVenv cls'
       cvenv' <- createCVenv' cls'
       let dups = Data.Map.intersection cvenv cvenv'
-      unless (null $ Data.Map.toList dups) (
-          let 
-            elems = classElemsToIdents $ filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) $ getClassElems cls
-            pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` Data.Map.keys dups) elems in
+      unless (null $ Data.Map.toList dups) (do
+          let elems = classElemsToIdents $ filter (\elem -> case elem of {ClassAttrDef {} -> True; _ -> False}) $ getClassElems cls
+          let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` Data.Map.keys dups) elems
           throwError $ ErrFieldShadowing pos (head $ Data.Map.keys dups)
         )
       return $ Data.Map.union cvenv' $ Data.Map.union (getCVenv cls) cvenv
