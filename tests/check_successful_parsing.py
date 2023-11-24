@@ -3,7 +3,7 @@ import os
 import subprocess
 from tqdm import tqdm
 
-# latte_dir = "tests/lattests/good"
+# latte_dir = "tests/lattests-benek/good"
 latte_dir = "tests/mrjp-tests-temp/good"
 test_latte = "./Frontend"
 

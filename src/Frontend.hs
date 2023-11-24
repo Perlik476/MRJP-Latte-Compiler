@@ -3,7 +3,7 @@ module Main where
 import Prelude
 import System.Environment ( getArgs )
 import System.Exit        ( exitFailure, exitSuccess )
-import System.IO          ( hPutStrLn, stderr )
+import System.IO          ( hPutStrLn, stderr, hPutStr )
 import Control.Monad      ( when )
 
 import Latte.Abs
@@ -32,7 +32,7 @@ run v p s =
       hPutStrLn stderr "ERROR"
       hPutStrLn stderr "Parse failed."
       hPutStrLn stderr err
-      hPutStrLn stderr $ showCode s (getParseErrPosition err)
+      hPutStr stderr $ showCode s (getParseErrPosition err)
       exitFailure
     Right tree -> do
       val <- runReaderT (runExceptT (checkProgram tree)) emptyEnv
@@ -43,20 +43,17 @@ run v p s =
         Left err -> do
           hPutStrLn stderr "ERROR"
           hPutStrLn stderr $ "Error: " ++ show err
-          hPutStrLn stderr $ showCode s (getErrPosition err)
+          hPutStr stderr $ showCode s (getErrPosition err)
           exitFailure
   where
   ts = myLexer s
-  showPosToken ((l,c),t) = concat [ show l, ":", show c, "\t", show t ]
 
--- Error is "syntax error at line l, column c before t" where
--- l is line number, c is column number and t is token.
 getParseErrPosition :: String -> Pos
 getParseErrPosition s = case words s of
-  ("syntax":"error":"at":"line":l_comma:"column":c:"before":_) -> 
+  ("syntax":"error":"at":"line":l_comma:"column":c:"before":_) ->
     let l = takeWhile (/= ',') l_comma in
     BNFC'Position (read l) (read c)
-  _ -> error "getParseErrPosition: impossible"
+  _ -> BNFC'NoPosition
 
 showCode :: String -> Pos -> String
 showCode s (Just (l,c)) =
@@ -64,14 +61,19 @@ showCode s (Just (l,c)) =
   replicate (c + maxLineNumberLenght) ' ' ++ "^\n" ++
   getLines (min 3 (length s - l)) l
   where getLines k from = unlines (map (
-          \(n, s) -> 
-            show n 
-            ++ replicate (maxLineNumberLenght - length (show n)) ' ' 
+          \(n, s) ->
+            show n
+            ++ replicate (maxLineNumberLenght - length (show n)) ' '
             ++ "|"
             ++ s
-          ) (take k $ zip [(from+1)..] $ drop from $ lines s))
+          ) (take k $ zip [(from+1)..] $ drop from $ lines $ convertTabTo8Spaces s))
         maxLineNumberLenght = length $ show $ l + 3
 showCode _ Nothing = ""
+
+convertTabTo8Spaces :: String -> String
+convertTabTo8Spaces [] = []
+convertTabTo8Spaces ('\t':s) = replicate 8 ' ' ++ convertTabTo8Spaces s
+convertTabTo8Spaces (c:s) = c:convertTabTo8Spaces s
 
 
 usage :: IO ()
@@ -147,8 +149,6 @@ data Error =
   | ErrAddition Pos Type
   | ErrBooleanOperation Pos Type
   | ErrInequalityOperation Pos Type
-  | ErrIfElseBranchesNotReturningInEveryCase Pos
-  | ErrWhileLoopNotReturningInEveryCase Pos
   | ErrIntegerOutOfRange Pos Integer
   | ErrDivisionByZero Pos
   | ErrCannotCastTo Pos Type Type
@@ -181,7 +181,7 @@ instance Show Error where
   show (ErrDuplicateFunctionArgumentName pos ident) = "Duplicate function argument name " ++ ident ++ " at " ++ showPos pos
   show (ErrWrongType pos t t') = "Wrong type at " ++ showPos pos ++ ": got " ++ showType t' ++ " from " ++ showPos (hasPosition t') ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
   show (ErrWrongNumberOfArguments pos name n n') = "Wrong number of arguments " ++ show n' ++ " at " ++ showPos pos ++ " of function " ++ name ++ ", expected " ++ show n
-  show (ErrWrongTypeOfArgument pos name n t t') = "Wrong type " ++ showType t' ++ " at " ++ showPos pos ++ " of argument " ++ show n ++ " of function " ++ name ++ ", expected " ++ showType t
+  show (ErrWrongTypeOfArgument pos name n t t') = "Wrong type of argument number " ++ show n ++ " of function " ++ name ++ " at " ++ showPos pos ++ ": got " ++ showType t' ++ " from " ++ showPos (hasPosition t') ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
   show ErrNoMain = "No main function"
   show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
@@ -191,8 +191,6 @@ instance Show Error where
   show (ErrAddition pos t) = "Addition on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int/string"
   show (ErrBooleanOperation pos t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected bool"
   show (ErrInequalityOperation pos t) = "Inequality operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int"
-  show (ErrIfElseBranchesNotReturningInEveryCase pos) = "If else branches don't return in every case with no return after at " ++ showPos pos
-  show (ErrWhileLoopNotReturningInEveryCase pos) = "While loop doesn't return in every case with no return after at " ++ showPos pos
   show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ showPos pos ++ ": " ++ show n
   show (ErrDivisionByZero pos) = "Division by zero at " ++ showPos pos
   show (ErrCannotCastTo pos t t') = "Cannot cast to type " ++ showType t ++ " from " ++ showType t' ++ " at " ++ showPos pos
@@ -206,7 +204,7 @@ instance Show Error where
   show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
-  show (ErrExpectedSameType pos t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
+  show (ErrExpectedSameType pos t t') = "Expected same types at " ++ showPos pos ++ ", got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
   show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
 
 getErrPosition :: Error -> Pos
@@ -233,8 +231,6 @@ getErrPosition (ErrNotAssignable pos _) = pos
 getErrPosition (ErrAddition pos _) = pos
 getErrPosition (ErrBooleanOperation pos _) = pos
 getErrPosition (ErrInequalityOperation pos _) = pos
-getErrPosition (ErrIfElseBranchesNotReturningInEveryCase pos) = pos
-getErrPosition (ErrWhileLoopNotReturningInEveryCase pos) = pos
 getErrPosition (ErrIntegerOutOfRange pos _) = pos
 getErrPosition (ErrDivisionByZero pos) = pos
 getErrPosition (ErrCannotCastTo pos _ _) = pos
@@ -266,7 +262,7 @@ showType (TFun _ t ts) = showType t ++ "(" ++ Data.List.intercalate ", " (map sh
 
 showPos :: Pos -> String
 showPos (BNFC'Position l c) = show l ++ ":" ++ show c
-showPos BNFC'NoPosition = "unknown"
+showPos BNFC'NoPosition = "unknown position"
 showPos _ = error "showPos: impossible"
 
 
@@ -392,7 +388,7 @@ checkTopDef (PFunDef pos t ident args block) = do
   cenv <- asks getCenv
   case mt' of
     Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrCannotCastTo pos t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning pos (fromIdent ident)
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning (hasPosition ident) (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
@@ -539,7 +535,7 @@ checkStmts (SDecl pos t (item:items):stmts) t' = do
     SInit _ _ expr -> do
       (t'', _) <- checkExpr expr
       cenv <- asks getCenv
-      unless (castsTo cenv t'' t) $ throwError $ ErrWrongType pos t t''
+      unless (castsTo cenv t'' t) $ throwError $ ErrWrongType (hasPosition expr) t t''
       tryEvalExpr expr
       return ()
   local (insertToEnv depth ident t) (checkStmts stmts' t')
@@ -570,20 +566,20 @@ checkStmts (SDecr pos expr:stmts) t' = do
   unless (sameType t (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t
   checkStmts stmts t'
 checkStmts (SRet pos expr:stmts) t = do
-  when (sameType t (TVoid pos)) $ throwError $ ErrVoidReturnValue pos
+  when (sameType t (TVoid pos)) $ throwError $ ErrVoidReturnValue (hasPosition expr)
   (t', _) <- checkExpr expr
   cenv <- asks getCenv
-  unless (castsTo cenv t' t) $ throwError $ ErrWrongType pos t t'
+  unless (castsTo cenv t' t) $ throwError $ ErrWrongType (hasPosition expr) t t'
   tryEvalExpr expr
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType pos t t''
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType (hasPosition expr) t t''
     Nothing -> return $ Just t
 checkStmts (SVRet pos:stmts) t = do
-  unless (sameType t (TVoid pos)) $ throwError $ ErrWrongType pos (TVoid $ hasPosition t) t
+  unless (sameType t (TVoid pos)) $ throwError $ ErrWrongType pos t (TVoid pos)
   mt'' <- checkStmts stmts t
   case mt'' of
-    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType pos (TVoid $ hasPosition t'') t''
+    Just t'' -> if sameType t t'' then return $ Just t else throwError $ ErrWrongType pos t t''
     Nothing -> return $ Just t
 checkStmts (SCond pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
@@ -596,7 +592,10 @@ checkStmts (SCond pos expr stmt:stmts) t = do
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> return mt1
+    Just (VBool True) -> 
+      case mt1 of
+        Just _ -> return $ Just t
+        _ -> return mt''
     Just (VBool False) -> return Nothing
     _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
@@ -612,8 +611,14 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
         (Just _, Just _, _) -> return $ Just t
         (_, _, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> return mt1
-    Just (VBool False) -> return mt2
+    Just (VBool True) -> 
+      case mt1 of
+        Just _ -> return $ Just t
+        _ -> return mt''
+    Just (VBool False) -> 
+      case mt2 of
+        Just _ -> return $ Just t
+        _ -> return mt''
     _ -> error "checkStmts: impossible"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
@@ -626,7 +631,10 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> return mt1
+    Just (VBool True) -> 
+      case mt1 of
+        Just _ -> return $ Just t
+        _ -> return mt''
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
@@ -786,6 +794,7 @@ checkExpr (EMethodCall pos expr ident exprs) = do
           cfenv <- createCFenv ident'
           case Data.Map.lookup (fromIdent ident) cfenv of
             Just (TFun pos' t' ts) -> do
+              -- TODO jak niżej
               when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments pos (fromIdent ident) (length ts) (length exprs)
               argTypes' <- mapM checkExpr exprs
               let argTypes = map fst argTypes'
@@ -803,8 +812,11 @@ checkExpr (EFunctionCall pos ident exprs) = do
       argTypes' <- mapM checkExpr exprs
       let argTypes = map fst argTypes'
       cenv <- asks getCenv
-      if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else
-        throwError $ ErrWrongTypeOfArgument pos (fromIdent ident) (length ts) (head ts) (head argTypes)
+      if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else do
+        let firstBadArg = head $ filter (\(t, t') -> not $ castsTo cenv t t') $ zip argTypes ts
+            firstBadArgPos = hasPosition $ exprs !! length (takeWhile (/= firstBadArg) $ zip argTypes ts)
+            firstBadArgNum = (+1) $ length $ takeWhile (/= firstBadArg) $ zip argTypes ts
+        throwError $ ErrWrongTypeOfArgument firstBadArgPos (fromIdent ident) firstBadArgNum (snd firstBadArg) (fst firstBadArg)
     _ -> throwError $ ErrUnknownFunction (hasPosition ident) (fromIdent ident)
 checkExpr (ENeg pos expr) = do
   (t, _) <- checkExpr expr
@@ -835,7 +847,8 @@ checkExpr (ERel pos expr1 op expr2) = do
   (t1, _) <- checkExpr expr1
   (t2, _) <- checkExpr expr2
   cenv <- asks getCenv
-  unless (castsTo cenv t1 t2 || castsTo cenv t2 t1) $ throwError $ ErrWrongType pos t1 t2
+  unless (castsTo cenv t1 t2 || castsTo cenv t2 t1) $ throwError $ ErrExpectedSameType pos t1 t2
+  -- TODO czemu castowanie?
   when (sameType t1 (TVoid pos)) $ throwError $ ErrVoidValue pos
   case op of
     OEQU {} -> return (TBool pos, False)
