@@ -31,9 +31,8 @@ run v p s =
     Left err -> do
       hPutStrLn stderr "ERROR"
       hPutStrLn stderr "Parse failed."
-      putStrV v "Tokens:"
-      mapM_ (putStrV v . showPosToken . mkPosToken) ts
       hPutStrLn stderr err
+      hPutStrLn stderr $ showCode s (getParseErrPosition err)
       exitFailure
     Right tree -> do
       val <- runReaderT (runExceptT (checkProgram tree)) emptyEnv
@@ -49,6 +48,15 @@ run v p s =
   where
   ts = myLexer s
   showPosToken ((l,c),t) = concat [ show l, ":", show c, "\t", show t ]
+
+-- Error is "syntax error at line l, column c before t" where
+-- l is line number, c is column number and t is token.
+getParseErrPosition :: String -> Pos
+getParseErrPosition s = case words s of
+  ("syntax":"error":"at":"line":l_comma:"column":c:"before":_) -> 
+    let l = takeWhile (/= ',') l_comma in
+    BNFC'Position (read l) (read c)
+  _ -> error "getParseErrPosition: impossible"
 
 showCode :: String -> Pos -> String
 showCode s (Just (l,c)) =
@@ -156,7 +164,6 @@ data Error =
   | ErrSelfDeclaration Pos
   | ErrExpectedSameType Pos Type Type
   | ErrFunctionNotAlwaysReturning Pos String
-  | ErrWrongReturnType Pos IIdent Type Type -- (function name, expected, got)
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -201,8 +208,6 @@ instance Show Error where
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType pos t t') = "Expected same type, got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
   show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
-  show (ErrWrongReturnType pos ident t t') = "Wrong return type " ++ showType t' ++ " at " ++ showPos (hasPosition t') ++ " of function " ++ fromIdent ident ++ ", expected " ++ showType t ++ " from " ++ showPos (hasPosition t)
-
 
 getErrPosition :: Error -> Pos
 getErrPosition (ErrUnknownVariable pos _) = pos
@@ -245,8 +250,6 @@ getErrPosition (ErrCyclicInheritance _ _) = BNFC'NoPosition
 getErrPosition (ErrSelfDeclaration pos) = pos
 getErrPosition (ErrExpectedSameType pos _ _) = pos
 getErrPosition (ErrFunctionNotAlwaysReturning pos _) = pos
-getErrPosition (ErrWrongReturnType pos _ _ _) = pos
-
 
 
 fromIdent :: IIdent -> String
@@ -375,7 +378,7 @@ checkClassNoCircularInheritance' visited cls = do
 
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
-  when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
+  when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction (hasPosition ident) (fromIdent ident)
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
@@ -388,7 +391,7 @@ checkTopDef (PFunDef pos t ident args block) = do
   mt' <- local envFun (checkBlock block t)
   cenv <- asks getCenv
   case mt' of
-    Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrWrongReturnType pos ident t t'
+    Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrCannotCastTo pos t t'
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning pos (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
@@ -445,8 +448,8 @@ checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   }
   mt' <- local envFun (checkBlock block t)
   case mt' of
-    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongReturnType pos ident t t'
-    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongReturnType pos ident t (TVoid BNFC'NoPosition)
+    Just t' -> if sameType t t' then return Nothing else throwError $ ErrWrongType pos t t'
+    Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrWrongType pos t (TVoid BNFC'NoPosition)
 
 
 createCVenv :: IIdent -> FMonad' VEnv
@@ -751,6 +754,7 @@ checkExpr (EArrayNew pos t expr) = do
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
   return (TArray pos t, False)
 checkExpr (EArrayElem pos expr val) = do
+  -- TODO check if val >= 0
   (t, _) <- checkExpr expr
   checkValType t
   (t', _) <- checkExpr val
