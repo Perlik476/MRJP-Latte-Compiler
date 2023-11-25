@@ -4,7 +4,8 @@ import subprocess
 from tqdm import tqdm
 
 # latte_dir = "tests/lattests-benek/good"
-latte_dir = "tests/mrjp-tests-temp/good"
+# latte_dir = "tests/mrjp-tests-temp/good"
+latte_dir = "tests/mrjp-tests-benek/good/basic"
 test_latte = "./Frontend"
 
 errs = 0

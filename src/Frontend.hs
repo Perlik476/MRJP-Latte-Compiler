@@ -611,7 +611,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
       case mt1 of
         Just _ -> return $ Just t
         _ -> return mt''
-    Just (VBool False) -> return Nothing
+    Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   (t', _) <- checkExpr expr
