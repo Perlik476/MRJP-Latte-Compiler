@@ -151,6 +151,7 @@ data Error =
   | ErrIntegerOutOfRange Pos Integer
   | ErrDivisionByZero Pos
   | ErrCannotCastTo Pos Type Type
+  | ErrCannotCastNullTo Pos Type
   | ErrNotAnArray Pos Type
   | ErrNotAClass Pos Type
   | ErrNotAFunction Pos Type
@@ -192,6 +193,7 @@ instance Show Error where
   show (ErrIntegerOutOfRange pos n) = "Integer out of range at " ++ showPos pos ++ ": " ++ show n
   show (ErrDivisionByZero pos) = "Division by zero at " ++ showPos pos
   show (ErrCannotCastTo pos t t') = "Cannot cast to type " ++ showType t ++ " from " ++ showType t' ++ " at " ++ showPos pos
+  show (ErrCannotCastNullTo pos t) = "Cannot cast null to type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAnArray pos t) = "Not an array type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAClass pos t) = "Not a class type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAFunction pos t) = "Not a function type " ++ showType t ++ " at " ++ showPos pos
@@ -231,6 +233,7 @@ getErrPosition (ErrInequalityOperation pos _) = pos
 getErrPosition (ErrIntegerOutOfRange pos _) = pos
 getErrPosition (ErrDivisionByZero pos) = pos
 getErrPosition (ErrCannotCastTo pos _ _) = pos
+getErrPosition (ErrCannotCastNullTo pos _) = pos
 getErrPosition (ErrNotAnArray pos _) = pos
 getErrPosition (ErrNotAClass pos _) = pos
 getErrPosition (ErrNotAFunction pos _) = pos
@@ -767,7 +770,7 @@ checkExpr (ECastNull pos t) = do
         Just _ -> return (t, False)
         Nothing -> throwError $ ErrUnknownClass (hasPosition ident) (fromIdent ident)
     TArray {} -> return (t, False)
-    _ -> throwError $ ErrCannotCastTo pos t t -- TODO
+    _ -> throwError $ ErrCannotCastNullTo pos t
 checkExpr (EArrayNew pos t expr) = do
   checkValType t
   (t', _) <- checkExpr expr
@@ -851,7 +854,7 @@ checkExpr (EAdd pos expr1 op expr2) = do
   case op of
     OPlus _ -> do
       unless (sameType t1 t2) $ throwError $ ErrExpectedSameType pos t1 t2
-      unless (sameType t1 (TInt pos) || sameType t2 (TStr pos)) $ throwError $ ErrAddition pos t1
+      unless (sameType t1 (TInt pos) || sameType t1 (TStr pos)) $ throwError $ ErrAddition pos t1
     OMinus _ -> do
       unless (sameType t1 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t1
       unless (sameType t2 (TInt pos)) $ throwError $ ErrWrongType pos (TInt pos) t2
