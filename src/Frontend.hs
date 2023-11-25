@@ -110,7 +110,9 @@ data ClassData = ClassData
     getClassElems :: [ClassElem],
     getExtends :: Maybe String,
     getCVenv :: VEnv,
-    getCFenv :: FEnv
+    getCFenv :: FEnv,
+    getClassPos :: Pos,
+    getClassName :: String
   }
 data Env = Env
   {
@@ -129,6 +131,7 @@ data Error =
   ErrUnknownVariable Pos String
   | ErrUnknownFunction Pos String
   | ErrUnknownClass Pos String
+  | ErrUnknownInheritedClass Pos String String
   | ErrUnknownClassAttribute Pos String
   | ErrUnknownClassMethod Pos String
   | ErrDuplicateVariable Pos String
@@ -165,12 +168,11 @@ data Error =
   | ErrFunctionNotAlwaysReturning Pos String
   | ErrNegativeArrayIndex Pos Integer
 
--- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
-
 instance Show Error where
   show (ErrUnknownVariable pos ident) = "Unknown variable " ++ ident ++ " at " ++ showPos pos
   show (ErrUnknownFunction pos ident) = "Unknown function " ++ ident ++ " at " ++ showPos pos
   show (ErrUnknownClass pos ident) = "Unknown class " ++ ident ++ " at " ++ showPos pos
+  show (ErrUnknownInheritedClass pos ident ident') = "Unknown inherited class " ++ ident ++ " in declaration of class " ++ ident' ++ " at " ++ showPos pos
   show (ErrUnknownClassAttribute pos ident) = "Unknown class attribute " ++ ident ++ " at " ++ showPos pos
   show (ErrUnknownClassMethod pos ident) = "Unknown class method " ++ ident ++ " at " ++ showPos pos
   show (ErrDuplicateVariable pos ident) = "Duplicate variable " ++ ident ++ " at " ++ showPos pos
@@ -211,6 +213,7 @@ getErrPosition :: Error -> Pos
 getErrPosition (ErrUnknownVariable pos _) = pos
 getErrPosition (ErrUnknownFunction pos _) = pos
 getErrPosition (ErrUnknownClass pos _) = pos
+getErrPosition (ErrUnknownInheritedClass pos _ _) = pos
 getErrPosition (ErrUnknownClassAttribute pos _) = pos
 getErrPosition (ErrUnknownClassMethod pos _) = pos
 getErrPosition (ErrDuplicateVariable pos _) = pos
@@ -346,10 +349,10 @@ classDeclarationsToCEnv topDefs =
   where
     f (PClassDef _ ident (ClassDef _ elems)) =
       let (venv, fenv) = createEnvs elems in
-      (fromIdent ident, ClassData elems Nothing venv fenv)
+      (fromIdent ident, ClassData elems Nothing venv fenv (hasPosition ident) (fromIdent ident))
     f (PClassDefExt _ ident ident' (ClassDef _ elems)) =
       let (venv, fenv) = createEnvs elems in
-      (fromIdent ident, ClassData elems (Just $ fromIdent ident') venv fenv)
+      (fromIdent ident, ClassData elems (Just $ fromIdent ident') venv fenv (hasPosition ident) (fromIdent ident))
     f _ = error "classDeclarationsToCEnv: impossible"
 
     createEnvs :: [ClassElem] -> (VEnv, FEnv)
@@ -379,7 +382,7 @@ checkClassNoCircularInheritance' visited cls = do
       when (extendsIdent `elem` visited) $ throwError $ ErrCyclicInheritance (head visited) extendsIdent
       cenv <- asks getCenv
       case Data.Map.lookup extendsIdent cenv of
-        Nothing -> throwError $ ErrUnknownClass (BNFC'NoPosition) extendsIdent -- TODO
+        Nothing -> throwError $ ErrUnknownInheritedClass (getClassPos cls) extendsIdent (getClassName cls)
         Just cls' -> do
           checkClassNoCircularInheritance' (extendsIdent:visited) cls'
           return Nothing
@@ -865,7 +868,6 @@ checkExpr (ERel pos expr1 op expr2) = do
   (t2, _) <- checkExpr expr2
   cenv <- asks getCenv
   unless (castsTo cenv t1 t2 || castsTo cenv t2 t1) $ throwError $ ErrExpectedSameType pos t1 t2
-  -- TODO czemu castowanie?
   when (sameType t1 (TVoid pos)) $ throwError $ ErrVoidValue pos
   case op of
     OEQU {} -> return (TBool pos, False)

@@ -1,7 +1,12 @@
 int main() {
-    boolean x = false;
-    if (x) {
-        return 1;
-    }
+    int x = 0;
+    return 0;
 }
 
+class A {
+
+}
+
+class B extends C {
+
+}
