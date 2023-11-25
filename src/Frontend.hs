@@ -144,7 +144,6 @@ data Error =
   | ErrNoMain
   | ErrMultipleMain Pos
   | ErrWrongMainType Pos Type
-  | ErrMainNotAFunction Pos
   | ErrNotAssignable Pos Type
   | ErrAddition Pos Type
   | ErrBooleanOperation Pos Type
@@ -186,7 +185,6 @@ instance Show Error where
   show ErrNoMain = "No main function"
   show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
   show (ErrWrongMainType pos t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int"
-  show (ErrMainNotAFunction pos) = "Main is not a function at " ++ showPos pos
   show (ErrNotAssignable pos t) = "Not assignable type " ++ showType t ++ " at " ++ showPos pos
   show (ErrAddition pos t) = "Addition on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int/string"
   show (ErrBooleanOperation pos t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected bool"
@@ -226,7 +224,6 @@ getErrPosition (ErrVoidReturnValue pos) = pos
 getErrPosition ErrNoMain = BNFC'NoPosition
 getErrPosition (ErrMultipleMain pos) = pos
 getErrPosition (ErrWrongMainType pos _) = pos
-getErrPosition (ErrMainNotAFunction pos) = pos
 getErrPosition (ErrNotAssignable pos _) = pos
 getErrPosition (ErrAddition pos _) = pos
 getErrPosition (ErrBooleanOperation pos _) = pos
