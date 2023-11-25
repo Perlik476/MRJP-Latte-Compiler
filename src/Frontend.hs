@@ -164,6 +164,7 @@ data Error =
   | ErrSelfDeclaration Pos
   | ErrExpectedSameType Pos Type Type
   | ErrFunctionNotAlwaysReturning Pos String
+  | ErrNegativeArrayIndex Pos Integer
 
 -- TODO not a class i not a function chyba nie mają sensu, podobnie chyba errfunctionvalue
 
@@ -206,6 +207,7 @@ instance Show Error where
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType pos t t') = "Expected same types at " ++ showPos pos ++ ", got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
   show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
+  show (ErrNegativeArrayIndex pos n) = "Negative array index at " ++ showPos pos ++ ": " ++ show n
 
 getErrPosition :: Error -> Pos
 getErrPosition (ErrUnknownVariable pos _) = pos
@@ -246,6 +248,7 @@ getErrPosition (ErrCyclicInheritance _ _) = BNFC'NoPosition
 getErrPosition (ErrSelfDeclaration pos) = pos
 getErrPosition (ErrExpectedSameType pos _ _) = pos
 getErrPosition (ErrFunctionNotAlwaysReturning pos _) = pos
+getErrPosition (ErrNegativeArrayIndex pos _) = pos
 
 
 fromIdent :: IIdent -> String
@@ -607,7 +610,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> 
+    Just (VBool True) ->
       case mt1 of
         Just _ -> return $ Just t
         _ -> return mt''
@@ -626,11 +629,11 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
         (Just _, Just _, _) -> return $ Just t
         (_, _, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> 
+    Just (VBool True) ->
       case mt1 of
         Just _ -> return $ Just t
         _ -> return mt''
-    Just (VBool False) -> 
+    Just (VBool False) ->
       case mt2 of
         Just _ -> return $ Just t
         _ -> return mt''
@@ -646,7 +649,7 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
       case (mt1, mt'') of
         (_, Just _) -> return $ Just t
         _ -> return Nothing
-    Just (VBool True) -> 
+    Just (VBool True) ->
       case mt1 of
         Just _ -> return $ Just t
         _ -> return mt''
@@ -782,6 +785,10 @@ checkExpr (EArrayElem pos expr val) = do
   checkValType t
   (t', _) <- checkExpr val
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
+  mval <- tryEvalExpr val
+  case mval of
+    Just (VInt n) -> unless (n >= 0) $ throwError $ ErrNegativeArrayIndex (hasPosition val) n
+    _ -> return ()
   case t of
     TArray _ t'' -> return (t'', True)
     _ -> throwError $ ErrNotAnArray pos t
