@@ -1,7 +1,14 @@
 int main() {
-    int[] arr = new int[10];
-    arr[1000000000000000000000000000000000000];
+    error();
     return 0;
+}
+
+class A {
+    int f(){ return 0; }
+}
+
+class B extends A {
+    int f(int x) { return 1; }
 }
 
 

@@ -154,12 +154,11 @@ data Error =
   | ErrCannotCastNullTo Pos Type
   | ErrNotAnArray Pos Type
   | ErrNotAClass Pos Type
-  | ErrNotAFunction Pos Type
   | ErrVoidValue Pos
   | ErrFunctionValue Pos
   | ErrRedefinitionOfBuiltinFunction Pos String
   | ErrFieldShadowing Pos String
-  | ErrOverridingMethodWrongType Pos String Type Type -- (method name, expected, got)
+  | ErrOverridingMethodWrongType Pos String String Type Type -- (method name, class name, expected, got)
   | ErrCyclicInheritance String String
   | ErrSelfDeclaration Pos
   | ErrExpectedSameType Pos Type Type
@@ -197,12 +196,11 @@ instance Show Error where
   show (ErrCannotCastNullTo pos t) = "Cannot cast null to type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAnArray pos t) = "Not an array type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAClass pos t) = "Not a class type " ++ showType t ++ " at " ++ showPos pos
-  show (ErrNotAFunction pos t) = "Not a function type " ++ showType t ++ " at " ++ showPos pos
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
   show (ErrRedefinitionOfBuiltinFunction pos name) = "Redefinition of builtin function " ++ name ++ " at " ++ showPos pos
-  show (ErrFieldShadowing pos ident) = "Field shadowing " ++ ident ++ " at " ++ showPos pos
-  show (ErrOverridingMethodWrongType pos ident t t') = "Overriding method " ++ ident ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
+  show (ErrFieldShadowing pos ident) = "Shadowing the field " ++ ident ++ " at " ++ showPos pos
+  show (ErrOverridingMethodWrongType pos methodIdent classIdent t t') = "Overriding method " ++ methodIdent ++ " in class " ++ classIdent ++ " at " ++ showPos pos ++ " has wrong type " ++ showType t' ++ ", expected " ++ showType t
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType pos t t') = "Expected same types at " ++ showPos pos ++ ", got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
@@ -238,12 +236,11 @@ getErrPosition (ErrCannotCastTo pos _ _) = pos
 getErrPosition (ErrCannotCastNullTo pos _) = pos
 getErrPosition (ErrNotAnArray pos _) = pos
 getErrPosition (ErrNotAClass pos _) = pos
-getErrPosition (ErrNotAFunction pos _) = pos
 getErrPosition (ErrVoidValue pos) = pos
 getErrPosition (ErrFunctionValue pos) = pos
 getErrPosition (ErrRedefinitionOfBuiltinFunction pos _) = pos
 getErrPosition (ErrFieldShadowing pos _) = pos
-getErrPosition (ErrOverridingMethodWrongType pos _ _ _) = pos
+getErrPosition (ErrOverridingMethodWrongType pos _ _  _ _) = pos
 getErrPosition (ErrCyclicInheritance _ _) = BNFC'NoPosition
 getErrPosition (ErrSelfDeclaration pos) = pos
 getErrPosition (ErrExpectedSameType pos _ _) = pos
@@ -493,23 +490,23 @@ createCFenv :: IIdent -> FMonad' FEnv
 createCFenv ident = do
   cenv <- asks getCenv
   let Just cls = Data.Map.lookup (fromIdent ident) cenv
-  cfenv <- createCFenv' cls
+  cfenv <- createCFenv' (fromIdent ident) cls
   return $ Data.Map.union (getCFenv cls) cfenv
-createCFenv' :: ClassData -> FMonad' FEnv
-createCFenv' cls = do
+createCFenv' :: String -> ClassData -> FMonad' FEnv
+createCFenv' name cls = do
   case getExtends cls of
     Nothing -> return $ getCFenv cls
-    Just extendsIdent -> do
+    Just extendsName -> do
       cenv <- asks getCenv
       let cfenv = getCFenv cls
-      let Just cls' = Data.Map.lookup extendsIdent cenv
-      cfenv' <- createCFenv' cls'
+      let Just cls' = Data.Map.lookup extendsName cenv
+      cfenv' <- createCFenv' extendsName cls'
       let dupsIdents = Data.Map.keys $ Data.Map.intersection cfenv cfenv'
       let sameTypes = map (\ident -> sameType (cfenv Data.Map.! ident) (cfenv' Data.Map.! ident)) dupsIdents
       let pos = hasPosition $ head $ filter (\ident -> fromIdent ident `elem` dupsIdents) $ classElemsToIdents $ filter isMethod $ getClassElems cls
       let t = getCFenv cls Data.Map.! head dupsIdents
       let t' = cfenv' Data.Map.! head dupsIdents
-      unless (and sameTypes) $ throwError $ ErrOverridingMethodWrongType pos (head dupsIdents) t t'
+      unless (and sameTypes) $ throwError $ ErrOverridingMethodWrongType pos (head dupsIdents) name t' t
       return $ Data.Map.union cfenv' $ Data.Map.union (getCFenv cls) cfenv
 
 classElemsToIdents :: [ClassElem] -> [IIdent]
@@ -780,7 +777,6 @@ checkExpr (EArrayNew pos t expr) = do
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
   return (TArray pos t, False)
 checkExpr (EArrayElem pos expr val) = do
-  -- TODO check if val >= 0
   (t, _) <- checkExpr expr
   checkValType t
   (t', _) <- checkExpr val
@@ -975,7 +971,7 @@ sameType (TBool _) (TBool _) = True
 sameType (TVoid _) (TVoid _) = True
 sameType (TClass _ ident) (TClass _ ident') = fromIdent ident == fromIdent ident'
 sameType (TArray _ t) (TArray _ t') = sameType t t'
-sameType (TFun _ t ts) (TFun _ t' ts') = sameType t t' && all (uncurry sameType) (ts `zip` ts')
+sameType (TFun _ t ts) (TFun _ t' ts') = sameType t t' && length ts == length ts' && all (uncurry sameType) (ts `zip` ts')
 sameType _ _ = False
 
 castsTo :: CEnv -> Type -> Type -> Bool
