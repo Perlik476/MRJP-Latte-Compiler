@@ -1,11 +1,5 @@
 int main() {
-    (new A).f(1, "xd");
     return 0;
 }
 
 
-class A {
-    int f(int x, int y, int z) {
-        return 0;
-    }
-}

@@ -308,9 +308,6 @@ getTopDefClassIdents = map getTopDefIdent . filter isClassDef
     isClassDef _ = False
 
 
-sameIdent :: IIdent -> IIdent -> Bool
-sameIdent (IIdent _ ident) (IIdent _ ident') = ident == ident'
-
 checkNoDuplicateIdents :: [IIdent] -> (Pos -> String -> Error) -> FMonad
 checkNoDuplicateIdents idents err = do
   let names = map (\(IIdent _ (Ident name)) -> name) idents
@@ -321,16 +318,18 @@ checkNoDuplicateIdents idents err = do
 
 checkMain :: [TopDef] -> FMonad
 checkMain topDefs = do
-  let mains = filter (\def -> sameIdent (getTopDefIdent def) (IIdent BNFC'NoPosition (Ident "main"))) topDefs
+  let mains = filter (\def -> fromIdent (getTopDefIdent def) == "main") $ filter isFunDef topDefs
+      isFunDef PFunDef {} = True
+      isFunDef _ = False
   when (null mains) $ throwError ErrNoMain
-  when (length mains > 1) $ throwError $ ErrMultipleMain (hasPosition $ head mains)
+  when (length mains > 1) $ throwError $ ErrMultipleMain (hasPosition $ mains !! 2)
   let main = head mains
   case main of
     PFunDef pos t ident args _ ->
       when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType pos mainType
       where
         mainType = TFun (hasPosition main) (TInt $ hasPosition main) []
-    _ -> throwError $ ErrMainNotAFunction (hasPosition main)
+    _ -> error "checkMain: impossible"
   return Nothing
 
 functionDeclarationsToFEnv :: [TopDef] -> FEnv
