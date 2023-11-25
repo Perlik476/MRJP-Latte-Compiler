@@ -204,7 +204,7 @@ instance Show Error where
   show (ErrCyclicInheritance ident ident') = "Cyclic inheritance between " ++ ident ++ " and " ++ ident'
   show (ErrSelfDeclaration pos) = "Self declaration at " ++ showPos pos
   show (ErrExpectedSameType pos t t') = "Expected same types at " ++ showPos pos ++ ", got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
-  show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " does not always return a value (no return after if/while, in both branches of if-else, or at the end of the function)"
+  show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " defined at " ++ showPos pos ++ " doesn't return a value in all possible execution paths"
   show (ErrNegativeArrayIndex pos n) = "Negative array index at " ++ showPos pos ++ ": " ++ show n
 
 getErrPosition :: Error -> Pos
@@ -598,7 +598,7 @@ checkStmts (SVRet pos:stmts) t = do
     Nothing -> return $ Just t
 checkStmts (SCond pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (hasPosition expr) (TBool pos) t'
   mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr
@@ -615,7 +615,7 @@ checkStmts (SCond pos expr stmt:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (hasPosition expr) (TBool pos) t'
   mt1 <- checkStmts [addBlockIfNecessary stmt1] t
   mt2 <- checkStmts [addBlockIfNecessary stmt2] t
   mt'' <- checkStmts stmts t
@@ -637,7 +637,7 @@ checkStmts (SCondElse pos expr stmt1 stmt2:stmts) t = do
     _ -> error "checkStmts: impossible"
 checkStmts (SWhile pos expr stmt:stmts) t = do
   (t', _) <- checkExpr expr
-  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType pos (TBool $ hasPosition t') t'
+  unless (sameType t' (TBool pos)) $ throwError $ ErrWrongType (hasPosition expr) (TBool pos) t'
   mt1 <- checkStmts [addBlockIfNecessary stmt] t
   mt'' <- checkStmts stmts t
   mb <- tryEvalExpr expr

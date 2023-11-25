@@ -1,14 +1,7 @@
 int main() {
-    error();
-    return 0;
+    boolean x = false;
+    if (x) {
+        return 1;
+    }
 }
-
-class A {
-    int f(){ return 0; }
-}
-
-class B extends A {
-    int f(int x) { return 1; }
-}
-
 
