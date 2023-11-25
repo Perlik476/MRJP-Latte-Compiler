@@ -1,61 +1,12 @@
 int main() {
-    int x = 0;
-    {
-        // int new = 1;
-        boolean x = true;
-        B b = new B;
-        A a = new A;
-        a = b;
-    }
-
-    B b = new B;
-    b.inc();
-    b;
-
-    A[] a = new A[-5];
-    a[5] = new A;
-    // a[0] = (C)null;
-
     return 0;
 }
 
-B g() {
-    A a = new A;
-    return a; 
-}
 
-int f(int dupa) {
-    return true;
-}
-
-class C {
+class A {
 
 }
 
 class A {
-    int x;
-
-    int get_x() {
-        return self.x;
-    }
-
-    void set_x(int y) {
-        x = y;
-    }
-
-    void inc() {
-        self.get_x() + 1;
-        self.set_x(self.get_x() + 1);
-    }
-}
-
-class B extends A {
-
-    int get_x() {
-        return 0;
-    }
-
-    void set_x() {
-        return;
-    }
+    
 }

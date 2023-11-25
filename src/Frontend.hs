@@ -277,8 +277,10 @@ stdlib = Data.Map.fromList [
 
 checkProgram :: Program -> FMonad
 checkProgram (PProgram _ topDefs) = do
-  let idents = map getTopDefIdent topDefs
-  checkNoDuplicateIdents idents ErrDuplicateFunction
+  let funIdents = getTopDefFunIdents topDefs
+  let classIdents = getTopDefClassIdents topDefs
+  checkNoDuplicateIdents funIdents ErrDuplicateFunction
+  checkNoDuplicateIdents classIdents ErrDuplicateClass
   checkMain topDefs
   let fenv = functionDeclarationsToFEnv topDefs
   let cenv = classDeclarationsToCEnv topDefs
@@ -292,6 +294,20 @@ getTopDefIdent (PFunDef _ _ ident _ _) = ident
 getTopDefIdent (PClassDef _ ident _) = ident
 getTopDefIdent (PClassDefExt _ ident _ _) = ident
 
+getTopDefFunIdents :: [TopDef] -> [IIdent]
+getTopDefFunIdents = map getTopDefIdent . filter isFunDef
+  where
+    isFunDef PFunDef {} = True
+    isFunDef _ = False
+
+getTopDefClassIdents :: [TopDef] -> [IIdent]
+getTopDefClassIdents = map getTopDefIdent . filter isClassDef
+  where
+    isClassDef PClassDef {} = True
+    isClassDef PClassDefExt {} = True
+    isClassDef _ = False
+
+
 sameIdent :: IIdent -> IIdent -> Bool
 sameIdent (IIdent _ ident) (IIdent _ ident') = ident == ident'
 
@@ -300,7 +316,7 @@ checkNoDuplicateIdents idents err = do
   let names = map (\(IIdent _ (Ident name)) -> name) idents
   if length names == length (Data.List.nub names) then return Nothing else
     let dup = head $ names Data.List.\\ Data.List.nub names
-        dupPos = hasPosition $ head $ filter (\(IIdent _ (Ident name)) -> name == dup) idents in
+        dupPos = hasPosition $ filter (\(IIdent _ (Ident name)) -> name == dup) idents !! 1 in
     throwError $ err dupPos dup
 
 checkMain :: [TopDef] -> FMonad
