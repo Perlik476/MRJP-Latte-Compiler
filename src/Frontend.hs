@@ -447,7 +447,6 @@ checkClassElem _ (ClassAttrDef _ t ident) = return Nothing
 checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   cenv <- asks getCenv
   let Just cls = Data.Map.lookup (fromIdent classIdent) cenv
-  -- when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction pos (fromIdent ident)
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
@@ -676,8 +675,9 @@ addBlockIfNecessary stmt = case stmt of
   _ -> SBStmt (hasPosition stmt) (SBlock (hasPosition stmt) [stmt])
 
 
-
+maxInt :: Integer
 maxInt = 2^31 - 1
+minInt :: Integer
 minInt = -2^31
 checkInt :: Pos -> Integer -> TEMonad
 checkInt pos n = if minInt <= n && n <= maxInt then return $ Just $ VInt n else throwError $ ErrIntegerOutOfRange pos n
@@ -808,21 +808,19 @@ checkExpr (EMethodCall pos expr ident exprs) = do
   case t of
     TClass _ ident' -> do
       cenv <- asks getCenv
-      case Data.Map.lookup (fromIdent ident') cenv of
-        Just cls -> do
-          cfenv <- createCFenv ident'
-          case Data.Map.lookup (fromIdent ident) cfenv of
-            Just (TFun pos' t' ts) -> do
-              when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments (hasPosition ident) (fromIdent ident) (length ts) (length exprs)
-              argTypes' <- mapM checkExpr exprs
-              let argTypes = map fst argTypes'
-              if and $ zipWith (castsTo cenv) argTypes ts then return (t', False) else do
-                let firstBadArg = head $ filter (\(t, t') -> not $ castsTo cenv t t') $ zip argTypes ts
-                    firstBadArgPos = hasPosition $ exprs !! length (takeWhile (/= firstBadArg) $ zip argTypes ts)
-                    firstBadArgNum = (+1) $ length $ takeWhile (/= firstBadArg) $ zip argTypes ts
-                throwError $ ErrWrongTypeOfArgument firstBadArgPos (fromIdent ident) firstBadArgNum (snd firstBadArg) (fst firstBadArg)
-            _ -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
-        Nothing -> throwError $ ErrUnknownClass (hasPosition ident') (fromIdent ident) -- TODO ?
+      let Just cls = Data.Map.lookup (fromIdent ident') cenv
+      cfenv <- createCFenv ident'
+      case Data.Map.lookup (fromIdent ident) cfenv of
+        Just (TFun pos' t' ts) -> do
+          when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments (hasPosition ident) (fromIdent ident) (length ts) (length exprs)
+          argTypes' <- mapM checkExpr exprs
+          let argTypes = map fst argTypes'
+          if and $ zipWith (castsTo cenv) argTypes ts then return (t', False) else do
+            let firstBadArg = head $ filter (\(t, t') -> not $ castsTo cenv t t') $ zip argTypes ts
+                firstBadArgPos = hasPosition $ exprs !! length (takeWhile (/= firstBadArg) $ zip argTypes ts)
+                firstBadArgNum = (+1) $ length $ takeWhile (/= firstBadArg) $ zip argTypes ts
+            throwError $ ErrWrongTypeOfArgument firstBadArgPos (fromIdent ident) firstBadArgNum (snd firstBadArg) (fst firstBadArg)
+        _ -> throwError $ ErrUnknownClassMethod (hasPosition ident) (fromIdent ident)
     _ -> throwError $ ErrNotAClass pos t
 checkExpr (EFunctionCall pos ident exprs) = do
   fenv <- asks getFenv
