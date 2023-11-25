@@ -185,7 +185,7 @@ instance Show Error where
   show (ErrVoidReturnValue pos) = "Void return value at " ++ showPos pos
   show ErrNoMain = "No main function"
   show (ErrMultipleMain pos) = "Multiple main functions at " ++ showPos pos
-  show (ErrWrongMainType pos t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int"
+  show (ErrWrongMainType pos t) = "Wrong main function type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int()"
   show (ErrNotAssignable pos t) = "Not assignable type " ++ showType t ++ " at " ++ showPos pos
   show (ErrAddition pos t) = "Addition on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected int/string"
   show (ErrBooleanOperation pos t) = "Boolean operation on type " ++ showType t ++ " at " ++ showPos pos ++ ", expected bool"
@@ -326,9 +326,7 @@ checkMain topDefs = do
   let main = head mains
   case main of
     PFunDef pos t ident args _ ->
-      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType pos mainType
-      where
-        mainType = TFun (hasPosition main) (TInt $ hasPosition main) []
+      when (case t of {TInt _ -> False; _ -> True} || args /= []) $ throwError $ ErrWrongMainType pos (TFun pos t (map (\(PArg _ t _) -> t) args))
     _ -> error "checkMain: impossible"
   return Nothing
 
