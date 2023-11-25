@@ -815,7 +815,7 @@ checkExpr (EMethodCall pos expr ident exprs) = do
               when (length ts /= length exprs) $ throwError $ ErrWrongNumberOfArguments (hasPosition ident) (fromIdent ident) (length ts) (length exprs)
               argTypes' <- mapM checkExpr exprs
               let argTypes = map fst argTypes'
-              if and $ zipWith (castsTo cenv) argTypes ts then return (t, False) else do
+              if and $ zipWith (castsTo cenv) argTypes ts then return (t', False) else do
                 let firstBadArg = head $ filter (\(t, t') -> not $ castsTo cenv t t') $ zip argTypes ts
                     firstBadArgPos = hasPosition $ exprs !! length (takeWhile (/= firstBadArg) $ zip argTypes ts)
                     firstBadArgNum = (+1) $ length $ takeWhile (/= firstBadArg) $ zip argTypes ts
