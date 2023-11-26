@@ -40,6 +40,8 @@ By zbudować kompilator, należy wykonać polecenie `make` w katalogu głównym 
 
 - Wewnątrz klas można używać `self` do odwoływania się do atrybutów i metod klasy, choć nie jest to wymagane.
 
+- W bezpośrednim bloku funkcji nie można zadeklarować zmiennej o nazwie argumentu funkcji, choć można zrobić to w blokach w nim zagnieżdżonych.
+
 - W bezpośrednim bloku `for` nie można zadeklarować zmiennej o nazwie zmiennej, która iteruje po kolekcji, choć można zrobić to w blokach w nim zagnieżdżonych.
 
 - Poprawne operacje na napisach: `+`, `==`, `!=`.
