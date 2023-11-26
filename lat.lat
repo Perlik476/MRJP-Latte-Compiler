@@ -1,7 +1,12 @@
 int main() {
+    int[][] arr = new int[][3];
+    for (int[] x : arr) {
+        x = new int[3];
+    }
+    for (int[] x : arr) {
+        for (int y : x) {
+            y = 1;
+        }
+    }
     return 0;
-}
-
-class A {
-    void printInt(int x) {}
 }
