@@ -10,6 +10,8 @@ By zbudować kompilator, należy wykonać polecenie `make` w katalogu głównym 
 
 - `src` - katalog zawierający źródła kompilatora
 
+- `src/Frontend` - plik zawierający moduł odpowiedzialny za frontend kompilatora
+
 - `src/Latte` - katalog zawierający pliki wygenerowane przez BNFC
 
 - `src/Latte.cf` - plik zawierający gramatykę języka Latte rozszerzoną o dodatkowe konstrukcje, patrz sekcja Rozszerzenia
