@@ -81,8 +81,7 @@ usage = do
   putStrLn $ unlines
     [ "usage: Call with one of the following argument combinations:"
     , "  --help          Display this help message."
-    , "  (files)         Parse content of files verbosely."
-    , "  -s (files)      Silent mode. Parse content of files silently."
+    , "  (file)          Check if the given file is a valid program."
     ]
 
 main :: IO ()
@@ -91,8 +90,10 @@ main = do
   case args of
     ["--help"] -> usage
     []         -> usage
-    "-s":fs    -> mapM_ (runFile 0 pProgram) fs
-    fs         -> mapM_ (runFile 2 pProgram) fs
+    [f]       -> runFile 0 pProgram f
+    _          -> do
+      putStrLn "Too many arguments."
+      usage
 
 type FMonad' a = ExceptT Error (ReaderT Env IO) a
 type FMonad = FMonad' (Maybe Type)
