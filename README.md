@@ -1,5 +1,24 @@
 # Kompilator Latte
 
+Kompilator języka Latte, napisany w Haskellu z wykorzystaniem BNFC do generacji parsera.
+
+## Budowanie
+
+By zbudować kompilator, należy wykonać polecenie `make` w katalogu głównym projektu. Po zbudowaniu w katalogu głównym pojawi się plik `latc_llvm`.
+
+## Struktura projektu
+
+- `src` - katalog zawierający źródła kompilatora
+
+- `src/Latte` - katalog zawierający pliki wygenerowane przez BNFC
+
+- `src/Latte.cf` - plik zawierający gramatykę języka Latte rozszerzoną o dodatkowe konstrukcje, patrz sekcja Rozszerzenia
+
+- `src/Makefile` - plik zawierający reguły budowania kompilatora
+
+- `README.md` - plik zawierający niniejszą dokumentację
+
+
 ## Rozszerzenia
 
 - Tablice jednowymiarowe i pętle for
@@ -10,9 +29,7 @@
 
 - Metody wirtualne
 
-## Frontend
-
-Kluczowe informacje o języku:
+## Kluczowe (potencjalnie niestandardowe) informacje o języku:
 
 
 - Wszystkie wyrażenia złożone ze stałych, operatorów arytmetycznych i relacyjnych są ewaluowane, a ich wynik jest używany do ustalenia wartości logicznej wyrażeń warunkowych, co pozwala na ustalenie, czy funkcje zwracają wartości w każdym możliwym przypadku (z tych, które wynikają z ewaluacji wyrażeń warunkowych).
