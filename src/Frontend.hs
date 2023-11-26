@@ -398,8 +398,7 @@ checkTopDef (PFunDef pos t ident args block) = do
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   let envFun = \env -> env {
-    getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent argIdents) $ zip argTypes $ repeat (getDepth env + 1),
-    getDepth = getDepth env + 1
+    getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent argIdents) $ zip argTypes $ repeat (getDepth env + 1)
   }
   mt' <- local envFun (checkBlock block t)
   cenv <- asks getCenv
