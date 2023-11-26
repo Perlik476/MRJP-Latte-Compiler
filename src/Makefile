@@ -14,7 +14,9 @@ ALEX_OPTS  = --ghc
 
 # Default goal.
 
-all : Latte/Test Frontend
+# all : Latte/Test Frontend
+
+all : Frontend
 
 # Rules for building the parser.
 
@@ -27,13 +29,13 @@ Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs Frontend.hs : 
 %.hs : %.x
 	${ALEX} ${ALEX_OPTS} $<
 
-Latte/Test : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Latte/Test.hs
-	${GHC} ${GHC_OPTS} $@
-	mv Latte/Test ..
+# Latte/Test : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Latte/Test.hs
+# 	${GHC} ${GHC_OPTS} $@
+# 	mv Latte/Test ../test
 
 Frontend : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Frontend.hs
 	${GHC} ${GHC_OPTS} $@
-	mv Frontend ..
+	mv Frontend ../latc_llvm
 
 # Rules for cleaning generated files.
 

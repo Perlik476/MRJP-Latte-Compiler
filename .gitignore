@@ -2,6 +2,8 @@ tests/lattests-benek
 tests/mrjp-tests*
 Test
 Frontend
+test
+latc_llvm
 *.hi
 *.o
 *.log
