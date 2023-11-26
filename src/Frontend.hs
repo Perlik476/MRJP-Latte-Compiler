@@ -454,8 +454,10 @@ checkClassElem classIdent (ClassMethodDef pos t ident args block) = do
   let argIdents = map (\(PArg _ _ ident) -> ident) args
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   cvenv <- createCVenv classIdent
+  cfenv <- createCFenv classIdent
   let envFun = \env -> env {
     getVenv = Data.Map.union (Data.Map.fromList $ zip (map fromIdent argIdents) $ zip argTypes $ repeat (getDepth env + 1)) cvenv,
+    getFenv = Data.Map.union cfenv (getFenv env),
     getDepth = getDepth env + 1
   }
   mt' <- local envFun (checkBlock block t)

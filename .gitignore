@@ -1,5 +1,6 @@
-tests/lattests-benek
-tests/mrjp-tests*
+tests/lattests
+tests/mrjp-tests
+tests/mrjp-tests-good
 Test
 Frontend
 test

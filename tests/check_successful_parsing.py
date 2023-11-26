@@ -4,9 +4,9 @@ import subprocess
 from tqdm import tqdm
 
 # latte_dir = "tests/lattests-benek/good"
-latte_dir = "tests/mrjp-tests-temp/good"
+latte_dir = "tests/mrjp-tests-good/good"
 # latte_dir = "tests/mrjp-tests-benek/gr5"
-test_latte = "./Frontend"
+test_latte = "./latc_llvm"
 
 errs = 0
 for file in tqdm([f for f in os.listdir(latte_dir) if f.endswith(".lat")]):
