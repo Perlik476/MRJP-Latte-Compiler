@@ -7,6 +7,8 @@ HAPPY      = happy
 HAPPY_OPTS = --array --info --ghc --coerce
 ALEX       = alex
 ALEX_OPTS  = --ghc
+BNFC       = bnfc
+# BNFC       = /home/students/inf/PUBLIC/MRJP/bin/bnfc
 
 # List of goals not corresponding to file names.
 
@@ -21,7 +23,7 @@ all : Frontend
 # Rules for building the parser.
 
 Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs Frontend.hs : Latte.cf
-	bnfc --haskell -d --functor Latte.cf
+	${BNFC} --haskell -d --functor Latte.cf
 
 %.hs : %.y
 	${HAPPY} ${HAPPY_OPTS} $<
