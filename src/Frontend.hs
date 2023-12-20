@@ -199,7 +199,7 @@ instance Show Error where
   show (ErrCannotCastTo pos t t') = "Cannot cast to type " ++ showType t ++ " from " ++ showType t' ++ " at " ++ showPos pos
   show (ErrCannotCastNullTo pos t) = "Cannot cast null to type " ++ showType t ++ " at " ++ showPos pos
   show (ErrNotAnArray pos t) = "Not an array type " ++ showType t ++ " at " ++ showPos pos
-  show (ErrNotAClass pos t) = "Not a class type " ++ showType t ++ " at " ++ showPos pos
+  show (ErrNotAClass pos t) = "Accessing class members on non-class type " ++ showType t ++ " at " ++ showPos pos
   show (ErrVoidValue pos) = "Void value at " ++ showPos pos
   show (ErrFunctionValue pos) = "Function value at " ++ showPos pos
   show (ErrRedefinitionOfBuiltinFunction pos name) = "Redefinition of builtin function " ++ name ++ " at " ++ showPos pos
@@ -813,7 +813,7 @@ checkExpr (EClassAttr pos expr ident) = do
     TClass _ ident' -> do
       checkClassAttr (fromIdent ident') ident
     TArray _ t' -> do
-      unless (fromIdent ident == "length") $ throwError $ ErrUnknownClassAttribute (hasPosition ident) (fromIdent ident)
+      unless (fromIdent ident == "length") $ throwError $ ErrNotAClass pos t
       return (TInt pos, False)
     _ -> throwError $ ErrNotAClass pos t
 checkExpr (EClassNew pos ident) = do
