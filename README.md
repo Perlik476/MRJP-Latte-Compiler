@@ -38,7 +38,7 @@ By zbudować kompilator, należy wykonać polecenie `make` w katalogu głównym 
 
 - Funkcje, zmienne i klasy są od siebie niezależne, przez co np. może istnieć funkcja o tej samej nazwie jak zmienna czy klasa. To samo dotyczy pól i metod w klasach.
 
-- Wewnątrz klas można używać `self` do odwoływania się do atrybutów i metod klasy, choć nie jest to wymagane.
+- Wewnątrz klas można używać `self` do odwoływania się do atrybutów i metod klasy, choć nie jest to wymagane. Nie można używać `self` jako nazw zmiennych, funkcji czy klas, w tym nazw pól i metod.
 
 - W bezpośrednim bloku funkcji nie można zadeklarować zmiennej o nazwie argumentu funkcji, choć można zrobić to w blokach w nim zagnieżdżonych.
 

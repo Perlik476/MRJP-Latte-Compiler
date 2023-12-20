@@ -394,12 +394,14 @@ checkClassNoCircularInheritance' visited cls = do
 
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
+  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
   mapM_ checkCorrectType $ t:map (\(PArg _ t' _) -> t') args
   when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction (hasPosition ident) (fromIdent ident)
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
   mapM_ checkValType argTypes
   let argIdents = map (\(PArg _ _ ident) -> ident) args
+  when ("self" `elem` map fromIdent argIdents) $ throwError $ ErrSelfDeclaration $ hasPosition $ head (filter (\i -> "self" == fromIdent i) argIdents)
   checkNoDuplicateIdents argIdents ErrDuplicateFunctionArgumentName
   let envFun = \env -> env {
     getVenv = Data.Map.union (getVenv env) $ Data.Map.fromList $ zip (map fromIdent argIdents) $ zip argTypes $ repeat (getDepth env + 1)
@@ -410,7 +412,9 @@ checkTopDef (PFunDef pos t ident args block) = do
     Just t' -> if castsTo cenv t t' then return Nothing else throwError $ ErrCannotCastTo pos t t'
     Nothing -> if sameType t (TVoid $ hasPosition t) then return Nothing else throwError $ ErrFunctionNotAlwaysReturning (hasPosition ident) (fromIdent ident)
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
+  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
   let elemIdents = classElemsToIdents elems
+  when ("self" `elem` map fromIdent elemIdents) $ throwError $ ErrSelfDeclaration $ hasPosition $ head (filter (\i -> "self" == fromIdent i) elemIdents)
   let elemTypes = classElemsToTypes elems
   mapM_ checkCorrectType elemTypes
   let funElems = filter isMethod elems
@@ -426,11 +430,13 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   local envClass (mapM_ (checkClassElem ident) elems)
   return Nothing
 checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
+  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
   cenv <- asks getCenv
   case Data.Map.lookup (fromIdent extendsIdent) cenv of
     Nothing -> throwError $ ErrUnknownClass (hasPosition extendsIdent) (fromIdent extendsIdent)
     Just cls -> do
       let elemIdents = classElemsToIdents elems
+      when ("self" `elem` map fromIdent elemIdents) $ throwError $ ErrSelfDeclaration $ hasPosition $ head (filter (\i -> "self" == fromIdent i) elemIdents)
       let elemTypes = classElemsToTypes elems
       mapM_ checkCorrectType elemTypes
       let funElems = filter isMethod elems
