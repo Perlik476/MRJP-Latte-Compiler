@@ -168,6 +168,7 @@ data Error =
   | ErrExpectedSameType Pos Type Type
   | ErrFunctionNotAlwaysReturning Pos String
   | ErrNegativeArrayIndex Pos Integer
+  | ErrArrayMultipleDimensions Pos Type
 
 instance Show Error where
   show (ErrUnknownVariable pos ident) = "Unknown variable " ++ ident ++ " at " ++ showPos pos
@@ -209,6 +210,7 @@ instance Show Error where
   show (ErrExpectedSameType pos t t') = "Expected same types at " ++ showPos pos ++ ", got " ++ showType t ++ " at " ++ showPos (hasPosition t) ++ " and " ++ showType t' ++ " at " ++ showPos (hasPosition t')
   show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " defined at " ++ showPos pos ++ " doesn't return a value in all possible execution paths"
   show (ErrNegativeArrayIndex pos n) = "Negative array index at " ++ showPos pos ++ ": " ++ show n
+  show (ErrArrayMultipleDimensions pos t) = "Array of multiple dimensions at " ++ showPos pos ++ ": " ++ showType t
 
 getErrPosition :: Error -> Pos
 getErrPosition (ErrUnknownVariable pos _) = pos
@@ -250,6 +252,7 @@ getErrPosition (ErrSelfDeclaration pos) = pos
 getErrPosition (ErrExpectedSameType pos _ _) = pos
 getErrPosition (ErrFunctionNotAlwaysReturning pos _) = pos
 getErrPosition (ErrNegativeArrayIndex pos _) = pos
+getErrPosition (ErrArrayMultipleDimensions pos _) = pos
 
 
 fromIdent :: IIdent -> String
@@ -391,6 +394,7 @@ checkClassNoCircularInheritance' visited cls = do
 
 checkTopDef :: TopDef -> FMonad
 checkTopDef (PFunDef pos t ident args block) = do
+  mapM_ checkCorrectType $ t:map (\(PArg _ t' _) -> t') args
   when (fromIdent ident `elem` Data.Map.keys stdlib) $ throwError $ ErrRedefinitionOfBuiltinFunction (hasPosition ident) (fromIdent ident)
   checkFunRetType t
   let argTypes = map (\(PArg _ t _) -> t) args
@@ -408,6 +412,7 @@ checkTopDef (PFunDef pos t ident args block) = do
 checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemIdents = classElemsToIdents elems
   let elemTypes = classElemsToTypes elems
+  mapM_ checkCorrectType elemTypes
   let funElems = filter isMethod elems
   checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
@@ -427,6 +432,7 @@ checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
     Just cls -> do
       let elemIdents = classElemsToIdents elems
       let elemTypes = classElemsToTypes elems
+      mapM_ checkCorrectType elemTypes
       let funElems = filter isMethod elems
       checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
       mapM_ checkFunRetType $ classElemsToTypes funElems
@@ -543,6 +549,7 @@ checkStmts (SBStmt _ block:stmts) t = do
     (_, Just t'') -> return $ Just t
     (Nothing, Nothing) -> return Nothing
 checkStmts (SDecl pos t (item:items):stmts) t' = do
+  checkCorrectType t
   when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration pos
   tryInsertToEnv ident t
   checkValType t
@@ -655,6 +662,8 @@ checkStmts (SWhile pos expr stmt:stmts) t = do
     Just (VBool False) -> return mt''
     _ -> error "checkStmts: impossible"
 checkStmts (SFor pos t' ident expr stmt:stmts) t = do
+  checkCorrectType t'
+  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration pos
   (t'', _) <- checkExpr expr
   cenv <- asks getCenv
   case t'' of
@@ -775,6 +784,7 @@ checkExpr (ECastNull pos t) = do
     TArray {} -> return (t, False)
     _ -> throwError $ ErrCannotCastNullTo pos t
 checkExpr (EArrayNew pos t expr) = do
+  checkCorrectType t
   checkValType t
   (t', _) <- checkExpr expr
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'
@@ -990,3 +1000,11 @@ castsTo cenv (TClass _ ident) (TClass _ ident') = fromIdent ident' `elem` getAnc
 castsTo cenv (TArray _ t) (TArray _ t') = sameType t t'
 castsTo cenv (TFun _ t ts) (TFun _ t' ts') = sameType t t' && all (uncurry sameType) (ts `zip` ts')
 castsTo _ _ _ = False
+
+checkCorrectType :: Type -> FMonad' ()
+checkCorrectType (TFun _ t ts) = do
+  checkCorrectType t
+  mapM_ checkCorrectType ts
+checkCorrectType t@(TArray pos (TArray _ _)) = do
+  throwError $ ErrArrayMultipleDimensions pos t
+checkCorrectType _ = return ()
