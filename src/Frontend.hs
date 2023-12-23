@@ -1,4 +1,4 @@
-module Main where
+module Frontend where
 
 import Prelude
 import System.Environment ( getArgs )
@@ -21,32 +21,6 @@ import qualified Data.List
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
-
-putStrV v s = when (v > 1) $ putStrLn s
-
-runFile v p f = putStrLn f >> readFile f >>= run v p
-
-run v p s =
-  case p ts of
-    Left err -> do
-      hPutStrLn stderr "ERROR"
-      hPutStrLn stderr "Parse failed."
-      hPutStrLn stderr err
-      hPutStr stderr $ showCode s (getParseErrPosition err)
-      exitFailure
-    Right tree -> do
-      val <- runReaderT (runExceptT (checkProgram tree)) emptyEnv
-      case val of
-        Right _ -> do
-          hPutStrLn stderr "OK"
-          exitSuccess
-        Left err -> do
-          hPutStrLn stderr "ERROR"
-          hPutStrLn stderr $ "Error: " ++ show err
-          hPutStr stderr $ showCode s (getErrPosition err)
-          exitFailure
-  where
-  ts = myLexer s
 
 getParseErrPosition :: String -> Pos
 getParseErrPosition s = case words s of
@@ -74,26 +48,6 @@ convertTabTo8Spaces :: String -> String
 convertTabTo8Spaces [] = []
 convertTabTo8Spaces ('\t':s) = replicate 8 ' ' ++ convertTabTo8Spaces s
 convertTabTo8Spaces (c:s) = c:convertTabTo8Spaces s
-
-
-usage :: IO ()
-usage = do
-  putStrLn $ unlines
-    [ "usage: Call with one of the following argument combinations:"
-    , "  --help          Display this help message."
-    , "  (file)          Check if the given file is a valid program."
-    ]
-
-main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    ["--help"] -> usage
-    []         -> usage
-    [f]       -> runFile 0 pProgram f
-    _          -> do
-      putStrLn "Too many arguments."
-      usage
 
 type FMonad' a = ExceptT Error (ReaderT Env IO) a
 type FMonad = FMonad' (Maybe Type)
@@ -281,6 +235,18 @@ stdlib = Data.Map.fromList [
   ("readInt", TFun BNFC'NoPosition (TInt BNFC'NoPosition) []),
   ("readString", TFun BNFC'NoPosition (TStr BNFC'NoPosition) [])
   ]
+
+frontendCheck :: Program -> String -> IO Bool
+frontendCheck tree s = do
+  val <- runReaderT (runExceptT (checkProgram tree)) emptyEnv
+  case val of
+    Right _ -> do
+      return True
+    Left err -> do
+      hPutStrLn stderr "ERROR"
+      hPutStrLn stderr $ "Error: " ++ show err
+      hPutStr stderr $ showCode s (getErrPosition err)
+      return False
 
 checkProgram :: Program -> FMonad
 checkProgram (PProgram _ topDefs) = do
