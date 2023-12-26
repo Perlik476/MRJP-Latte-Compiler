@@ -32,7 +32,7 @@ newtype Block = SBlock [Stmt]
 data Stmt
     = SEmpty
     | SBStmt Block
-    | SDecl Type Ident
+    | SDecl Type Ident Expr
     | SAss Expr Expr
     | SIncr Expr
     | SDecr Expr
@@ -77,7 +77,14 @@ data Expr
   deriving (Eq, Ord, Show, Read)
 
 data ArithOp = OPlus | OMinus | OTimes | ODiv | OMod
-  deriving (Eq, Ord, Show, Read)
+  deriving (Eq, Ord, Read)
+instance Show ArithOp where
+  show OPlus  = "add"
+  show OMinus = "sub"
+  show OTimes = "mul"
+  show ODiv   = "div"
+  show OMod   = "mod"
+-- TODO
 
 data RelOp = OLTH | OLE | OGTH | OGE | OEQU | ONE
   deriving (Eq, Ord, Show, Read)

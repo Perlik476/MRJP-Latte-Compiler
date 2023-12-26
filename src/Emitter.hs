@@ -29,5 +29,5 @@ addInstr instr state = state { getInstrs = getInstrs state ++ [instr] }
 
 emitBinOp :: Address -> Address -> ArithOp -> Address -> GenM ()
 emitBinOp addr addr1 op addr2 = do
-  emit $ show addr ++ " = " ++ show addr1 ++ " " ++ show op ++ " " ++ show addr2
+  emit $ show addr ++ " = " ++ show op ++ " " ++ showAddrType addr ++ " " ++ show addr1 ++ ", " ++ show addr2
 

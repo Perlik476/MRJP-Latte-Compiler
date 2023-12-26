@@ -59,19 +59,29 @@ genStmt :: Stmt -> GenM ()
 genStmt (SExp expr) = do
   genExpr expr
   return ()
-genStmt (SDecl t ident) = do
-  addr <- freshReg (toCompType t)
+genStmt (SDecl t ident expr) = do
+  addr <- genExpr expr
   modify $ \s -> s { getRegEnv = insert ident addr (getRegEnv s) }
   return ()
 genStmt (SAss expr1 expr2) = do
-  addr1 <- genExpr expr1
+  addr1 <- genLhs expr1
   addr2 <- genExpr expr2
-  emit $ show addr1 ++ " = " ++ show addr2
+  case addr1 of
+    AImmediate val t -> do
+      let ident = getVarName expr1
+      modify $ \s -> s { getRegEnv = insert ident addr2 (getRegEnv s) }
+    ARegister _ t -> do
+      let ident = getVarName expr1
+      modify $ \s -> s { getRegEnv = insert ident addr2 (getRegEnv s) }
   return ()
 genStmt (SRet expr) = do
   addr <- genExpr expr
   emit $ "ret " ++ showType (getAddrType addr) ++ " " ++ show addr
   return ()
+
+getVarName :: Expr -> String
+getVarName (EVar ident) = ident
+getVarName _ = error "Not a variable"
 
 toCompType :: Type -> CType
 toCompType TInt = CInt
@@ -79,8 +89,6 @@ toCompType TBool = CBool
 toCompType TVoid = CVoid
 toCompType TStr = CString
 -- TODO
-
-
 
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
@@ -91,6 +99,7 @@ genExpr (EVar ident) = do
     Just addr -> return addr
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."
+genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do

@@ -42,7 +42,7 @@ showAddrType (AImmediate _ t) = showType t
 showAddrType (ARegister _ t) = showType t
 
 showType :: CType -> String
-showType CInt = "i32"
+showType CInt = "i32" -- TODO
 showType CBool = "i1"
 showType CVoid = "void"
 showType CString = "i8*"

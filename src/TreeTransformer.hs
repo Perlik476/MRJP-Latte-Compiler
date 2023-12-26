@@ -75,16 +75,24 @@ transformStmt' (Abs.SExp _ expr) = AST.SExp (transformExpr expr)
 transformStmts :: [Abs.Stmt] -> [AST.Stmt]
 transformStmts (Abs.SDecl _ t (item:items):stmts) = 
   case item of
-    Abs.SNoInit _ (Abs.IIdent _ (Abs.Ident ident)) -> AST.SDecl (transformType t) ident : transformStmts (Abs.SDecl undefined t items : stmts)
-    Abs.SInit _ (Abs.IIdent _ (Abs.Ident ident)) val -> 
-      AST.SDecl (transformType t) ident : 
-      transformStmt' (Abs.SAss undefined (Abs.EVar undefined (Abs.IIdent undefined (Abs.Ident ident))) val) :
+    Abs.SNoInit _ (Abs.IIdent _ (Abs.Ident ident)) -> 
+      let t' = transformType t in
+      AST.SDecl t' ident (defaultValue t'): 
+      transformStmts (Abs.SDecl undefined t items : stmts)
+    Abs.SInit _ (Abs.IIdent _ (Abs.Ident ident)) expr -> 
+      AST.SDecl (transformType t) ident (transformExpr expr): 
       transformStmts (Abs.SDecl undefined t items : stmts)
 transformStmts (Abs.SDecl _ t []:stmts) = transformStmts stmts
 transformStmts (Abs.SRet _ expr:stmts) = [transformStmt' (Abs.SRet undefined expr)]
 transformStmts (Abs.SVRet _:stmts) = [transformStmt' (Abs.SVRet undefined)]
 transformStmts (stmt:stmts) = transformStmt' stmt : transformStmts stmts
 transformStmts [] = []
+
+defaultValue :: AST.Type -> AST.Expr
+defaultValue AST.TInt = AST.ELitInt 0
+defaultValue AST.TStr = AST.EString ""
+defaultValue AST.TBool = AST.ELitFalse
+
 
 transformType :: Abs.Type -> AST.Type
 transformType (Abs.TInt _) = AST.TInt
@@ -170,9 +178,9 @@ transformExpr (Abs.EAnd _ expr1 expr2) =
   let tExpr1 = transformExpr expr1
       tExpr2 = transformExpr expr2 in
   case (tExpr1, tExpr2) of
-    (AST.ELitTrue, b) -> b
-    (b, AST.ELitTrue) -> b
-    (_, AST.ELitFalse) -> AST.ELitFalse
+    (AST.ELitTrue, _) -> tExpr2
+    (_, AST.ELitTrue) -> tExpr1
+    (_, AST.ELitFalse) -> AST.EAnd tExpr1 tExpr2 -- TODO check if correct semantics
     (AST.ELitFalse, _) -> AST.ELitFalse
     _ -> AST.EAnd tExpr1 tExpr2
 transformExpr (Abs.EOr _ expr1 expr2) =
@@ -181,8 +189,8 @@ transformExpr (Abs.EOr _ expr1 expr2) =
   case (tExpr1, tExpr2) of
     (AST.ELitTrue, _) -> AST.ELitTrue
     (_, AST.ELitTrue) -> AST.ELitTrue
-    (AST.ELitFalse, b) -> b
-    (b, AST.ELitFalse) -> b
+    (AST.ELitFalse, _) -> tExpr2
+    (_, AST.ELitFalse) -> AST.EOr tExpr1 tExpr2
     _ -> AST.EOr tExpr1 tExpr2
 
 toASTBool :: Bool -> AST.Expr
