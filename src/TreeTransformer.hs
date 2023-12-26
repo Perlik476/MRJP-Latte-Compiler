@@ -65,6 +65,9 @@ transformStmts (Abs.SDecl _ t (item:items):stmts) =
       AST.SDecl (transformType t) ident : 
       transformStmt' (Abs.SAss undefined (Abs.EVar undefined (Abs.IIdent undefined (Abs.Ident ident))) val) :
       transformStmts (Abs.SDecl undefined t items : stmts)
+transformStmts (Abs.SDecl _ t []:stmts) = transformStmts stmts
+transformStmts (Abs.SRet _ expr:stmts) = [transformStmt' (Abs.SRet undefined expr)]
+transformStmts (Abs.SVRet _:stmts) = [transformStmt' (Abs.SVRet undefined)]
 transformStmts (stmt:stmts) = transformStmt' stmt : transformStmts stmts
 transformStmts [] = []
 
@@ -89,12 +92,87 @@ transformExpr (Abs.EClassAttr _ expr ident) = AST.EClassAttr (transformExpr expr
 transformExpr (Abs.EMethodCall _ expr ident exprs) = AST.EMethodCall (transformExpr expr) (transformIIdent ident) (map transformExpr exprs)
 transformExpr (Abs.EArrayNew _ t expr) = AST.EArrayNew (transformType t) (transformExpr expr)
 transformExpr (Abs.EArrayElem _ expr expr') = AST.EArrayElem (transformExpr expr) (transformExpr expr')
-transformExpr (Abs.ENeg _ expr) = AST.ENeg (transformExpr expr)
-transformExpr (Abs.ENot _ expr) = AST.ENot (transformExpr expr)
-transformExpr (Abs.EMul _ expr1 mulOp expr2) = AST.EOp (transformExpr expr1) (transformMulOp mulOp) (transformExpr expr2)
-transformExpr (Abs.EAdd _ expr1 addOp expr2) = AST.EOp (transformExpr expr1) (transformAddOp addOp) (transformExpr expr2)
-transformExpr (Abs.ERel _ expr1 relOp expr2) = AST.ERel (transformExpr expr1) (transformRelOp relOp) (transformExpr expr2)
-transformExpr (Abs.EAnd _ expr1 expr2) = AST.EAnd (transformExpr expr1) (transformExpr expr2)
+transformExpr (Abs.ENeg _ expr) = 
+  let tExpr = transformExpr expr in
+  case tExpr of
+    AST.ELitInt integer -> AST.ELitInt (-integer)
+    _ -> AST.ENeg tExpr
+transformExpr (Abs.ENot _ expr) = 
+  let tExpr = transformExpr expr in
+  case tExpr of
+    AST.ELitTrue -> AST.ELitFalse
+    AST.ELitFalse -> AST.ELitTrue
+    _ -> AST.ENot tExpr
+transformExpr (Abs.EMul _ expr1 mulOp expr2) = 
+  let tExpr1 = transformExpr expr1
+      tExpr2 = transformExpr expr2 in
+  case (tExpr1, tExpr2) of
+    (AST.ELitInt integer1, AST.ELitInt integer2) -> 
+      case mulOp of
+        Abs.OTimes _ -> AST.ELitInt (integer1 * integer2)
+        Abs.ODiv _ -> AST.ELitInt (integer1 `div` integer2)
+        Abs.OMod _ -> AST.ELitInt (integer1 `mod` integer2)
+    _ -> AST.EOp tExpr1 (transformMulOp mulOp) tExpr2
+transformExpr (Abs.EAdd _ expr1 addOp expr2) =
+  let tExpr1 = transformExpr expr1
+      tExpr2 = transformExpr expr2 in
+  case (tExpr1, tExpr2) of
+    (AST.ELitInt integer1, AST.ELitInt integer2) -> 
+      case addOp of
+        Abs.OPlus _ -> AST.ELitInt (integer1 + integer2)
+        Abs.OMinus _ -> AST.ELitInt (integer1 - integer2)
+    _ -> AST.EOp tExpr1 (transformAddOp addOp) tExpr2
+transformExpr (Abs.ERel _ expr1 relOp expr2) = 
+  let tExpr1 = transformExpr expr1
+      tExpr2 = transformExpr expr2 in
+  case (tExpr1, tExpr2) of
+    (AST.ELitInt integer1, AST.ELitInt integer2) -> 
+      case relOp of
+        Abs.OLTH _ -> toASTBool (integer1 < integer2)
+        Abs.OLE _ -> toASTBool (integer1 <= integer2)
+        Abs.OGTH _ -> toASTBool (integer1 > integer2)
+        Abs.OGE _ -> toASTBool (integer1 >= integer2)
+        Abs.OEQU _ -> toASTBool (integer1 == integer2)
+        Abs.ONE _ -> toASTBool (integer1 /= integer2)
+    (AST.ELitTrue, AST.ELitTrue) -> 
+      case relOp of
+        Abs.OEQU _ -> AST.ELitTrue
+        Abs.ONE _ -> AST.ELitFalse
+    (AST.ELitFalse, AST.ELitFalse) -> 
+      case relOp of
+        Abs.OEQU _ -> AST.ELitTrue
+        Abs.ONE _ -> AST.ELitFalse
+    (AST.ELitTrue, AST.ELitFalse) -> 
+      case relOp of
+        Abs.OEQU _ -> AST.ELitFalse
+        Abs.ONE _ -> AST.ELitTrue
+    (AST.ELitFalse, AST.ELitTrue) -> 
+      case relOp of
+        Abs.OEQU _ -> AST.ELitFalse
+        Abs.ONE _ -> AST.ELitTrue
+    _ -> AST.ERel tExpr1 (transformRelOp relOp) tExpr2
+transformExpr (Abs.EAnd _ expr1 expr2) = 
+  let tExpr1 = transformExpr expr1
+      tExpr2 = transformExpr expr2 in
+  case (tExpr1, tExpr2) of
+    (AST.ELitTrue, b) -> b
+    (b, AST.ELitTrue) -> b
+    (_, AST.ELitFalse) -> AST.ELitFalse
+    (AST.ELitFalse, _) -> AST.ELitFalse
+    _ -> AST.EAnd tExpr1 tExpr2
+transformExpr (Abs.EOr _ expr1 expr2) =
+  let tExpr1 = transformExpr expr1
+      tExpr2 = transformExpr expr2 in
+  case (tExpr1, tExpr2) of
+    (AST.ELitTrue, _) -> AST.ELitTrue
+    (_, AST.ELitTrue) -> AST.ELitTrue
+    (AST.ELitFalse, b) -> b
+    (b, AST.ELitFalse) -> b
+    _ -> AST.EOr tExpr1 tExpr2
+
+toASTBool :: Bool -> AST.Expr
+toASTBool True = AST.ELitTrue
+toASTBool False = AST.ELitFalse
 
 transformMulOp :: Abs.MulOp -> AST.ArithOp
 transformMulOp (Abs.OTimes _) = AST.OTimes

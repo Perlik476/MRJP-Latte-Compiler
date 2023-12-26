@@ -85,6 +85,12 @@ toCompType TStr = CString
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
 genExpr (ELitInt n) = return $ AImmediate n CInt
+genExpr (EVar ident) = do
+  regEnv <- gets getRegEnv
+  case Data.Map.lookup ident regEnv of
+    Just addr -> return addr
+    Nothing ->
+      error $ "Variable " ++ ident ++ " not found in environment."
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do
