@@ -24,6 +24,7 @@ import qualified Data.List
 
 import Frontend (frontendCheck, showCode, getParseErrPosition)
 import TreeTransformer (transformProgram)
+import Generator (compile)
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -45,6 +46,8 @@ run v p s =
         hPutStrLn stderr "OK"
         let ast = transformProgram tree
         liftIO $ print ast
+        s <- compile ast
+        liftIO $ putStrLn s
         exitSuccess
       else do
         exitFailure

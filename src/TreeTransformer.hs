@@ -40,26 +40,33 @@ transformClassItem :: Abs.ClassItem -> AST.ClassItem
 transformClassItem (Abs.ClassItem _ ident) = AST.ClassItem (transformIIdent ident)
 
 transformBlock :: Abs.Block -> AST.Block
-transformBlock (Abs.SBlock _ stmts) = AST.SBlock $ map transformStmt stmts
+transformBlock (Abs.SBlock _ stmts) = AST.SBlock $ transformStmts stmts
 
-transformStmt :: Abs.Stmt -> AST.Stmt
-transformStmt (Abs.SEmpty _) = AST.SEmpty
-transformStmt (Abs.SBStmt _ block) = AST.SBStmt (transformBlock block)
-transformStmt (Abs.SDecl _ t items) = AST.SDecl (transformType t) (map transformItem items)
-transformStmt (Abs.SAss _ expr1 expr2) = AST.SAss (transformExpr expr1) (transformExpr expr2)
-transformStmt (Abs.SIncr _ expr) = AST.SIncr (transformExpr expr)
-transformStmt (Abs.SDecr _ expr) = AST.SDecr (transformExpr expr)
-transformStmt (Abs.SRet _ expr) = AST.SRet (transformExpr expr)
-transformStmt (Abs.SVRet _) = AST.SVRet
-transformStmt (Abs.SCond _ expr stmt) = AST.SCond (transformExpr expr) (transformStmt stmt)
-transformStmt (Abs.SCondElse _ expr stmt1 stmt2) = AST.SCondElse (transformExpr expr) (transformStmt stmt1) (transformStmt stmt2)
-transformStmt (Abs.SWhile _ expr stmt) = AST.SWhile (transformExpr expr) (transformStmt stmt)
-transformStmt (Abs.SFor _ t ident expr stmt) = AST.SFor (transformType t) (transformIIdent ident) (transformExpr expr) (transformStmt stmt)
-transformStmt (Abs.SExp _ expr) = AST.SExp (transformExpr expr)
+transformStmt' :: Abs.Stmt -> AST.Stmt
+transformStmt' (Abs.SEmpty _) = AST.SEmpty
+transformStmt' (Abs.SBStmt _ block) = AST.SBStmt (transformBlock block)
+transformStmt' (Abs.SDecl _ t _) = error "Multiple items in declaration"
+transformStmt' (Abs.SAss _ expr1 expr2) = AST.SAss (transformExpr expr1) (transformExpr expr2)
+transformStmt' (Abs.SIncr _ expr) = AST.SIncr (transformExpr expr)
+transformStmt' (Abs.SDecr _ expr) = AST.SDecr (transformExpr expr)
+transformStmt' (Abs.SRet _ expr) = AST.SRet (transformExpr expr)
+transformStmt' (Abs.SVRet _) = AST.SVRet
+transformStmt' (Abs.SCond _ expr stmt) = AST.SCond (transformExpr expr) (transformStmt' stmt)
+transformStmt' (Abs.SCondElse _ expr stmt1 stmt2) = AST.SCondElse (transformExpr expr) (transformStmt' stmt1) (transformStmt' stmt2)
+transformStmt' (Abs.SWhile _ expr stmt) = AST.SWhile (transformExpr expr) (transformStmt' stmt)
+transformStmt' (Abs.SFor _ t ident expr stmt) = AST.SFor (transformType t) (transformIIdent ident) (transformExpr expr) (transformStmt' stmt)
+transformStmt' (Abs.SExp _ expr) = AST.SExp (transformExpr expr)
 
-transformItem :: Abs.Item -> AST.Item
-transformItem (Abs.SNoInit _ ident) = AST.SNoInit (transformIIdent ident)
-transformItem (Abs.SInit _ ident expr) = AST.SInit (transformIIdent ident) (transformExpr expr)
+transformStmts :: [Abs.Stmt] -> [AST.Stmt]
+transformStmts (Abs.SDecl _ t (item:items):stmts) = 
+  case item of
+    Abs.SNoInit _ (Abs.IIdent _ (Abs.Ident ident)) -> AST.SDecl (transformType t) ident : transformStmts (Abs.SDecl undefined t items : stmts)
+    Abs.SInit _ (Abs.IIdent _ (Abs.Ident ident)) val -> 
+      AST.SDecl (transformType t) ident : 
+      transformStmt' (Abs.SAss undefined (Abs.EVar undefined (Abs.IIdent undefined (Abs.Ident ident))) val) :
+      transformStmts (Abs.SDecl undefined t items : stmts)
+transformStmts (stmt:stmts) = transformStmt' stmt : transformStmts stmts
+transformStmts [] = []
 
 transformType :: Abs.Type -> AST.Type
 transformType (Abs.TInt _) = AST.TInt
@@ -82,6 +89,29 @@ transformExpr (Abs.EClassAttr _ expr ident) = AST.EClassAttr (transformExpr expr
 transformExpr (Abs.EMethodCall _ expr ident exprs) = AST.EMethodCall (transformExpr expr) (transformIIdent ident) (map transformExpr exprs)
 transformExpr (Abs.EArrayNew _ t expr) = AST.EArrayNew (transformType t) (transformExpr expr)
 transformExpr (Abs.EArrayElem _ expr expr') = AST.EArrayElem (transformExpr expr) (transformExpr expr')
+transformExpr (Abs.ENeg _ expr) = AST.ENeg (transformExpr expr)
+transformExpr (Abs.ENot _ expr) = AST.ENot (transformExpr expr)
+transformExpr (Abs.EMul _ expr1 mulOp expr2) = AST.EOp (transformExpr expr1) (transformMulOp mulOp) (transformExpr expr2)
+transformExpr (Abs.EAdd _ expr1 addOp expr2) = AST.EOp (transformExpr expr1) (transformAddOp addOp) (transformExpr expr2)
+transformExpr (Abs.ERel _ expr1 relOp expr2) = AST.ERel (transformExpr expr1) (transformRelOp relOp) (transformExpr expr2)
+transformExpr (Abs.EAnd _ expr1 expr2) = AST.EAnd (transformExpr expr1) (transformExpr expr2)
+
+transformMulOp :: Abs.MulOp -> AST.ArithOp
+transformMulOp (Abs.OTimes _) = AST.OTimes
+transformMulOp (Abs.ODiv _) = AST.ODiv
+transformMulOp (Abs.OMod _) = AST.OMod
+
+transformAddOp :: Abs.AddOp -> AST.ArithOp
+transformAddOp (Abs.OPlus _) = AST.OPlus
+transformAddOp (Abs.OMinus _) = AST.OMinus
+
+transformRelOp :: Abs.RelOp -> AST.RelOp
+transformRelOp (Abs.OLTH _) = AST.OLTH
+transformRelOp (Abs.OLE _) = AST.OLE
+transformRelOp (Abs.OGTH _) = AST.OGTH
+transformRelOp (Abs.OGE _) = AST.OGE
+transformRelOp (Abs.OEQU _) = AST.OEQU
+transformRelOp (Abs.ONE _) = AST.ONE
 
 transformIIdent :: Abs.IIdent -> AST.Ident
-transformIIdent (Abs.IIdent _ (Abs.Ident ident)) = AST.Ident ident
+transformIIdent (Abs.IIdent _ (Abs.Ident ident)) = ident

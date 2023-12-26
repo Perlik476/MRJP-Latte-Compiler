@@ -32,7 +32,7 @@ newtype Block = SBlock [Stmt]
 data Stmt
     = SEmpty
     | SBStmt Block
-    | SDecl Type [Item]
+    | SDecl Type Ident
     | SAss Expr Expr
     | SIncr Expr
     | SDecr Expr
@@ -43,10 +43,6 @@ data Stmt
     | SWhile Expr Stmt
     | SFor Type Ident Expr Stmt
     | SExp Expr
-  deriving (Eq, Ord, Show, Read)
-
-data Item
-    = SNoInit Ident | SInit Ident Expr
   deriving (Eq, Ord, Show, Read)
 
 data Type
@@ -74,21 +70,16 @@ data Expr
     | EClassNew Ident
     | ENeg Expr
     | ENot Expr
-    | EMul Expr MulOp Expr
-    | EAdd Expr AddOp Expr
+    | EOp Expr ArithOp Expr
     | ERel Expr RelOp Expr
     | EAnd Expr Expr
     | EOr Expr Expr
   deriving (Eq, Ord, Show, Read)
 
-data AddOp = OPlus | OMinus
-  deriving (Eq, Ord, Show, Read)
-
-data MulOp = OTimes | ODiv | OMod
+data ArithOp = OPlus | OMinus | OTimes | ODiv | OMod
   deriving (Eq, Ord, Show, Read)
 
 data RelOp = OLTH | OLE | OGTH | OGE | OEQU | ONE
   deriving (Eq, Ord, Show, Read)
 
-newtype Ident = Ident String
-  deriving (Eq, Ord, Show, Read, Data.String.IsString)
+type Ident = String

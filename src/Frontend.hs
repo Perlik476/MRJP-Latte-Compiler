@@ -74,11 +74,10 @@ data Env = Env
     getVenv :: VEnv,
     getFenv :: FEnv,
     getCenv :: CEnv,
-    getDepth :: Integer,
-    getClass :: Maybe String
+    getDepth :: Integer
   }
 emptyEnv :: Env
-emptyEnv = Env Data.Map.empty stdlib Data.Map.empty 0 Nothing
+emptyEnv = Env Data.Map.empty stdlib Data.Map.empty 0
 
 
 type Pos = BNFC'Position
