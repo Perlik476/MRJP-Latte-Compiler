@@ -42,12 +42,12 @@ genProgram (PProgram topDefs) = do
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
-  emit $ "define " ++ show t ++ " @" ++ show ident ++ "(" ++ concatMap showArg args ++ ") {"
+  emit $ "define " ++ showType (toCompType t) ++ " @" ++ ident ++ "(" ++ concatMap showArg args ++ ") {"
   genBlock block
   emit "}"
 
 showArg :: Arg -> String
-showArg (PArg t ident) = show t ++ " " ++ show ident
+showArg (PArg t ident) = show t ++ " " ++ ident
 
 genBlock :: Block -> GenM ()
 genBlock (SBlock stmts) = do
@@ -70,7 +70,7 @@ genStmt (SAss expr1 expr2) = do
   return ()
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  emit $ "ret " ++ show addr
+  emit $ "ret " ++ showType (getAddrType addr) ++ " " ++ show addr
   return ()
 
 toCompType :: Type -> CType
@@ -84,10 +84,7 @@ toCompType TStr = CString
 
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
-genExpr (ELitInt n) = do
-  addr <- freshReg CInt
-  emit $ show addr ++ " = " ++ show n
-  return addr
+genExpr (ELitInt n) = return $ AImmediate n CInt
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do

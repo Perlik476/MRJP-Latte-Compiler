@@ -37,6 +37,17 @@ instance Show Address where
   show (AImmediate n _) = show n
   show (ARegister n _) = "%r" ++ show n
 
+showAddrType :: Address -> String
+showAddrType (AImmediate _ t) = showType t
+showAddrType (ARegister _ t) = showType t
+
+showType :: CType -> String
+showType CInt = "i32"
+showType CBool = "i1"
+showType CVoid = "void"
+showType CString = "i8*"
+-- TODO
+
 data CType = 
   CInt |
   CBool |

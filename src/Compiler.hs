@@ -25,6 +25,7 @@ import qualified Data.List
 import Frontend (frontendCheck, showCode, getParseErrPosition)
 import TreeTransformer (transformProgram)
 import Generator (compile)
+import System.Process
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -46,8 +47,10 @@ run v p s =
         hPutStrLn stderr "OK"
         let ast = transformProgram tree
         liftIO $ print ast
-        s <- compile ast
-        liftIO $ putStrLn s
+        llvm_file_content <- compile ast
+        liftIO $ putStrLn llvm_file_content
+        writeFile "out.ll" llvm_file_content
+        callCommand "llvm-as out.ll"
         exitSuccess
       else do
         exitFailure
