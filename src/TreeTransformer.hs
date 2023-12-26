@@ -51,8 +51,18 @@ transformStmt' (Abs.SIncr _ expr) = AST.SIncr (transformExpr expr)
 transformStmt' (Abs.SDecr _ expr) = AST.SDecr (transformExpr expr)
 transformStmt' (Abs.SRet _ expr) = AST.SRet (transformExpr expr)
 transformStmt' (Abs.SVRet _) = AST.SVRet
-transformStmt' (Abs.SCond _ expr stmt) = AST.SCond (transformExpr expr) (transformStmt' stmt)
-transformStmt' (Abs.SCondElse _ expr stmt1 stmt2) = AST.SCondElse (transformExpr expr) (transformStmt' stmt1) (transformStmt' stmt2)
+transformStmt' (Abs.SCond _ expr stmt) = 
+  let tExpr = transformExpr expr in
+  case tExpr of
+    AST.ELitTrue -> transformStmt' stmt
+    AST.ELitFalse -> AST.SEmpty
+    _ -> AST.SCond tExpr (transformStmt' stmt)
+transformStmt' (Abs.SCondElse _ expr stmt1 stmt2) = 
+  let tExpr = transformExpr expr in
+  case tExpr of
+    AST.ELitTrue -> transformStmt' stmt1
+    AST.ELitFalse -> transformStmt' stmt2
+    _ -> AST.SCondElse tExpr (transformStmt' stmt1) (transformStmt' stmt2)
 transformStmt' (Abs.SWhile _ expr stmt) = AST.SWhile (transformExpr expr) (transformStmt' stmt)
 transformStmt' (Abs.SFor _ t ident expr stmt) = AST.SFor (transformType t) (transformIIdent ident) (transformExpr expr) (transformStmt' stmt)
 transformStmt' (Abs.SExp _ expr) = AST.SExp (transformExpr expr)

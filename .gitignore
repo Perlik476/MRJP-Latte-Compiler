@@ -16,3 +16,5 @@ latc_llvm
 *.y
 *.txt
 *.tar.gz
+*.ll
+*.bc

@@ -1,4 +1,10 @@
 int main() {
-  int x = 1;
+  int x = 1 + 2;
+  if (3 + 1 == 4) {
+    x = 5;
+  }
+  else {
+    x = 6;
+  }
   return x;
 }
