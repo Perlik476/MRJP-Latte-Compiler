@@ -11,7 +11,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
-import Data.Map (Map, empty, fromList, union, member, lookup, insert, toList, keys, difference, intersection, elems, (!), intersectionWith)
+import qualified Data.Map as Map
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -19,22 +19,33 @@ import qualified Data.List
 
 import AST
 import Utils
-import Emitter
 
 
 compile :: Program -> IO String
 compile ast =
   let initState = GenState {
     getInstrs = [],
-    getRegEnv = empty,
+    getBasicBlockEnv = Map.empty,
+    getBasicBlockCount = 0,
+    getFunctions = Map.empty,
+    getVEnv = Map.empty,
     getRegCount = 0,
-    getFEnv = empty,
-    getCVenv = empty
+    getFEnv = Map.empty,
+    getCVenv = Map.empty
     -- TODO
   } in do
     result <- runStateT (genProgram ast) initState
-    let instrs = getInstrs $ snd result
-    return $ unlines instrs
+    let funs = Map.elems $ getFunctions $ snd result
+    return $ unlines $ map show funs
+
+
+emit :: Instr -> GenM ()
+emit instr = do
+  modify $ addInstr instr
+
+addInstr :: Instr -> GenState -> GenState
+addInstr instr state = state { getInstrs = getInstrs state ++ [instr] }
+
 
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
@@ -42,18 +53,24 @@ genProgram (PProgram topDefs) = do
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
-  emit $ "define " ++ showType (toCompType t) ++ " @" ++ ident ++ "(" ++ concatMap showArg args ++ ") {"
   genBlock block
-  emit "}"
+  basicBlocks <- gets getBasicBlockEnv
+  modify $ \s -> s { 
+    getInstrs = [],
+    getBasicBlockEnv = Map.empty,
+    getFunctions = 
+      Map.insert ident (FunBlock ident (toCompType t) (map (\(PArg t ident) -> (ident, toCompType t)) args) (Map.elems basicBlocks)) (getFunctions s)
+  }
+  return ()
 
 showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
 
 genBlock :: Block -> GenM ()
 genBlock (SBlock stmts) = do
-  regEnv <- gets getRegEnv
+  regEnv <- gets getVEnv
   mapM_ genStmt stmts
-  modify $ \s -> s { getRegEnv = regEnv }
+  modify $ \s -> s { getVEnv = regEnv }
 
 genStmt :: Stmt -> GenM ()
 genStmt (SExp expr) = do
@@ -61,7 +78,7 @@ genStmt (SExp expr) = do
   return ()
 genStmt (SDecl t ident expr) = do
   addr <- genExpr expr
-  modify $ \s -> s { getRegEnv = insert ident addr (getRegEnv s) }
+  modify $ \s -> s { getVEnv = Map.insert ident addr (getVEnv s) }
   return ()
 genStmt (SAss expr1 expr2) = do
   addr1 <- genLhs expr1
@@ -69,14 +86,14 @@ genStmt (SAss expr1 expr2) = do
   case addr1 of
     AImmediate val t -> do
       let ident = getVarName expr1
-      modify $ \s -> s { getRegEnv = insert ident addr2 (getRegEnv s) }
+      modify $ \s -> s { getVEnv = Map.insert ident addr2 (getVEnv s) }
     ARegister _ t -> do
       let ident = getVarName expr1
-      modify $ \s -> s { getRegEnv = insert ident addr2 (getRegEnv s) }
+      modify $ \s -> s { getVEnv = Map.insert ident addr2 (getVEnv s) }
   return ()
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  emit $ "ret " ++ showType (getAddrType addr) ++ " " ++ show addr
+  emit $ IRet addr
   return ()
 
 getVarName :: Expr -> String
@@ -94,8 +111,8 @@ genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
 genExpr (ELitInt n) = return $ AImmediate n CInt
 genExpr (EVar ident) = do
-  regEnv <- gets getRegEnv
-  case Data.Map.lookup ident regEnv of
+  regEnv <- gets getVEnv
+  case Map.lookup ident regEnv of
     Just addr -> return addr
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."
@@ -106,7 +123,7 @@ genBinOp op e1 e2 = do
   addr1 <- genExpr e1
   addr2 <- genExpr e2
   addr <- freshReg (getAddrType addr1)
-  emitBinOp addr addr1 op addr2
+  emit $ IBinOp addr addr1 op addr2
   return addr
 
 genLhs :: Expr -> GenM Address
@@ -114,8 +131,8 @@ genLhs (EVar ident) = getAddr ident
 
 getAddr :: Ident -> GenM Address
 getAddr ident = do
-  env <- gets getRegEnv
-  case Data.Map.lookup ident env of
+  env <- gets getVEnv
+  case Map.lookup ident env of
     Just addr -> return addr
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."

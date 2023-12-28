@@ -17,18 +17,43 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Data.List
 
+import AST
+
 type GenM = StateT GenState IO
 
 data GenState = GenState {
-  getInstrs :: [String],
-  getRegEnv :: Map String Address,
+  getInstrs :: [Instr],
+  getVEnv :: Map String Address,
   getRegCount :: Integer,
+  getBasicBlockEnv :: Map String BasicBlock,
+  getBasicBlockCount :: Integer,
+  getFunctions :: Map String FunBlock,
   getFEnv :: Map String Address,
   getCVenv :: Map String Address
   -- TODO
 }
 
-data Address = 
+data FunBlock = FunBlock String CType [(String, CType)] [BasicBlock]
+instance Show FunBlock where
+  show (FunBlock name t args blocks) = 
+    "define " ++ showType t ++ " @" ++ name ++ "(" ++ 
+    Data.List.intercalate ", " (map (\(name, t) -> showType t ++ " " ++ name) args) ++ 
+    ") {\n" ++ unlines (map show blocks) ++ "}\n"
+data BasicBlock = BasicBlock Label [Instr]
+instance Show BasicBlock where
+  show (BasicBlock label instrs) = label ++ ":\n" ++ unlines (map show instrs)
+type Label = String
+data Instr =
+  IBinOp Address Address ArithOp Address |
+  IRet Address |
+  IBr Address Label Label
+instance Show Instr where
+  show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr ++ " " ++ show addr1 ++ ", " ++ show addr2
+  show (IRet addr) = "ret " ++ showAddrType addr ++ " " ++ show addr
+  show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
+
+
+data Address =
   AImmediate Integer CType |
   ARegister Integer CType
 -- TODO
@@ -48,7 +73,7 @@ showType CVoid = "void"
 showType CString = "i8*"
 -- TODO
 
-data CType = 
+data CType =
   CInt |
   CBool |
   CVoid |

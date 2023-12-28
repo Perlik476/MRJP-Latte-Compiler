@@ -14,6 +14,8 @@ data TopDef
 
 data Arg = PArg Type Ident
   deriving (Eq, Ord, Show, Read)
+getArgType :: Arg -> Type
+getArgType (PArg t _) = t
 
 newtype ClassDef = ClassDef [ClassElem]
   deriving (Eq, Ord, Show, Read)

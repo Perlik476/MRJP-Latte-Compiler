@@ -23,7 +23,7 @@ import Control.Monad.Reader
 import qualified Data.List
 
 import Frontend (frontendCheck, showCode, getParseErrPosition)
-import TreeTransformer (transformProgram)
+import TreeTransformer (transformTree)
 import Generator (compile)
 import System.Process
 
@@ -45,12 +45,12 @@ run v p s =
       success <- frontendCheck tree s
       if success then do
         hPutStrLn stderr "OK"
-        let ast = transformProgram tree
+        let ast = transformTree tree
         liftIO $ print ast
-        llvm_file_content <- compile ast
-        liftIO $ putStrLn llvm_file_content
-        writeFile "out.ll" llvm_file_content
-        callCommand "llvm-as out.ll"
+        -- llvm_file_content <- compile ast
+        -- liftIO $ putStrLn llvm_file_content
+        -- writeFile "out.ll" llvm_file_content
+        -- callCommand "llvm-as out.ll"
         exitSuccess
       else do
         exitFailure
