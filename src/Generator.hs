@@ -184,12 +184,11 @@ genStmt (SRet expr) = do
   emitBasicBlock
   return ()
 genStmt (SCondElse expr thenStmt elseStmt) = do
-  currentLabel <- getLabel
   thenLabel <- freshLabel
   elseLabel <- freshLabel
   endLabel <- freshLabel
 
-  genIfThenElseBlocks expr thenLabel elseLabel
+  emitIfThenElseBlocks expr thenLabel elseLabel
   sealBlock thenLabel
   sealBlock elseLabel
 
@@ -199,23 +198,40 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
 
   setCurrentLabel elseLabel 
   genStmt elseStmt
-  elseEndLabel <- emitJump endLabel
+  emitJump endLabel
 
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
 genStmt (SCond expr thenStmt) = do
-  currentLabel <- getLabel
   thenLabel <- freshLabel
   endLabel <- freshLabel
 
-  ifteLabel <- genIfThenElseBlocks expr thenLabel endLabel -- TODO
+  emitIfThenElseBlocks expr thenLabel endLabel
   sealBlock thenLabel
 
   setCurrentLabel thenLabel
   genStmt thenStmt
-  thenEndLabel <- emitJump endLabel
+  emitJump endLabel
 
+  sealBlock endLabel
+  setCurrentLabel endLabel
+  return ()
+genStmt (SWhile expr stmt) = do
+  condLabel <- freshLabel
+  bodyLabel <- freshLabel
+  endLabel <- freshLabel
+
+  emitJump condLabel
+  setCurrentLabel condLabel
+  emitIfThenElseBlocks expr bodyLabel endLabel
+  sealBlock bodyLabel
+
+  setCurrentLabel bodyLabel
+  genStmt stmt
+  emitJump condLabel
+
+  sealBlock condLabel
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
@@ -234,24 +250,24 @@ emitBranch addr label1 label2 = do
   emitTerminator $ IBr addr label1 label2
   emitBasicBlock
 
-genIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
-genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
+emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
+emitIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
   currentLabel <- getLabel
   interLabel <- freshLabel
   sealBlock interLabel
-  genIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
+  emitIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
   setCurrentLabel interLabel
-  genIfThenElseBlocks expr2 thenLabel elseLabel
-genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
+  emitIfThenElseBlocks expr2 thenLabel elseLabel
+emitIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
   currentLabel <- getLabel
   interLabel <- freshLabel
   sealBlock interLabel
-  genIfThenElseBlocks expr1 thenLabel interLabel
+  emitIfThenElseBlocks expr1 thenLabel interLabel
   setCurrentLabel interLabel
-  genIfThenElseBlocks expr2 thenLabel elseLabel
-genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel >> return ()
-genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel >> return ()
-genIfThenElseBlocks expr thenLabel elseLabel = do
+  emitIfThenElseBlocks expr2 thenLabel elseLabel
+emitIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel >> return ()
+emitIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel >> return ()
+emitIfThenElseBlocks expr thenLabel elseLabel = do
   addr <- genExpr expr
   emitBranch addr thenLabel elseLabel >> return ()
 
