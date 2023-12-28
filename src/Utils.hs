@@ -47,10 +47,17 @@ getLabel =  gets $ getBlockLabel . getCurrentBasicBlock
 getInstrs :: GenM [Instr]
 getInstrs = gets $ getBlockInstrs . getCurrentBasicBlock
 
-addInstr :: Instr -> GenM ()
-addInstr instr = do
-  instrs <- getInstrs
-  modify $ \s -> s { getCurrentBasicBlock = (getCurrentBasicBlock s) { getBlockInstrs = instrs ++ [instr] } }
+addInstr :: Label -> Instr -> GenM ()
+addInstr label instr = do
+  blockEnv <- gets getBasicBlockEnv
+  block <- gets $ (Map.! label) . getBasicBlockEnv
+  currentLabel <- getLabel
+  if currentLabel == label then do
+    instrs <- gets $ getBlockInstrs . getCurrentBasicBlock
+    modify $ \s -> s { getCurrentBasicBlock = block { getBlockInstrs = instrs ++ [instr] } }  -- TODO na odwrót
+  else do
+    let instrs = getBlockInstrs block
+    modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockInstrs = instrs ++ [instr] }) blockEnv }
 
 getTerminator :: GenM (Maybe Instr)
 getTerminator = gets $ getBlockTerminator . getCurrentBasicBlock
@@ -62,7 +69,12 @@ addTerminator instr = do
 idToLabel :: Integer -> String
 idToLabel n = "L" ++ show n
 
-data FunBlock = FunBlock String CType [(String, CType)] [BasicBlock]
+data FunBlock = FunBlock {
+  getFunName :: String,
+  getFunRetType :: CType,
+  getFunArgs :: [(String, CType)],
+  getFunBlocks :: [BasicBlock]
+}
 instance Show FunBlock where
   show (FunBlock name t args blocks) =
     "define " ++ show t ++ " @" ++ name ++ "(" ++

@@ -43,36 +43,54 @@ compile ast =
     let funs = Map.elems $ getFunctions $ snd result
     return $ unlines $ map show funs ++ ["define i32 @main() {\n  %r = call i32 @fun.main()\n  ret i32 %r\n}"]
 
-
 emitInstr :: Instr -> GenM ()
-emitInstr = addInstr
+emitInstr instr = do
+  label <- getLabel
+  addInstr label instr
+  return ()
 
 emitTerminator :: Instr -> GenM ()
 emitTerminator = addTerminator
 
-emitBasicBlock :: GenM ()
+emitBasicBlock :: GenM Label
 emitBasicBlock = do
   instrs <- getInstrs
   term <- getTerminator
   case term of
     Just t -> do
       label <- getLabel
+      liftIO $ putStrLn $ "Emmiting block " ++ label
       block <- gets getCurrentBasicBlock
-      instrs <- getInstrs
-      let phiInstrs = filter isPhiInstr instrs
-      let instrs' = filter (not . isPhiInstr) instrs
-      phiInstrs' <- mapM (\instr -> case instr of
-        IPhi' reg phiId -> do
-          phi <- gets $ (Map.! phiId) . getPhiEnv
-          let (APhi _ _ operands) = phi
-          return $ IPhi reg operands
-        _ -> return instr
-        ) phiInstrs
-      -- TODO remove trivial phis
-      let block' = block { getBlockInstrs = phiInstrs' ++ instrs' }
-      modify $ \s -> s { getBasicBlockEnv = Map.insert label block' (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
+      modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
+      return label
     Nothing -> do
       error "No terminator in block"
+
+-- emitBasicBlock :: GenM Label
+-- emitBasicBlock = do
+--   instrs <- getInstrs
+--   term <- getTerminator
+--   case term of
+--     Just t -> do
+--       label <- getLabel
+--       liftIO $ putStrLn $ "Emmiting block " ++ label
+--       block <- gets getCurrentBasicBlock
+--       instrs <- getInstrs
+--       let phiInstrs = filter isPhiInstr instrs
+--       let instrs' = filter (not . isPhiInstr) instrs
+--       phiInstrs' <- mapM (\instr -> case instr of
+--         IPhi' reg phiId -> do
+--           phi <- gets $ (Map.! phiId) . getPhiEnv
+--           let (APhi _ _ operands) = phi
+--           return $ IPhi reg operands
+--         _ -> return instr
+--         ) phiInstrs
+--       -- TODO remove trivial phis
+--       let block' = block { getBlockInstrs = phiInstrs' ++ instrs' }
+--       modify $ \s -> s { getBasicBlockEnv = Map.insert label block' (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
+--       return label
+--     Nothing -> do
+--       error "No terminator in block"
 
 
 isPhiInstr :: Instr -> Bool
@@ -85,6 +103,35 @@ isPhiInstr _ = False
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
   mapM_ genTopDef topDefs
+  funs <- gets getFunctions
+  funs' <- mapM translatePhis funs
+  modify $ \s -> s { getFunctions = funs' }
+  
+
+translatePhis :: FunBlock -> GenM FunBlock
+translatePhis fun = do
+  blocks <- mapM translatePhis' $ getFunBlocks fun
+  return $ fun { getFunBlocks = blocks }
+
+translatePhis' :: BasicBlock -> GenM BasicBlock
+translatePhis' blocks = do
+  let instrs = getBlockInstrs blocks
+  instrs' <- translatePhis'' instrs
+  return $ blocks { getBlockInstrs = instrs' }
+
+translatePhis'' :: [Instr] -> GenM [Instr]
+translatePhis'' instrs = do
+  let phiInstrs = filter isPhiInstr instrs
+  let instrs' = filter (not . isPhiInstr) instrs
+  phiInstrs' <- mapM (\instr -> case instr of
+    IPhi' reg phiId -> do
+      phi <- gets $ (Map.! phiId) . getPhiEnv
+      let (APhi _ _ operands) = phi
+      return $ IPhi reg operands
+    _ -> return instr
+    ) phiInstrs
+  -- TODO remove trivial phis
+  return $ phiInstrs' ++ instrs'
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
@@ -128,9 +175,7 @@ genStmt (SAss expr1 expr2) = do
     ARegister _ t -> do
       let ident = getVarName expr1
       addVarAddr ident addr2
-    APhi {} -> do
-      -- error "Cannot assign to phi"
-      return ()
+    APhi {} -> error "Cannot assign to phi"
     -- TODO
   return ()
 genStmt (SRet expr) = do
@@ -151,41 +196,41 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
   newBasicBlock thenLabel [currentLabel]
   preds <- gets $ getBlockPredecessors . getCurrentBasicBlock
   genStmt thenStmt
-  emitJump endLabel
+  thenEndLabel <- emitJump endLabel
 
   newBasicBlock elseLabel [currentLabel]
   genStmt elseStmt
-  emitJump endLabel
+  elseEndLabel <- emitJump endLabel
 
   sealBlock endLabel
-  newBasicBlock endLabel [thenLabel, elseLabel]
+  newBasicBlock endLabel [thenEndLabel, elseEndLabel]
 
   return ()
 genStmt s = error $ "Not implemented " ++ show s
 
-emitJump :: Label -> GenM ()
+emitJump :: Label -> GenM Label
 emitJump label = do
   emitTerminator $ IJmp label
   emitBasicBlock
 
-emitBranch :: Address -> Label -> Label -> GenM ()
+emitBranch :: Address -> Label -> Label -> GenM Label
 emitBranch addr label1 label2 = do
-  emitTerminator $ IBr addr label1 label2 -- TODO
+  emitTerminator $ IBr addr label1 label2
   emitBasicBlock
 
-genIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
-genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
-  currentLabel <- getLabel
-  interLabel <- freshLabel
-  genIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
-  newBasicBlock interLabel [currentLabel]
-  genIfThenElseBlocks expr2 thenLabel elseLabel
-genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
-  currentLabel <- getLabel
-  interLabel <- freshLabel
-  genIfThenElseBlocks expr1 thenLabel interLabel
-  newBasicBlock interLabel [currentLabel]
-  genIfThenElseBlocks expr2 thenLabel elseLabel
+genIfThenElseBlocks :: Expr -> Label -> Label -> GenM Label
+-- genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
+--   currentLabel <- getLabel
+--   interLabel <- freshLabel
+--   genIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
+--   newBasicBlock interLabel [currentLabel]
+--   genIfThenElseBlocks expr2 thenLabel elseLabel
+-- genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
+--   currentLabel <- getLabel
+--   interLabel <- freshLabel
+--   genIfThenElseBlocks expr1 thenLabel interLabel
+--   newBasicBlock interLabel [currentLabel]
+--   genIfThenElseBlocks expr2 thenLabel elseLabel
 genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel
 genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel
 genIfThenElseBlocks expr thenLabel elseLabel = do
@@ -253,7 +298,7 @@ freshPhi label t = do
   let phi = APhi phiId t []
   modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
   newReg <- freshReg (getAddrType phi)
-  emitInstr $ IPhi' newReg phiId
+  addInstr label $ IPhi' newReg phiId
   return (newReg, phiId)
 
 addVarAddr :: String -> Address -> GenM ()
@@ -274,16 +319,14 @@ hasOnePred label = do
 writeVar :: Ident -> Label -> Address -> GenM ()
 writeVar ident label addr = do
   venv <- gets getVEnv
-  liftIO $ print $ "writeVar " ++ ident ++ " " ++ label ++ " " ++ show addr ++ " " ++ show venv
   case Map.lookup ident venv of
     Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
     Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
-  liftIO $ print $ "writeVarEnd " ++ ident ++ " " ++ label ++ " " ++ show addr ++ " " ++ show venv
   
 
 readVar :: Ident -> Label -> GenM Address
 readVar ident label = do
-  liftIO $ print $ "readVar " ++ ident ++ " " ++ label
+  liftIO $ putStrLn $ "Reading " ++ ident ++ " from " ++ label
   venv <- gets getVEnv
   case Map.lookup ident venv of
     Just m -> case Map.lookup label m of
@@ -295,8 +338,9 @@ readVar ident label = do
 readVarRec :: Ident -> Label -> GenM Address
 readVarRec ident label = do
   sealedBlocks <- gets getSealedBlocks
+  liftIO $ putStrLn $ "Reading (rec) " ++ ident ++ " from " ++ label
   addr <- if label `notElem` sealedBlocks then do
-        liftIO $ print $ "if " ++ ident ++ " " ++ label
+        liftIO $ putStrLn $ "Block " ++ label ++ " not sealed"
         t <- gets $ (Map.! ident) . getVarType
         (addr', phiId) <- freshPhi label t
         modify $ \s -> s {
@@ -306,29 +350,30 @@ readVarRec ident label = do
       else do
         b <- hasOnePred label
         if b then do
-          liftIO $ print $ "else if " ++ ident ++ " " ++ label
+          liftIO $ putStrLn $ "Block " ++ label ++ " sealed and has one predecessor"
           blockEnv <- gets getBasicBlockEnv
           case Map.lookup label blockEnv of
             Nothing -> error $ "Block " ++ label ++ " not found in environment."
             _ -> return ()
           block <- gets $ (Map.! label) . getBasicBlockEnv
+          liftIO $ putStrLn $ "Next reading " ++ ident ++ " from " ++ label ++ " with address " ++ show (getBlockInstrs block)
           readVar ident (head $ getBlockPredecessors block)
         else do
-          liftIO $ print $ "else " ++ ident ++ " " ++ label
+          liftIO $ putStrLn $ "Block " ++ label ++ " sealed and has more than one predecessor"
           t <- gets $ (Map.! ident) . getVarType
           (addr', phiId) <- freshPhi label t
+          liftIO $ putStrLn $ "Created phi " ++ show phiId ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show addr'
           writeVar ident label addr'
           addPhiOperands ident phiId label
           return addr'
-  liftIO $ print addr
   writeVar ident label addr
   return addr
 
 addPhiOperands :: Ident -> PhiID -> Label -> GenM ()
 addPhiOperands ident phiId label = do
   venv <- gets getVEnv
-  liftIO $ print $ "addPhiOperands " ++ ident ++ " " ++ show phiId ++ " " ++ label ++ " " ++ show venv
-  preds <- gets $ getBlockPredecessors . getCurrentBasicBlock
+  block <- gets $ (Map.! label) . getBasicBlockEnv
+  let preds = getBlockPredecessors block
   newOperands <- mapM (\pred -> do
     addr' <- readVar ident pred
     return (pred, addr')
@@ -337,7 +382,6 @@ addPhiOperands ident phiId label = do
   let (APhi phiId t oldOperands) = phi
   let newPhi = APhi phiId t $ oldOperands ++ newOperands
   modify $ \s -> s { getPhiEnv = Map.insert phiId newPhi (getPhiEnv s) }
-  -- TODO
 
 sealBlock :: Label -> GenM ()
 sealBlock label = do
