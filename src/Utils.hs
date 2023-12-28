@@ -22,16 +22,42 @@ import AST
 type GenM = StateT GenState IO
 
 data GenState = GenState {
-  getInstrs :: [Instr],
+  getCurrentBasicBlock :: BasicBlock,
   getVEnv :: Map String Address,
   getRegCount :: Integer,
+  getLabelCount :: Integer,
   getBasicBlockEnv :: Map String BasicBlock,
-  getBasicBlockCount :: Integer,
   getFunctions :: Map String FunBlock,
   getFEnv :: Map String Address,
   getCVenv :: Map String Address
   -- TODO
 }
+
+getLabel :: GenM String
+getLabel =  gets $ getBlockLabel . getCurrentBasicBlock
+
+getInstrs :: GenM [Instr]
+getInstrs = gets $ getBlockInstrs . getCurrentBasicBlock
+
+addInstr :: Instr -> GenM ()
+addInstr instr = do
+  instrs <- getInstrs
+  modify $ \s -> s { getCurrentBasicBlock = (getCurrentBasicBlock s) { getBlockInstrs = instrs ++ [instr] } }
+
+getTerminator :: GenM (Maybe Instr)
+getTerminator = gets $ getBlockTerminator . getCurrentBasicBlock
+
+addTerminator :: Instr -> GenM ()
+addTerminator instr = do
+  modify $ \s -> s { getCurrentBasicBlock = (getCurrentBasicBlock s) { getBlockTerminator = Just instr } }
+
+idToLabel :: Integer -> String
+idToLabel n = "L" ++ show n
+
+freshLabel :: GenM String
+freshLabel = do
+  modify $ \s -> s { getLabelCount = getLabelCount s + 1 }
+  gets $ idToLabel . getLabelCount
 
 data FunBlock = FunBlock String CType [(String, CType)] [BasicBlock]
 instance Show FunBlock where
@@ -39,9 +65,19 @@ instance Show FunBlock where
     "define " ++ showType t ++ " @" ++ name ++ "(" ++ 
     Data.List.intercalate ", " (map (\(name, t) -> showType t ++ " " ++ name) args) ++ 
     ") {\n" ++ unlines (map show blocks) ++ "}\n"
-data BasicBlock = BasicBlock Label [Instr]
+data BasicBlock = BasicBlock {
+  getBlockLabel :: String,
+  getBlockInstrs :: [Instr],
+  getBlockTerminator :: Maybe Instr
+}
 instance Show BasicBlock where
-  show (BasicBlock label instrs) = label ++ ":\n" ++ unlines (map show instrs)
+  show (BasicBlock label instrs terminator) = label ++ ":\n" ++ unlines (map show instrs) ++ maybe "" show terminator  -- TODO
+newBasicBlock :: String -> GenM ()
+newBasicBlock label = do
+  modify $ \s -> s { getCurrentBasicBlock = BasicBlock label [] Nothing }
+  return ()
+nothingBlock :: BasicBlock
+nothingBlock = BasicBlock "" [] Nothing
 type Label = String
 data Instr =
   IBinOp Address Address ArithOp Address |

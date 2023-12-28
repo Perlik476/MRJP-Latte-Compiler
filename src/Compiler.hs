@@ -47,10 +47,10 @@ run v p s =
         hPutStrLn stderr "OK"
         let ast = transformTree tree
         liftIO $ print ast
-        -- llvm_file_content <- compile ast
-        -- liftIO $ putStrLn llvm_file_content
-        -- writeFile "out.ll" llvm_file_content
-        -- callCommand "llvm-as out.ll"
+        llvm_file_content <- compile ast
+        liftIO $ putStrLn llvm_file_content
+        writeFile "out.ll" llvm_file_content
+        callCommand "llvm-as out.ll"
         exitSuccess
       else do
         exitFailure

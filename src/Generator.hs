@@ -24,9 +24,9 @@ import Utils
 compile :: Program -> IO String
 compile ast =
   let initState = GenState {
-    getInstrs = [],
+    getCurrentBasicBlock = nothingBlock,
+    getLabelCount = 0,
     getBasicBlockEnv = Map.empty,
-    getBasicBlockCount = 0,
     getFunctions = Map.empty,
     getVEnv = Map.empty,
     getRegCount = 0,
@@ -36,15 +36,25 @@ compile ast =
   } in do
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
-    return $ unlines $ map show funs
+    return $ unlines $ map show funs ++ ["define i32 @main() {\n%r = call i32 @fun.main()\nret i32 %r\n}"]
 
 
-emit :: Instr -> GenM ()
-emit instr = do
-  modify $ addInstr instr
+emitInstr :: Instr -> GenM ()
+emitInstr = addInstr
 
-addInstr :: Instr -> GenState -> GenState
-addInstr instr state = state { getInstrs = getInstrs state ++ [instr] }
+emitTerminator :: Instr -> GenM ()
+emitTerminator = addTerminator
+
+emitBasicBlock :: GenM ()
+emitBasicBlock = do
+  instrs <- getInstrs
+  term <- getTerminator
+  case term of
+    Just t -> do
+      label <- getLabel
+      modify $ \s -> s { getBasicBlockEnv = Map.insert label (getCurrentBasicBlock s) (getBasicBlockEnv s) }
+    Nothing -> do
+      error "No terminator in block"
 
 
 genProgram :: Program -> GenM ()
@@ -53,12 +63,14 @@ genProgram (PProgram topDefs) = do
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
+  -- TODO args
+  label <- freshLabel
+  newBasicBlock label
   genBlock block
   basicBlocks <- gets getBasicBlockEnv
-  modify $ \s -> s { 
-    getInstrs = [],
+  modify $ \s -> s {
     getBasicBlockEnv = Map.empty,
-    getFunctions = 
+    getFunctions =
       Map.insert ident (FunBlock ident (toCompType t) (map (\(PArg t ident) -> (ident, toCompType t)) args) (Map.elems basicBlocks)) (getFunctions s)
   }
   return ()
@@ -75,6 +87,9 @@ genBlock (SBlock stmts) = do
 genStmt :: Stmt -> GenM ()
 genStmt (SExp expr) = do
   genExpr expr
+  return ()
+genStmt (SBStmt block) = do
+  genBlock block
   return ()
 genStmt (SDecl t ident expr) = do
   addr <- genExpr expr
@@ -93,8 +108,10 @@ genStmt (SAss expr1 expr2) = do
   return ()
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  emit $ IRet addr
+  emitTerminator $ IRet addr
+  emitBasicBlock
   return ()
+genStmt s = error $ "Not implemented " ++ show s
 
 getVarName :: Expr -> String
 getVarName (EVar ident) = ident
@@ -123,7 +140,7 @@ genBinOp op e1 e2 = do
   addr1 <- genExpr e1
   addr2 <- genExpr e2
   addr <- freshReg (getAddrType addr1)
-  emit $ IBinOp addr addr1 op addr2
+  emitInstr $ IBinOp addr addr1 op addr2
   return addr
 
 genLhs :: Expr -> GenM Address
