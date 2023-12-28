@@ -104,10 +104,7 @@ showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
 
 genBlock :: Block -> GenM ()
-genBlock (SBlock stmts) = do
-  regEnv <- gets getVEnv
-  mapM_ genStmt stmts
-  modify $ \s -> s { getVEnv = regEnv }
+genBlock (SBlock stmts) = mapM_ genStmt stmts
 
 genStmt :: Stmt -> GenM ()
 genStmt (SExp expr) = do
@@ -152,6 +149,7 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
   sealBlock elseLabel
 
   newBasicBlock thenLabel [currentLabel]
+  preds <- gets $ getBlockPredecessors . getCurrentBasicBlock
   genStmt thenStmt
   emitJump endLabel
 
@@ -276,12 +274,16 @@ hasOnePred label = do
 writeVar :: Ident -> Label -> Address -> GenM ()
 writeVar ident label addr = do
   venv <- gets getVEnv
+  liftIO $ print $ "writeVar " ++ ident ++ " " ++ label ++ " " ++ show addr ++ " " ++ show venv
   case Map.lookup ident venv of
     Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
     Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
+  liftIO $ print $ "writeVarEnd " ++ ident ++ " " ++ label ++ " " ++ show addr ++ " " ++ show venv
+  
 
 readVar :: Ident -> Label -> GenM Address
 readVar ident label = do
+  liftIO $ print $ "readVar " ++ ident ++ " " ++ label
   venv <- gets getVEnv
   case Map.lookup ident venv of
     Just m -> case Map.lookup label m of
@@ -324,6 +326,8 @@ readVarRec ident label = do
 
 addPhiOperands :: Ident -> PhiID -> Label -> GenM ()
 addPhiOperands ident phiId label = do
+  venv <- gets getVEnv
+  liftIO $ print $ "addPhiOperands " ++ ident ++ " " ++ show phiId ++ " " ++ label ++ " " ++ show venv
   preds <- gets $ getBlockPredecessors . getCurrentBasicBlock
   newOperands <- mapM (\pred -> do
     addr' <- readVar ident pred

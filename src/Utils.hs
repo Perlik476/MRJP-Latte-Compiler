@@ -82,7 +82,9 @@ instance Show BasicBlock where
 newBasicBlock :: String -> [String] -> GenM ()
 newBasicBlock label preds = do
   modify $ \s -> s {
-    getCurrentBasicBlock = BasicBlock label [] Nothing preds Map.empty, 
+    getCurrentBasicBlock = BasicBlock label [] Nothing preds Map.empty
+  }
+  modify $ \s -> s {
     getBasicBlockEnv = Map.insert label (getCurrentBasicBlock s) (getBasicBlockEnv s)
   }
   return ()
