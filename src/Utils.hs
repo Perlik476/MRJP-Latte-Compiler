@@ -65,20 +65,25 @@ instance Show FunBlock where
     "define " ++ showType t ++ " @" ++ name ++ "(" ++ 
     Data.List.intercalate ", " (map (\(name, t) -> showType t ++ " " ++ name) args) ++ 
     ") {\n" ++ unlines (map show blocks) ++ "}\n"
+
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,
   getBlockInstrs :: [Instr],
-  getBlockTerminator :: Maybe Instr
+  getBlockTerminator :: Maybe Instr,
+  getBlockPredecessors :: [String]
 }
 instance Show BasicBlock where
-  show (BasicBlock label instrs (Just terminator)) = label ++ ":\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator])) -- TODO
-newBasicBlock :: String -> GenM ()
-newBasicBlock label = do
-  modify $ \s -> s { getCurrentBasicBlock = BasicBlock label [] Nothing }
+  show (BasicBlock label instrs (Just terminator) preds) = 
+    label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator]))
+newBasicBlock :: String -> [String] -> GenM ()
+newBasicBlock label preds = do
+  modify $ \s -> s { getCurrentBasicBlock = BasicBlock label [] Nothing preds }
   return ()
 nothingBlock :: BasicBlock
-nothingBlock = BasicBlock "" [] Nothing
+nothingBlock = BasicBlock "" [] Nothing []
+
 type Label = String
+
 data Instr =
   IBinOp Address Address ArithOp Address |
   IRelOp Address Address RelOp Address |

@@ -65,7 +65,7 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   -- TODO args
   label <- freshLabel
-  newBasicBlock label
+  newBasicBlock label []
   genBlock block
   basicBlocks <- gets getBasicBlockEnv
   modify $ \s -> s {
@@ -112,6 +112,7 @@ genStmt (SRet expr) = do
   emitBasicBlock
   return ()
 genStmt (SCondElse expr thenStmt elseStmt) = do
+  currentLabel <- getLabel
   thenLabel <- freshLabel
   elseLabel <- freshLabel
   endLabel <- freshLabel
@@ -120,16 +121,16 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
   -- sealBlock thenLabel
   -- sealBlock elseLabel
 
-  newBasicBlock thenLabel
+  newBasicBlock thenLabel [currentLabel]
   genStmt thenStmt
   emitJump endLabel
 
-  newBasicBlock elseLabel
+  newBasicBlock elseLabel [currentLabel]
   genStmt elseStmt
   emitJump endLabel
 
   -- sealBlock endLabel
-  newBasicBlock endLabel
+  newBasicBlock endLabel [thenLabel, elseLabel]
 
   return ()
 genStmt s = error $ "Not implemented " ++ show s
@@ -146,14 +147,16 @@ emitBranch addr label1 label2 = do
 
 genIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
 genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
+  currentLabel <- getLabel
   interLabel <- freshLabel
   genIfThenElseBlocks expr1 interLabel elseLabel
-  newBasicBlock interLabel
+  newBasicBlock interLabel [currentLabel]
   genIfThenElseBlocks expr2 thenLabel elseLabel
 genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
+  currentLabel <- getLabel
   interLabel <- freshLabel
   genIfThenElseBlocks expr1 thenLabel interLabel
-  newBasicBlock interLabel
+  newBasicBlock interLabel [currentLabel]
   genIfThenElseBlocks expr2 thenLabel elseLabel
 genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel
 genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel
