@@ -24,7 +24,7 @@ import Utils
 compile :: Program -> IO String
 compile ast =
   let initState = GenState {
-    getCurrentBasicBlock = nothingBlock,
+    getCurrentLabel = "",
     getLabelCount = 0,
     getBasicBlockEnv = Map.empty,
     getFunctions = Map.empty,
@@ -60,8 +60,8 @@ emitBasicBlock = do
     Just t -> do
       label <- getLabel
       liftIO $ putStrLn $ "Emmiting block " ++ label
-      block <- gets getCurrentBasicBlock
-      modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
+      block <- getCurrentBasicBlock
+      modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
       return label
     Nothing -> do
       error "No terminator in block"
@@ -137,7 +137,7 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   -- TODO args
   label <- freshLabel
-  newBasicBlock label []
+  setCurrentLabel label
   genBlock block
   basicBlocks <- gets getBasicBlockEnv
   modify $ \s -> s {
@@ -193,49 +193,67 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
   sealBlock thenLabel
   sealBlock elseLabel
 
-  newBasicBlock thenLabel [currentLabel]
-  preds <- gets $ getBlockPredecessors . getCurrentBasicBlock
+  setCurrentLabel thenLabel
   genStmt thenStmt
   thenEndLabel <- emitJump endLabel
 
-  newBasicBlock elseLabel [currentLabel]
+  setCurrentLabel elseLabel 
   genStmt elseStmt
   elseEndLabel <- emitJump endLabel
 
   sealBlock endLabel
-  newBasicBlock endLabel [thenEndLabel, elseEndLabel]
+  setCurrentLabel endLabel
+  return ()
+genStmt (SCond expr thenStmt) = do
+  currentLabel <- getLabel
+  thenLabel <- freshLabel
+  endLabel <- freshLabel
 
+  ifteLabel <- genIfThenElseBlocks expr thenLabel endLabel -- TODO
+  sealBlock thenLabel
+
+  setCurrentLabel thenLabel
+  genStmt thenStmt
+  thenEndLabel <- emitJump endLabel
+
+  sealBlock endLabel
+  setCurrentLabel endLabel
   return ()
 genStmt s = error $ "Not implemented " ++ show s
 
 emitJump :: Label -> GenM Label
 emitJump label = do
+  addPredToBlock label =<< getLabel
   emitTerminator $ IJmp label
   emitBasicBlock
 
 emitBranch :: Address -> Label -> Label -> GenM Label
 emitBranch addr label1 label2 = do
+  addPredToBlock label1 =<< getLabel
+  addPredToBlock label2 =<< getLabel
   emitTerminator $ IBr addr label1 label2
   emitBasicBlock
 
-genIfThenElseBlocks :: Expr -> Label -> Label -> GenM Label
--- genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
---   currentLabel <- getLabel
---   interLabel <- freshLabel
---   genIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
---   newBasicBlock interLabel [currentLabel]
---   genIfThenElseBlocks expr2 thenLabel elseLabel
--- genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
---   currentLabel <- getLabel
---   interLabel <- freshLabel
---   genIfThenElseBlocks expr1 thenLabel interLabel
---   newBasicBlock interLabel [currentLabel]
---   genIfThenElseBlocks expr2 thenLabel elseLabel
-genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel
-genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel
+genIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
+genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
+  currentLabel <- getLabel
+  interLabel <- freshLabel
+  sealBlock interLabel
+  genIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
+  setCurrentLabel interLabel
+  genIfThenElseBlocks expr2 thenLabel elseLabel
+genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
+  currentLabel <- getLabel
+  interLabel <- freshLabel
+  sealBlock interLabel
+  genIfThenElseBlocks expr1 thenLabel interLabel
+  setCurrentLabel interLabel
+  genIfThenElseBlocks expr2 thenLabel elseLabel
+genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel >> return ()
+genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel >> return ()
 genIfThenElseBlocks expr thenLabel elseLabel = do
   addr <- genExpr expr
-  emitBranch addr thenLabel elseLabel
+  emitBranch addr thenLabel elseLabel >> return ()
 
 
 getVarName :: Expr -> String
@@ -288,7 +306,11 @@ freshReg t = do
 freshLabel :: GenM String
 freshLabel = do
   modify $ \s -> s { getLabelCount = getLabelCount s + 1 }
-  gets $ idToLabel . getLabelCount
+  label <- gets $ idToLabel . getLabelCount
+  modify $ \s -> s {
+    getBasicBlockEnv = Map.insert label (BasicBlock label [] Nothing [] Map.empty) (getBasicBlockEnv s)
+  }
+  return label
 
 freshPhi :: Label -> CType -> GenM (Address, PhiID)
 freshPhi label t = do
@@ -300,6 +322,11 @@ freshPhi label t = do
   newReg <- freshReg (getAddrType phi)
   addInstr label $ IPhi' newReg phiId
   return (newReg, phiId)
+
+setCurrentLabel :: String -> GenM ()
+setCurrentLabel label = do
+  modify $ \s -> s { getCurrentLabel = label }
+  return ()
 
 addVarAddr :: String -> Address -> GenM ()
 addVarAddr name addr = do
@@ -373,7 +400,7 @@ addPhiOperands :: Ident -> PhiID -> Label -> GenM ()
 addPhiOperands ident phiId label = do
   venv <- gets getVEnv
   block <- gets $ (Map.! label) . getBasicBlockEnv
-  let preds = getBlockPredecessors block
+  let preds = getBlockPredecessors block -- TODO czy nie powinno to iść rekurencyjnie?
   newOperands <- mapM (\pred -> do
     addr' <- readVar ident pred
     return (pred, addr')

@@ -1,37 +1,8 @@
 int main() {
   int x = 1 + 2;
-  x = x + 1;
   x = x * 2;
-  if (x == 8) {
-    x = x * 2;
-    if (x == 2) {
-      x = x * 3;
-      if (x == 4) {
-        x = x + 1;
-      } else {
-        x = 0;
-      }
-    } 
-    else {
-      if (x == 3) {
-        x = x + 2;
-      } 
-      else {
-        x = x - 16;
-      }
-      x = x - 5;
-    }
-    int y = 1;
-    y = y + 1;
+  if ((x == 1 && x == 2 && (x == -3 || x == 2137)) || (x == 2 && (x == 3 && x == 4) || x == 5) || x == -6) {
+    x = x - 6;
   }
-  else {
-    x = x - 1;
-    if (x == 7) {
-      x = x + 42;
-    } else {
-      x = x - 69;
-    }
-  }
-  x = x + 5;
   return x;
 }

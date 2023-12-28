@@ -23,7 +23,7 @@ import AST
 type GenM = StateT GenState IO
 
 data GenState = GenState {
-  getCurrentBasicBlock :: BasicBlock,
+  getCurrentLabel :: Label,
   getVEnv :: Map String (Map Label Address),
   getRegCount :: Integer,
   getLabelCount :: Integer,
@@ -41,30 +41,51 @@ data GenState = GenState {
 
 type PhiID = Integer
 
-getLabel :: GenM String
-getLabel =  gets $ getBlockLabel . getCurrentBasicBlock
+getCurrentBasicBlock :: GenM BasicBlock
+getCurrentBasicBlock = do
+  label <- gets getCurrentLabel
+  gets $ (Map.! label) . getBasicBlockEnv
+
+getLabel :: GenM Label
+getLabel = gets getCurrentLabel
 
 getInstrs :: GenM [Instr]
-getInstrs = gets $ getBlockInstrs . getCurrentBasicBlock
+getInstrs = getCurrentBasicBlock >>= return . getBlockInstrs
 
 addInstr :: Label -> Instr -> GenM ()
 addInstr label instr = do
   blockEnv <- gets getBasicBlockEnv
   block <- gets $ (Map.! label) . getBasicBlockEnv
-  currentLabel <- getLabel
-  if currentLabel == label then do
-    instrs <- gets $ getBlockInstrs . getCurrentBasicBlock
-    modify $ \s -> s { getCurrentBasicBlock = block { getBlockInstrs = instrs ++ [instr] } }  -- TODO na odwrót
-  else do
-    let instrs = getBlockInstrs block
-    modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockInstrs = instrs ++ [instr] }) blockEnv }
+  let instrs = getBlockInstrs block
+  modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockInstrs = instrs ++ [instr] }) blockEnv }
 
 getTerminator :: GenM (Maybe Instr)
-getTerminator = gets $ getBlockTerminator . getCurrentBasicBlock
+getTerminator = getCurrentBasicBlock >>= return . getBlockTerminator
 
 addTerminator :: Instr -> GenM ()
 addTerminator instr = do
-  modify $ \s -> s { getCurrentBasicBlock = (getCurrentBasicBlock s) { getBlockTerminator = Just instr } }
+  blockEnv <- gets getBasicBlockEnv
+  block <- getCurrentBasicBlock
+  modify $ \s -> s { getBasicBlockEnv = Map.insert (getCurrentLabel s) (block { getBlockTerminator = Just instr }) blockEnv }
+
+getPreds :: GenM [Label]
+getPreds = getCurrentBasicBlock >>= return . getBlockPredecessors
+
+addPredToBlock :: Label -> Label -> GenM ()
+addPredToBlock label pred = do
+  block <- gets $ (Map.! label) . getBasicBlockEnv
+  let preds = getBlockPredecessors block
+  modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockPredecessors = pred : preds }) (getBasicBlockEnv s) }
+
+addPred :: Label -> GenM ()
+addPred pred = do
+  label <- getLabel
+  addPredToBlock label pred
+
+addPreds :: [Label] -> GenM ()
+addPreds preds = do
+  label <- getLabel
+  mapM_ (addPredToBlock label) preds
 
 idToLabel :: Integer -> String
 idToLabel n = "L" ++ show n
@@ -91,15 +112,6 @@ data BasicBlock = BasicBlock {
 instance Show BasicBlock where
   show (BasicBlock label instrs (Just terminator) preds _) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator]))
-newBasicBlock :: String -> [String] -> GenM ()
-newBasicBlock label preds = do
-  modify $ \s -> s {
-    getCurrentBasicBlock = BasicBlock label [] Nothing preds Map.empty
-  }
-  modify $ \s -> s {
-    getBasicBlockEnv = Map.insert label (getCurrentBasicBlock s) (getBasicBlockEnv s)
-  }
-  return ()
 nothingBlock :: BasicBlock
 nothingBlock = BasicBlock "" [] Nothing [] Map.empty
 
