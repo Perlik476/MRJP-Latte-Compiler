@@ -71,7 +71,7 @@ data BasicBlock = BasicBlock {
   getBlockTerminator :: Maybe Instr
 }
 instance Show BasicBlock where
-  show (BasicBlock label instrs terminator) = label ++ ":\n" ++ unlines (map show instrs) ++ maybe "" show terminator  -- TODO
+  show (BasicBlock label instrs (Just terminator)) = label ++ ":\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator])) -- TODO
 newBasicBlock :: String -> GenM ()
 newBasicBlock label = do
   modify $ \s -> s { getCurrentBasicBlock = BasicBlock label [] Nothing }
@@ -81,11 +81,15 @@ nothingBlock = BasicBlock "" [] Nothing
 type Label = String
 data Instr =
   IBinOp Address Address ArithOp Address |
+  IRelOp Address Address RelOp Address |
   IRet Address |
+  IJmp Label |
   IBr Address Label Label
 instance Show Instr where
-  show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr ++ " " ++ show addr1 ++ ", " ++ show addr2
+  show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
+  show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRet addr) = "ret " ++ showAddrType addr ++ " " ++ show addr
+  show (IJmp label) = "br label %" ++ label
   show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
 
 

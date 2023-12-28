@@ -36,7 +36,7 @@ compile ast =
   } in do
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
-    return $ unlines $ map show funs ++ ["define i32 @main() {\n%r = call i32 @fun.main()\nret i32 %r\n}"]
+    return $ unlines $ map show funs ++ ["define i32 @main() {\n  %r = call i32 @fun.main()\n  ret i32 %r\n}"]
 
 
 emitInstr :: Instr -> GenM ()
@@ -52,7 +52,7 @@ emitBasicBlock = do
   case term of
     Just t -> do
       label <- getLabel
-      modify $ \s -> s { getBasicBlockEnv = Map.insert label (getCurrentBasicBlock s) (getBasicBlockEnv s) }
+      modify $ \s -> s { getBasicBlockEnv = Map.insert label (getCurrentBasicBlock s) (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
     Nothing -> do
       error "No terminator in block"
 
@@ -111,7 +111,56 @@ genStmt (SRet expr) = do
   emitTerminator $ IRet addr
   emitBasicBlock
   return ()
+genStmt (SCondElse expr thenStmt elseStmt) = do
+  thenLabel <- freshLabel
+  elseLabel <- freshLabel
+  endLabel <- freshLabel
+
+  genIfThenElseBlocks expr thenLabel elseLabel
+  -- sealBlock thenLabel
+  -- sealBlock elseLabel
+
+  newBasicBlock thenLabel
+  genStmt thenStmt
+  emitJump endLabel
+
+  newBasicBlock elseLabel
+  genStmt elseStmt
+  emitJump endLabel
+
+  -- sealBlock endLabel
+  newBasicBlock endLabel
+
+  return ()
 genStmt s = error $ "Not implemented " ++ show s
+
+emitJump :: Label -> GenM ()
+emitJump label = do
+  emitTerminator $ IJmp label
+  emitBasicBlock
+
+emitBranch :: Address -> Label -> Label -> GenM ()
+emitBranch addr label1 label2 = do
+  emitTerminator $ IBr addr label1 label2 -- TODO
+  emitBasicBlock
+
+genIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
+genIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
+  interLabel <- freshLabel
+  genIfThenElseBlocks expr1 interLabel elseLabel
+  newBasicBlock interLabel
+  genIfThenElseBlocks expr2 thenLabel elseLabel
+genIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
+  interLabel <- freshLabel
+  genIfThenElseBlocks expr1 thenLabel interLabel
+  newBasicBlock interLabel
+  genIfThenElseBlocks expr2 thenLabel elseLabel
+genIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel
+genIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel
+genIfThenElseBlocks expr thenLabel elseLabel = do
+  addr <- genExpr expr
+  emitBranch addr thenLabel elseLabel
+
 
 getVarName :: Expr -> String
 getVarName (EVar ident) = ident
@@ -134,6 +183,7 @@ genExpr (EVar ident) = do
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."
 genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
+genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do
@@ -141,6 +191,14 @@ genBinOp op e1 e2 = do
   addr2 <- genExpr e2
   addr <- freshReg (getAddrType addr1)
   emitInstr $ IBinOp addr addr1 op addr2
+  return addr
+
+genRelOp :: RelOp -> Expr -> Expr -> GenM Address
+genRelOp op e1 e2 = do
+  addr1 <- genExpr e1
+  addr2 <- genExpr e2
+  addr <- freshReg CBool
+  emitInstr $ IRelOp addr addr1 op addr2
   return addr
 
 genLhs :: Expr -> GenM Address

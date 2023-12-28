@@ -89,6 +89,13 @@ instance Show ArithOp where
 -- TODO
 
 data RelOp = OLTH | OLE | OGTH | OGE | OEQU | ONE
-  deriving (Eq, Ord, Show, Read)
+  deriving (Eq, Ord, Read)
+instance Show RelOp where
+  show OEQU = "icmp eq"
+  show ONE  = "icmp ne"
+  show OLE  = "icmp sle"
+  show OLTH = "icmp slt"
+  show OGE  = "icmp sge"
+  show OGTH = "icmp sgt"
 
 type Ident = String
