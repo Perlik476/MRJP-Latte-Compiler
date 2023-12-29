@@ -151,6 +151,7 @@ genBlock :: Block -> GenM ()
 genBlock (SBlock stmts) = mapM_ genStmt stmts
 
 genStmt :: Stmt -> GenM ()
+genStmt SEmpty = pure ()
 genStmt (SExp expr) = do
   genExpr expr
   return ()
@@ -175,6 +176,8 @@ genStmt (SAss expr1 expr2) = do
     APhi {} -> error "Cannot assign to phi"
     -- TODO
   return ()
+genStmt (SIncr expr) = genStmt (SAss expr (EOp expr OPlus (ELitInt 1)))
+genStmt (SDecr expr) = genStmt (SAss expr (EOp expr OMinus (ELitInt 1)))
 genStmt (SRet expr) = do
   addr <- genExpr expr
   emitRet addr
@@ -303,11 +306,11 @@ toCompType TStr = CString
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
 genExpr (ELitInt n) = return $ AImmediate $ EVInt n
+genExpr ELitTrue = return $ AImmediate $ EVBool True
+genExpr ELitFalse = return $ AImmediate $ EVBool False
 genExpr (EVar ident) = do
   label <- getLabel
   readVar ident label
-genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
-genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
 genExpr (EFunctionCall ident exprs) = do
   args <- mapM genExpr exprs
   funType <- gets $ (Map.! ident) . getFEnv
@@ -319,6 +322,13 @@ genExpr (EFunctionCall ident exprs) = do
     addr <- freshReg retType
     emitInstr $ ICall addr ident args
     return addr
+genExpr (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
+-- genExpr (ENot expr) = -- TODO
+genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
+genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
+-- genExpr (EAnd expr1 expr2) = -- TODO
+-- genExpr (EOr expr1 expr2) = -- TODO
+
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do
