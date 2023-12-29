@@ -106,7 +106,7 @@ instance Show FunBlock where
 data FunType = FunType {
   getFunTypeEntryLabel :: Label,
   getFunTypeRet :: CType,
-  getFunTypeArgs :: [(String, CType)]
+  getFunTypeArgs :: [(Address, CType)]
 }
 
 data BasicBlock = BasicBlock {
@@ -119,6 +119,8 @@ data BasicBlock = BasicBlock {
 instance Show BasicBlock where
   show (BasicBlock label instrs (Just terminator) preds _) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator]))
+  show (BasicBlock label instrs Nothing preds _) =
+    label ++ ":  ; ERROR preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) instrs)
 nothingBlock :: BasicBlock
 nothingBlock = BasicBlock "" [] Nothing [] Map.empty
 

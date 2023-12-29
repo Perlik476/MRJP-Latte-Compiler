@@ -67,32 +67,6 @@ emitBasicBlock = do
     Nothing -> do
       error "No terminator in block"
 
--- emitBasicBlock :: GenM Label
--- emitBasicBlock = do
---   instrs <- getInstrs
---   term <- getTerminator
---   case term of
---     Just t -> do
---       label <- getLabel
---       liftIO $ putStrLn $ "Emmiting block " ++ label
---       block <- gets getCurrentBasicBlock
---       instrs <- getInstrs
---       let phiInstrs = filter isPhiInstr instrs
---       let instrs' = filter (not . isPhiInstr) instrs
---       phiInstrs' <- mapM (\instr -> case instr of
---         IPhi' reg phiId -> do
---           phi <- gets $ (Map.! phiId) . getPhiEnv
---           let (APhi _ _ operands) = phi
---           return $ IPhi reg operands
---         _ -> return instr
---         ) phiInstrs
---       -- TODO remove trivial phis
---       let block' = block { getBlockInstrs = phiInstrs' ++ instrs' }
---       modify $ \s -> s { getBasicBlockEnv = Map.insert label block' (getBasicBlockEnv s), getCurrentBasicBlock = nothingBlock }
---       return label
---     Nothing -> do
---       error "No terminator in block"
-
 
 isPhiInstr :: Instr -> Bool
 isPhiInstr (IPhi' _ _) = True
@@ -114,12 +88,16 @@ addFunsAndClassesToEnvs :: TopDef -> GenM ()
 addFunsAndClassesToEnvs (PFunDef t ident args block) = do
   funEntry <- freshLabel
   setCurrentLabel funEntry
-  mapM_ (\(PArg t ident') -> do
+  args' <- mapM (\(PArg t ident') -> do
     addr <- freshReg (toCompType t)
     addVarAddr ident' addr
     addVarType ident' (toCompType t)
+    return (addr, toCompType t)
     ) args
-  modify $ \s -> s { getFEnv = Map.insert ident (FunType funEntry (toCompType t) (map (\(PArg t ident) -> (ident, toCompType t)) args)) (getFEnv s) }
+  modify $ \s -> s { 
+    getFEnv = Map.insert ident (FunType funEntry (toCompType t) args') (getFEnv s),
+    getCurrentFunLabels = []
+  }
 addFunsAndClassesToEnvs _ = error "Classes not implemented"
 
 translatePhis :: FunBlock -> GenM FunBlock
@@ -151,18 +129,18 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   funType <- gets $ (Map.! ident) . getFEnv
   let funEntry = getFunTypeEntryLabel funType
+  modify $ \s -> s { getCurrentFunLabels = [funEntry] }
   setCurrentLabel funEntry
   genBlock block
   basicBlocks <- gets getBasicBlockEnv
   currentFunLabelsRev <- gets getCurrentFunLabels
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
-  argAddrs <- mapM (\(PArg t ident) -> readVar ident funEntry) args
-  let argTypes = map (\(PArg t ident) -> toCompType t) args
+  let args' = getFunTypeArgs funType
   modify $ \s -> s {
     getCurrentFunLabels = [],
     getFunctions =
-      Map.insert ident (FunBlock ident (toCompType t) (argAddrs `zip` argTypes) funBasicBlocks) (getFunctions s)
+      Map.insert ident (FunBlock ident (toCompType t) args' funBasicBlocks) (getFunctions s)
   }
   return ()
 
