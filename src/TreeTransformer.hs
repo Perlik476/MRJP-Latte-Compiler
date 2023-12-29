@@ -35,10 +35,10 @@ getNewName name = do
   case Map.lookup name names of
     Nothing -> do
       modify $ \s -> s { getNames = Map.insert name 1 names }
-      return $ name ++ "0"
+      return $ name ++ ".0"
     Just n -> do
       modify $ \s -> s { getNames = Map.insert name (n + 1) names }
-      return $ name ++ show n
+      return $ name ++ "." ++ show n
 
 transformTree :: Abs.Program -> AST.Program
 transformTree prog = evalState (transformProgram prog) (TMState Map.empty Map.empty)
