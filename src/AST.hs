@@ -84,9 +84,8 @@ instance Show ArithOp where
   show OPlus  = "add"
   show OMinus = "sub"
   show OTimes = "mul"
-  show ODiv   = "div"
-  show OMod   = "mod"
--- TODO
+  show ODiv   = "sdiv"
+  show OMod   = "srem"
 
 data RelOp = OLTH | OLE | OGTH | OGE | OEQU | ONE
   deriving (Eq, Ord, Read)

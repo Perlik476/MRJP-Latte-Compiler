@@ -3,8 +3,8 @@ import os
 import subprocess
 from tqdm import tqdm
 
-# latte_dir = "tests/lattests-benek/good"
-latte_dir = "tests/mrjp-tests-good/good"
+latte_dir = "tests/lattests/good"
+# latte_dir = "tests/mrjp-tests-good/good"
 # latte_dir = "tests/mrjp-tests-benek/gr5"
 test_latte = "./latc_llvm"
 
@@ -15,6 +15,6 @@ for file in tqdm([f for f in os.listdir(latte_dir) if f.endswith(".lat")]):
         print(f"Error processing {file}")
         errs += 1
         # exit(1)
-print(f"Errors: {errs}")
+print(f"Errors: {errs} out of {len(os.listdir(latte_dir))} files")
 
 print("All files processed successfully")
