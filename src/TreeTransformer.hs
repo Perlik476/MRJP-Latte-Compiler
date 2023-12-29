@@ -51,7 +51,11 @@ transformTopDef (Abs.PFunDef _ t ident args block) = do
   mapM_ (\(Abs.PArg _ t (Abs.IIdent _ (Abs.Ident ident))) -> do
     newIdent <- getNewName ident
     modify (\s -> s { getEnv = Map.insert ident newIdent (getEnv s) })) args
-  AST.PFunDef <$> transformType t <*> transformIIdentFun ident <*> mapM transformArg args <*> transformBlock block
+  tBlock <- transformBlock block
+  let tBlock' = case t of 
+        Abs.TVoid _ -> addVRetToBlockIfNecessary tBlock
+        _ -> tBlock
+  AST.PFunDef <$> transformType t <*> transformIIdentFun ident <*> mapM transformArg args <*> pure tBlock'
 transformTopDef (Abs.PClassDef _ ident classDef) = 
   AST.PClassDef <$> transformIIdentClass ident <*> transformClassDef classDef
 transformArg :: Abs.Arg -> TM AST.Arg
@@ -72,6 +76,14 @@ transformBlock (Abs.SBlock _ stmts) = do
   tStmts <- transformStmts stmts
   modify (\s -> s { getEnv = oldEnv })
   return $ AST.SBlock tStmts
+
+addVRetToBlockIfNecessary :: AST.Block -> AST.Block
+addVRetToBlockIfNecessary (AST.SBlock stmts) = 
+  case stmts of
+    [] -> AST.SBlock [AST.SVRet]
+    _ -> case last stmts of
+      AST.SVRet -> AST.SBlock stmts
+      _ -> AST.SBlock (stmts ++ [AST.SVRet])
 
 transformStmt' :: Abs.Stmt -> TM AST.Stmt
 transformStmt' (Abs.SEmpty _) = pure AST.SEmpty
