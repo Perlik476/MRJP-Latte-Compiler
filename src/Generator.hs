@@ -25,6 +25,7 @@ compile :: Program -> IO String
 compile ast =
   let initState = GenState {
     getCurrentLabel = "",
+    getCurrentFunLabels = [],
     getLabelCount = 0,
     getBasicBlockEnv = Map.empty,
     getFunctions = Map.empty,
@@ -52,17 +53,17 @@ emitInstr instr = do
 emitTerminator :: Instr -> GenM ()
 emitTerminator = addTerminator
 
-emitBasicBlock :: GenM Label
+emitBasicBlock :: GenM ()
 emitBasicBlock = do
   instrs <- getInstrs
   term <- getTerminator
   case term of
     Just t -> do
       label <- getLabel
-      liftIO $ putStrLn $ "Emmiting block " ++ label
+      liftIO $ putStrLn $ "Emitting block " ++ label
       block <- getCurrentBasicBlock
+      liftIO $ putStrLn $ "Block " ++ label ++ " has instructions " ++ show instrs
       modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
-      return label
     Nothing -> do
       error "No terminator in block"
 
@@ -102,11 +103,24 @@ isPhiInstr _ = False
 
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
+  mapM_ addFunsAndClassesToEnvs topDefs
   mapM_ genTopDef topDefs
   funs <- gets getFunctions
   funs' <- mapM translatePhis funs
   modify $ \s -> s { getFunctions = funs' }
-  
+
+
+addFunsAndClassesToEnvs :: TopDef -> GenM ()
+addFunsAndClassesToEnvs (PFunDef t ident args block) = do
+  funEntry <- freshLabel
+  setCurrentLabel funEntry
+  mapM_ (\(PArg t ident') -> do
+    addr <- freshReg (toCompType t)
+    addVarAddr ident' addr
+    addVarType ident' (toCompType t)
+    ) args
+  modify $ \s -> s { getFEnv = Map.insert ident (FunType funEntry (toCompType t) (map (\(PArg t ident) -> (ident, toCompType t)) args)) (getFEnv s) }
+addFunsAndClassesToEnvs _ = error "Classes not implemented"
 
 translatePhis :: FunBlock -> GenM FunBlock
 translatePhis fun = do
@@ -135,15 +149,20 @@ translatePhis'' instrs = do
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
-  -- TODO args
-  label <- freshLabel
-  setCurrentLabel label
+  funType <- gets $ (Map.! ident) . getFEnv
+  let funEntry = getFunTypeEntryLabel funType
+  setCurrentLabel funEntry
   genBlock block
   basicBlocks <- gets getBasicBlockEnv
+  currentFunLabelsRev <- gets getCurrentFunLabels
+  let currentFunLabels = reverse currentFunLabelsRev
+  funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
+  argAddrs <- mapM (\(PArg t ident) -> readVar ident funEntry) args
+  let argTypes = map (\(PArg t ident) -> toCompType t) args
   modify $ \s -> s {
-    getBasicBlockEnv = Map.empty,
+    getCurrentFunLabels = [],
     getFunctions =
-      Map.insert ident (FunBlock ident (toCompType t) (map (\(PArg t ident) -> (ident, toCompType t)) args) (Map.elems basicBlocks)) (getFunctions s)
+      Map.insert ident (FunBlock ident (toCompType t) (argAddrs `zip` argTypes) funBasicBlocks) (getFunctions s)
   }
   return ()
 
@@ -180,8 +199,7 @@ genStmt (SAss expr1 expr2) = do
   return ()
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  emitTerminator $ IRet addr
-  emitBasicBlock
+  emitRet addr
   return ()
 genStmt (SCondElse expr thenStmt elseStmt) = do
   thenLabel <- freshLabel
@@ -194,11 +212,11 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
 
   setCurrentLabel thenLabel
   genStmt thenStmt
-  thenEndLabel <- emitJump endLabel
+  emitJumpIfNoTerminator endLabel
 
-  setCurrentLabel elseLabel 
+  setCurrentLabel elseLabel
   genStmt elseStmt
-  emitJump endLabel
+  emitJumpIfNoTerminator endLabel
 
   sealBlock endLabel
   setCurrentLabel endLabel
@@ -212,7 +230,7 @@ genStmt (SCond expr thenStmt) = do
 
   setCurrentLabel thenLabel
   genStmt thenStmt
-  emitJump endLabel
+  emitJumpIfNoTerminator endLabel
 
   sealBlock endLabel
   setCurrentLabel endLabel
@@ -229,7 +247,7 @@ genStmt (SWhile expr stmt) = do
 
   setCurrentLabel bodyLabel
   genStmt stmt
-  emitJump condLabel
+  emitJumpIfNoTerminator condLabel
 
   sealBlock condLabel
   sealBlock endLabel
@@ -237,17 +255,30 @@ genStmt (SWhile expr stmt) = do
   return ()
 genStmt s = error $ "Not implemented " ++ show s
 
-emitJump :: Label -> GenM Label
+emitJump :: Label -> GenM ()
 emitJump label = do
   addPredToBlock label =<< getLabel
   emitTerminator $ IJmp label
   emitBasicBlock
 
-emitBranch :: Address -> Label -> Label -> GenM Label
+emitJumpIfNoTerminator :: Label -> GenM ()
+emitJumpIfNoTerminator label = do
+  currentLabel <- getLabel
+  if currentLabel == "" then
+    return ()
+  else
+    emitJump label
+
+emitBranch :: Address -> Label -> Label -> GenM ()
 emitBranch addr label1 label2 = do
   addPredToBlock label1 =<< getLabel
   addPredToBlock label2 =<< getLabel
   emitTerminator $ IBr addr label1 label2
+  emitBasicBlock
+
+emitRet :: Address -> GenM ()
+emitRet addr = do
+  emitTerminator $ IRet addr
   emitBasicBlock
 
 emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
@@ -291,6 +322,13 @@ genExpr (EVar ident) = do
   readVar ident label
 genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
 genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
+genExpr (EFunctionCall ident exprs) = do
+  args <- mapM genExpr exprs
+  funType <- gets $ (Map.! ident) . getFEnv
+  let retType = getFunTypeRet funType
+  addr <- freshReg retType
+  emitInstr $ ICall addr ident args
+  return addr
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do
@@ -324,7 +362,8 @@ freshLabel = do
   modify $ \s -> s { getLabelCount = getLabelCount s + 1 }
   label <- gets $ idToLabel . getLabelCount
   modify $ \s -> s {
-    getBasicBlockEnv = Map.insert label (BasicBlock label [] Nothing [] Map.empty) (getBasicBlockEnv s)
+    getBasicBlockEnv = Map.insert label (BasicBlock label [] Nothing [] Map.empty) (getBasicBlockEnv s),
+    getCurrentFunLabels = label : getCurrentFunLabels s
   }
   return label
 
@@ -365,7 +404,7 @@ writeVar ident label addr = do
   case Map.lookup ident venv of
     Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
     Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
-  
+
 
 readVar :: Ident -> Label -> GenM Address
 readVar ident label = do

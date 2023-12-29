@@ -24,13 +24,14 @@ type GenM = StateT GenState IO
 
 data GenState = GenState {
   getCurrentLabel :: Label,
+  getCurrentFunLabels :: [Label],
   getVEnv :: Map String (Map Label Address),
   getRegCount :: Integer,
   getLabelCount :: Integer,
   getBasicBlockEnv :: Map Label BasicBlock,
   getFunctions :: Map String FunBlock,
-  getFEnv :: Map String Address,
-  getCVenv :: Map String Address,
+  getFEnv :: Map String FunType,
+  getCVenv :: Map String Address, -- TODO
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
@@ -93,14 +94,20 @@ idToLabel n = "L" ++ show n
 data FunBlock = FunBlock {
   getFunName :: String,
   getFunRetType :: CType,
-  getFunArgs :: [(String, CType)],
+  getFunArgs :: [(Address, CType)], -- TODO ctype chyba niepotrzebny
   getFunBlocks :: [BasicBlock]
 }
 instance Show FunBlock where
   show (FunBlock name t args blocks) =
     "define " ++ show t ++ " @" ++ name ++ "(" ++
-    Data.List.intercalate ", " (map (\(name, t) -> show t ++ " " ++ name) args) ++
+    Data.List.intercalate ", " (map (\(addr, t) -> show t ++ " " ++ show addr) args) ++
     ") {\n" ++ unlines (map show blocks) ++ "}\n"
+
+data FunType = FunType {
+  getFunTypeEntryLabel :: Label,
+  getFunTypeRet :: CType,
+  getFunTypeArgs :: [(String, CType)]
+}
 
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,
@@ -120,6 +127,7 @@ type Label = String
 data Instr =
   IBinOp Address Address ArithOp Address |
   IRelOp Address Address RelOp Address |
+  ICall Address String [Address] |
   IRet Address |
   IJmp Label |
   IBr Address Label Label |
@@ -128,6 +136,9 @@ data Instr =
 instance Show Instr where
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
+  show (ICall addr name args) = 
+    show addr ++ " = call " ++ showAddrType addr ++ " @" ++ name ++ "(" ++ Data.List.intercalate ", " (
+      map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
   show (IRet addr) = "ret " ++ showAddrType addr ++ " " ++ show addr
   show (IJmp label) = "br label %" ++ label
   show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
