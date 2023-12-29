@@ -16,5 +16,7 @@ latc_llvm
 *.y
 *.txt
 *.tar.gz
+# exclude .ll files but keep the runtime.ll file
+!runtime.ll
 *.ll
 *.bc
