@@ -323,11 +323,36 @@ genExpr (EFunctionCall ident exprs) = do
     emitInstr $ ICall addr ident args
     return addr
 genExpr (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
--- genExpr (ENot expr) = -- TODO
+genExpr (ENot expr) = genBoolExpr False expr
 genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
 genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
--- genExpr (EAnd expr1 expr2) = -- TODO
--- genExpr (EOr expr1 expr2) = -- TODO
+genExpr expr@(EAnd _ _) = genBoolExpr True expr
+genExpr expr@(EOr _ _) = genBoolExpr True expr
+
+genBoolExpr :: Bool -> Expr -> GenM Address
+genBoolExpr b expr = do
+  labelTrue <- freshLabel
+  labelFalse <- freshLabel
+  labelEnd <- freshLabel
+
+  emitIfThenElseBlocks expr labelTrue labelFalse
+  sealBlock labelTrue
+  sealBlock labelFalse
+
+  setCurrentLabel labelTrue
+  emitJump labelEnd
+
+  setCurrentLabel labelFalse
+  emitJump labelEnd
+
+  sealBlock labelEnd
+  setCurrentLabel labelEnd
+
+  (addr, phiId) <- freshPhi labelEnd CBool
+  let phi = APhi phiId CBool [(labelTrue, AImmediate $ EVBool b), (labelFalse, AImmediate $ EVBool $ not b)]
+  modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
+
+  return addr
 
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address

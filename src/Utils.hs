@@ -181,7 +181,7 @@ data EVal =
   EVString String
 instance Show EVal where
   show (EVInt n) = show n
-  show (EVBool b) = show b
+  show (EVBool b) = if b then "1" else "0"
   show (EVString s) = show s
 
 getEvalType :: EVal -> CType
