@@ -1,11 +1,8 @@
 int main() {
-  int x = 1;
-  boolean b = ((x == 2) && (x == 3) || x == 1);
-  if (b) {
-    x = 2;
-  } else {
-    x =1;
+  int x = 10;
+  while (x != 0) {
+    x = x - 1;
+    printInt(x);
   }
-  x = x - 2;
-  return x;
+  return 0;
 }

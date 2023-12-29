@@ -33,7 +33,7 @@ Latte/Abs.hs Latte/Lex.x Latte/Par.y Latte/Print.hs Latte/Test.hs : Latte.cf
 # 	${GHC} ${GHC_OPTS} $@
 # 	mv Latte/Test ../test
 
-Compiler : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Frontend.hs AST.hs TreeTransformer.hs Compiler.hs
+Compiler : Latte/Abs.hs Latte/Lex.hs Latte/Par.hs Latte/Print.hs Frontend.hs AST.hs TreeTransformer.hs Compiler.hs Utils.hs Generator.hs
 	${GHC} ${GHC_OPTS} $@
 	mv Compiler ../latc_llvm
 

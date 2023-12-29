@@ -107,7 +107,7 @@ data FunType = FunType {
   getFunTypeEntryLabel :: Label,
   getFunTypeRet :: CType,
   getFunTypeArgs :: [(Address, CType)]
-}
+} deriving (Show)
 
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,

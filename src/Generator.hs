@@ -42,7 +42,16 @@ compile ast =
   } in do
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
-    return $ unlines $ map show funs ++ ["define i32 @main() {\n  %r = call i32 @fun.main()\n  ret i32 %r\n}"]
+    let lines = [
+          "declare void @fun.printInt(i32)", 
+          "declare i32 @fun.readInt()", 
+          "declare void @fun.printString(i8*)",
+          "declare i8* @fun.readString()", 
+          "declare void @fun.error()"
+          ] ++
+          map show funs ++
+          ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
+    return $ unlines lines
 
 emitInstr :: Instr -> GenM ()
 emitInstr instr = do
@@ -77,11 +86,25 @@ isPhiInstr _ = False
 
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
+  addStdLib
   mapM_ addFunsAndClassesToEnvs topDefs
   mapM_ genTopDef topDefs
   funs <- gets getFunctions
   funs' <- mapM translatePhis funs
   modify $ \s -> s { getFunctions = funs' }
+
+
+addStdLib :: GenM ()
+addStdLib = do
+  fenv <- gets getFEnv
+  let fenv' = Map.union fenv $ Map.fromList [
+        ("fun.printInt", FunType "fun.printInt" CVoid [(ARegister 0 CInt, CInt)]),
+        ("fun.readInt", FunType "fun.readInt" CInt []),
+        ("fun.printString", FunType "fun.printString" CVoid [(ARegister 0 CString, CString)]),
+        ("fun.readString", FunType "fun.readString" CString []),
+        ("fun.error", FunType "fun.error" CVoid [])
+        ]
+  modify $ \s -> s { getFEnv = fenv' }
 
 
 addFunsAndClassesToEnvs :: TopDef -> GenM ()
@@ -94,7 +117,7 @@ addFunsAndClassesToEnvs (PFunDef t ident args block) = do
     addVarType ident' (toCompType t)
     return (addr, toCompType t)
     ) args
-  modify $ \s -> s { 
+  modify $ \s -> s {
     getFEnv = Map.insert ident (FunType funEntry (toCompType t) args') (getFEnv s),
     getCurrentFunLabels = []
   }
