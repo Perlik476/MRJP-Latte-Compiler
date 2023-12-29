@@ -179,6 +179,9 @@ genStmt (SRet expr) = do
   addr <- genExpr expr
   emitRet addr
   return ()
+genStmt SVRet = do
+  emitVRet
+  return ()
 genStmt (SCondElse expr thenStmt elseStmt) = do
   thenLabel <- freshLabel
   elseLabel <- freshLabel
@@ -259,6 +262,11 @@ emitRet addr = do
   emitTerminator $ IRet addr
   emitBasicBlock
 
+emitVRet :: GenM ()
+emitVRet = do
+  emitTerminator IVRet
+  emitBasicBlock
+
 emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
 emitIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
   currentLabel <- getLabel
@@ -304,9 +312,13 @@ genExpr (EFunctionCall ident exprs) = do
   args <- mapM genExpr exprs
   funType <- gets $ (Map.! ident) . getFEnv
   let retType = getFunTypeRet funType
-  addr <- freshReg retType
-  emitInstr $ ICall addr ident args
-  return addr
+  if retType == CVoid then do
+    emitInstr $ IVCall ident args
+    return $ AImmediate EVoid
+  else do
+    addr <- freshReg retType
+    emitInstr $ ICall addr ident args
+    return addr
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do

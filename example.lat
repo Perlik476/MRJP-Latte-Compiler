@@ -6,6 +6,5 @@ int f(int x) {
 int main() {
   int x = 1;
   x = f(x);
-  x = f(x);
   return x;
 }

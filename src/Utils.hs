@@ -130,7 +130,9 @@ data Instr =
   IBinOp Address Address ArithOp Address |
   IRelOp Address Address RelOp Address |
   ICall Address String [Address] |
+  IVCall String [Address] |
   IRet Address |
+  IVRet |
   IJmp Label |
   IBr Address Label Label |
   IPhi' Address PhiID |
@@ -141,7 +143,10 @@ instance Show Instr where
   show (ICall addr name args) = 
     show addr ++ " = call " ++ showAddrType addr ++ " @" ++ name ++ "(" ++ Data.List.intercalate ", " (
       map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
+  show (IVCall name args) = "call void @" ++ name ++ "(" ++ Data.List.intercalate ", " (
+      map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
   show (IRet addr) = "ret " ++ showAddrType addr ++ " " ++ show addr
+  show IVRet = "ret void"
   show (IJmp label) = "br label %" ++ label
   show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
   show (IPhi' addr phiId) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ show phiId
@@ -170,6 +175,7 @@ showAddrType = show . getAddrType
 -- TODO
 
 data EVal =
+  EVoid |
   EVInt Integer |
   EVBool Bool |
   EVString String
@@ -189,6 +195,7 @@ data CType =
   CVoid |
   CString
 -- TODO
+  deriving (Eq, Ord, Read)
 instance Show CType where
   show CInt = "i32"
   show CBool = "i1"
