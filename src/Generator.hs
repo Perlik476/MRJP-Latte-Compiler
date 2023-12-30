@@ -26,6 +26,7 @@ compile ast =
   let initState = GenState {
     getCurrentLabel = "",
     getCurrentFunLabels = [],
+    getCurrentFunName = "",
     getLabelCount = 0,
     getBasicBlockEnv = Map.empty,
     getFunctions = Map.empty,
@@ -43,38 +44,15 @@ compile ast =
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
     let lines = [
-          "declare void @fun.printInt(i32)", 
-          "declare i32 @fun.readInt()", 
+          "declare void @fun.printInt(i32)",
+          "declare i32 @fun.readInt()",
           "declare void @fun.printString(i8*)",
-          "declare i8* @fun.readString()", 
+          "declare i8* @fun.readString()",
           "declare void @fun.error()"
           ] ++
           map show funs ++
           ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
     return $ unlines lines
-
-emitInstr :: Instr -> GenM ()
-emitInstr instr = do
-  label <- getLabel
-  addInstr label instr
-  return ()
-
-emitTerminator :: Instr -> GenM ()
-emitTerminator = addTerminator
-
-emitBasicBlock :: GenM ()
-emitBasicBlock = do
-  instrs <- getInstrs
-  term <- getTerminator
-  case term of
-    Just t -> do
-      label <- getLabel
-      liftIO $ putStrLn $ "Emitting block " ++ label
-      block <- getCurrentBasicBlock
-      liftIO $ putStrLn $ "Block " ++ label ++ " has instructions " ++ show instrs
-      modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
-    Nothing -> do
-      error "No terminator in block"
 
 
 isPhiInstr :: Instr -> Bool
@@ -152,9 +130,10 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   funType <- gets $ (Map.! ident) . getFEnv
   let funEntry = getFunTypeEntryLabel funType
-  modify $ \s -> s { getCurrentFunLabels = [funEntry] }
+  modify $ \s -> s { getCurrentFunLabels = [funEntry], getCurrentFunName = ident }
   setCurrentLabel funEntry
   genBlock block
+  emitBasicBlock
   basicBlocks <- gets getBasicBlockEnv
   currentFunLabelsRev <- gets getCurrentFunLabels
   let currentFunLabels = reverse currentFunLabelsRev
@@ -172,6 +151,8 @@ showArg (PArg t ident) = show t ++ " " ++ ident
 
 genBlock :: Block -> GenM ()
 genBlock (SBlock stmts) = mapM_ genStmt stmts
+
+
 
 genStmt :: Stmt -> GenM ()
 genStmt SEmpty = pure ()
@@ -262,6 +243,69 @@ genStmt (SWhile expr stmt) = do
   return ()
 genStmt s = error $ "Not implemented " ++ show s
 
+
+
+emitInstr :: Instr -> GenM ()
+emitInstr instr = do
+  label <- getLabel
+  addInstr label instr
+  return ()
+
+emitTerminator :: Instr -> GenM ()
+emitTerminator = addTerminator
+
+emitBasicBlock :: GenM ()
+emitBasicBlock = do
+  label <- getLabel
+  liftIO $ putStrLn $ "Trying to emit block " ++ label 
+  instrs <- getInstrs
+  term <- getTerminator
+  if label == "" then
+    return ()
+  else do
+    block <- getCurrentBasicBlock
+    preds <- getPreds
+    funName <- gets getCurrentFunName
+    entryLabel <- gets $ getFunTypeEntryLabel . (Map.! funName) . getFEnv
+    if label == entryLabel then do
+      liftIO $ putStrLn "Entry block"
+      emitBasicBlock'
+    else if null preds then do
+      liftIO $ putStrLn "No predecessors"
+      skipEmitBasicBlock'
+    else case term of
+      Nothing -> do
+        liftIO $ putStrLn "No terminator"
+        funRetType <- gets $ getFunTypeRet . (Map.! funName) . getFEnv
+        if funRetType == CVoid then do
+          liftIO $ putStrLn "Void function"
+          emitRet $ AImmediate EVVoid
+        else do
+          liftIO $ putStrLn "Non-void function"
+          emitRet $ AImmediate $ EVUndef funRetType
+      _ -> emitBasicBlock'
+
+emitBasicBlock' :: GenM ()
+emitBasicBlock' = do
+  label <- getLabel
+  instrs <- getInstrs
+  block <- getCurrentBasicBlock
+  liftIO $ putStrLn $ "Emitting block " ++ label
+  liftIO $ putStrLn $ "Block " ++ label ++ " has instructions " ++ show instrs
+  modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
+
+skipEmitBasicBlock' :: GenM ()
+skipEmitBasicBlock' = do
+  label <- getLabel
+  instrs <- getInstrs
+  liftIO $ putStrLn $ "Skipping block " ++ label
+  liftIO $ putStrLn $ "No predecessors in block " ++ label ++ " with instructions " ++ show instrs
+  modify $ \s -> s { 
+    getBasicBlockEnv = Map.delete label (getBasicBlockEnv s), 
+    getCurrentLabel = "", 
+    getCurrentFunLabels = Data.List.delete label (getCurrentFunLabels s) 
+  }
+
 emitJump :: Label -> GenM ()
 emitJump label = do
   addPredToBlock label =<< getLabel
@@ -326,6 +370,8 @@ toCompType TVoid = CVoid
 toCompType TStr = CString
 -- TODO
 
+
+
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
 genExpr (ELitInt n) = return $ AImmediate $ EVInt n
@@ -340,7 +386,7 @@ genExpr (EFunctionCall ident exprs) = do
   let retType = getFunTypeRet funType
   if retType == CVoid then do
     emitInstr $ IVCall ident args
-    return $ AImmediate EVoid
+    return $ AImmediate EVVoid
   else do
     addr <- freshReg retType
     emitInstr $ ICall addr ident args

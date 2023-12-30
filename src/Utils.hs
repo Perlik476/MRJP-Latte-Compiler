@@ -25,6 +25,7 @@ type GenM = StateT GenState IO
 data GenState = GenState {
   getCurrentLabel :: Label,
   getCurrentFunLabels :: [Label],
+  getCurrentFunName :: String,
   getVEnv :: Map String (Map Label Address),
   getRegCount :: Integer,
   getLabelCount :: Integer,
@@ -39,6 +40,7 @@ data GenState = GenState {
   getVarType :: Map String CType
   -- TODO
 }
+
 
 type PhiID = Integer
 
@@ -175,7 +177,8 @@ showAddrType = show . getAddrType
 -- TODO
 
 data EVal =
-  EVoid |
+  EVUndef CType |
+  EVVoid |
   EVInt Integer |
   EVBool Bool |
   EVString String
@@ -183,11 +186,15 @@ instance Show EVal where
   show (EVInt n) = show n
   show (EVBool b) = if b then "1" else "0"
   show (EVString s) = show s
+  show EVVoid = ""
+  show (EVUndef t) = "undef"
 
 getEvalType :: EVal -> CType
 getEvalType (EVInt _) = CInt
 getEvalType (EVBool _) = CBool
 getEvalType (EVString _) = CString
+getEvalType EVVoid = CVoid
+getEvalType (EVUndef t) = t
 
 data CType =
   CInt |
