@@ -183,7 +183,7 @@ transformExpr (Abs.EMul _ expr1 mulOp expr2) = do
       case mulOp of
         Abs.OTimes _ -> AST.ELitInt (integer1 * integer2)
         Abs.ODiv _ -> AST.ELitInt (integer1 `div` integer2)
-        Abs.OMod _ -> AST.ELitInt (integer1 `mod` integer2) -- TODO
+        Abs.OMod _ -> AST.ELitInt (integer1 `rem` integer2)
     _ -> AST.EOp tExpr1 (transformMulOp mulOp) tExpr2
 transformExpr (Abs.EAdd _ expr1 addOp expr2) = do
   tExpr1 <- transformExpr expr1

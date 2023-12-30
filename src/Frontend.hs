@@ -686,7 +686,7 @@ tryEvalExpr (EMul pos expr1 op expr2) = do
     (Just (VInt n1), Just (VInt n2)) -> case op of
       OTimes _ -> checkInt pos $ n1 * n2
       ODiv _ -> if n2 /= 0 then checkInt pos $ n1 `div` n2 else throwError $ ErrDivisionByZero pos
-      OMod _ -> if n2 /= 0 then checkInt pos $ n1 `mod` n2 else throwError $ ErrDivisionByZero pos -- TODO
+      OMod _ -> if n2 /= 0 then checkInt pos $ n1 `rem` n2 else throwError $ ErrDivisionByZero pos
     _ -> return Nothing
 tryEvalExpr (EAdd pos expr1 op expr2) = do
   mn1 <- tryEvalExpr expr1
