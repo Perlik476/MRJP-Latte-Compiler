@@ -16,7 +16,12 @@ for file in tqdm(files):
         print(f"Error processing {file}")
         errs += 1
     else:
-        result = subprocess.run(["./out.bc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # if exists file with .input extension, use it as input
+        if os.path.exists(os.path.join(latte_dir, file.replace(".lat", ".input"))):
+            with open(os.path.join(latte_dir, file.replace(".lat", ".input")), "r") as f:
+                result = subprocess.run(["./out.bc"], stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            result = subprocess.run(["./out.bc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         with open(os.path.join(latte_dir, file.replace(".lat", ".output")), "r") as f:
             expected = f.read()
         if result.stdout.decode("utf-8") != expected:
