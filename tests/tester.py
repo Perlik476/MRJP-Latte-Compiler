@@ -9,7 +9,8 @@ latte_dir = "tests/lattests/good"
 test_latte = "./latc_llvm"
 
 errs = 0
-for file in tqdm([f for f in os.listdir(latte_dir) if f.endswith(".lat")]):
+files = sorted([f for f in os.listdir(latte_dir) if f.endswith(".lat")])
+for file in tqdm(files):
     result = subprocess.run([test_latte, os.path.join(latte_dir, file)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if result.returncode != 0:
         print(f"Error processing {file}")

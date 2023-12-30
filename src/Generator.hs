@@ -38,18 +38,25 @@ compile ast =
     getIncompletePhis = Map.empty,
     getPhiCount = 0,
     getPhiEnv = Map.empty,
-    getVarType = Map.empty
+    getVarType = Map.empty,
+    getStringPool = Map.empty,
+    getStringPoolCount = 0
     -- TODO
   } in do
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
+    let stringPool = getStringPool $ snd result
     let lines = [
           "declare void @fun.printInt(i32)",
           "declare i32 @fun.readInt()",
           "declare void @fun.printString(i8*)",
           "declare i8* @fun.readString()",
-          "declare void @fun.error()"
+          "declare void @fun.error()",
+          "declare i8* @fun.internal.concatStrings(i8*, i8*)",
+          "declare i1 @fun.internal.compareStrings(i8*, i8*)",
+          ""
           ] ++
+          map showStrPool (Map.toList stringPool) ++ ["\n"] ++
           map show funs ++
           ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
     return $ unlines lines
@@ -257,7 +264,7 @@ emitTerminator = addTerminator
 emitBasicBlock :: GenM ()
 emitBasicBlock = do
   label <- getLabel
-  liftIO $ putStrLn $ "Trying to emit block " ++ label 
+  liftIO $ putStrLn $ "Trying to emit block " ++ label
   instrs <- getInstrs
   term <- getTerminator
   if label == "" then
@@ -300,10 +307,10 @@ skipEmitBasicBlock' = do
   instrs <- getInstrs
   liftIO $ putStrLn $ "Skipping block " ++ label
   liftIO $ putStrLn $ "No predecessors in block " ++ label ++ " with instructions " ++ show instrs
-  modify $ \s -> s { 
-    getBasicBlockEnv = Map.delete label (getBasicBlockEnv s), 
-    getCurrentLabel = "", 
-    getCurrentFunLabels = Data.List.delete label (getCurrentFunLabels s) 
+  modify $ \s -> s {
+    getBasicBlockEnv = Map.delete label (getBasicBlockEnv s),
+    getCurrentLabel = "",
+    getCurrentFunLabels = Data.List.delete label (getCurrentFunLabels s)
   }
 
 emitJump :: Label -> GenM ()
@@ -371,12 +378,31 @@ toCompType TStr = CString
 -- TODO
 
 
+newStringConst :: String -> GenM Integer
+newStringConst str = do
+  stringPoolCount <- gets getStringPoolCount
+  modify $ \s -> s { getStringPoolCount = stringPoolCount + 1, getStringPool = Map.insert str stringPoolCount (getStringPool s) }
+  return stringPoolCount
+
 
 genRhs, genExpr :: Expr -> GenM Address
 genRhs = genExpr
 genExpr (ELitInt n) = return $ AImmediate $ EVInt n
 genExpr ELitTrue = return $ AImmediate $ EVBool True
 genExpr ELitFalse = return $ AImmediate $ EVBool False
+genExpr (EString str) = do
+  let strLen = 1 + toInteger (length str)
+  pool <- gets getStringPool
+  case Map.lookup str pool of
+    Just strNum -> do
+      addr <- freshReg CString
+      emitInstr $ IString addr strNum strLen
+      return addr
+    Nothing -> do
+      strNum <- newStringConst str
+      addr <- freshReg CString
+      emitInstr $ IString addr strNum strLen
+      return addr
 genExpr (EVar ident) = do
   label <- getLabel
   readVar ident label
@@ -397,6 +423,8 @@ genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
 genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
 genExpr expr@(EAnd _ _) = genBoolExpr True expr
 genExpr expr@(EOr _ _) = genBoolExpr True expr
+
+
 
 genBoolExpr :: Bool -> Expr -> GenM Address
 genBoolExpr b expr = do
@@ -428,16 +456,34 @@ genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
 genBinOp op e1 e2 = do
   addr1 <- genExpr e1
   addr2 <- genExpr e2
-  addr <- freshReg (getAddrType addr1)
-  emitInstr $ IBinOp addr addr1 op addr2
-  return addr
-
+  case getAddrType addr1 of
+    CInt -> do
+      addr <- freshReg (getAddrType addr1)
+      emitInstr $ IBinOp addr addr1 op addr2
+      return addr
+    CString -> do
+      addr <- freshReg (getAddrType addr1)
+      emitInstr $ ICall addr (case op of
+        OPlus -> "fun.internal.concatStrings"
+        _ -> error "Not implemented"
+        ) [addr1, addr2]
+      return addr
+    _ -> error "Not implemented"
 genRelOp :: RelOp -> Expr -> Expr -> GenM Address
 genRelOp op e1 e2 = do
   addr1 <- genExpr e1
   addr2 <- genExpr e2
   addr <- freshReg CBool
-  emitInstr $ IRelOp addr addr1 op addr2
+  case getAddrType addr1 of
+    CString -> do
+      case op of 
+        OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1, addr2]
+        ONE -> do
+          addr' <- freshReg CBool
+          emitInstr $ ICall addr' "fun.internal.compareStrings" [addr1, addr2]
+          emitInstr $ IBinOp addr addr' OMinus (AImmediate $ EVInt 1) -- TODO
+        _ -> error "Not implemented"
+    _ -> emitInstr $ IRelOp addr addr1 op addr2
   return addr
 
 genLhs :: Expr -> GenM Address

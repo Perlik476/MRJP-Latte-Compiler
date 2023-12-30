@@ -37,7 +37,9 @@ data GenState = GenState {
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
   getPhiEnv :: Map PhiID Address,
-  getVarType :: Map String CType
+  getVarType :: Map String CType,
+  getStringPool :: Map String Integer,
+  getStringPoolCount :: Integer
   -- TODO
 }
 
@@ -138,7 +140,8 @@ data Instr =
   IJmp Label |
   IBr Address Label Label |
   IPhi' Address PhiID |
-  IPhi Address [(Label, Address)]
+  IPhi Address [(Label, Address)] |
+  IString Address Integer Integer
 instance Show Instr where
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
@@ -153,6 +156,14 @@ instance Show Instr where
   show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
   show (IPhi' addr phiId) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ show phiId
   show (IPhi addr vals) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ Data.List.intercalate ", " (map (\(label, addr) -> "[" ++ show addr ++ ", %" ++ label ++ "]") vals)
+  show (IString addr ident len) = show addr ++ " = bitcast [" ++ show len ++ " x i8]* " ++ showStrName ident ++ " to i8*"
+
+
+showStrName :: Integer -> String
+showStrName n = "@str." ++ show n
+
+showStrPool :: (String, Integer) -> String
+showStrPool (str, n) = showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ str ++ "\\00\""
 
 
 data Address =
@@ -180,19 +191,16 @@ data EVal =
   EVUndef CType |
   EVVoid |
   EVInt Integer |
-  EVBool Bool |
-  EVString String
+  EVBool Bool
 instance Show EVal where
   show (EVInt n) = show n
   show (EVBool b) = if b then "1" else "0"
-  show (EVString s) = show s
   show EVVoid = ""
   show (EVUndef t) = "undef"
 
 getEvalType :: EVal -> CType
 getEvalType (EVInt _) = CInt
 getEvalType (EVBool _) = CBool
-getEvalType (EVString _) = CString
 getEvalType EVVoid = CVoid
 getEvalType (EVUndef t) = t
 

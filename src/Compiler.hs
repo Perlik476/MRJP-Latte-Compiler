@@ -49,10 +49,10 @@ run v p s =
         liftIO $ print ast
         llvm_file_content <- compile ast
         liftIO $ putStrLn llvm_file_content
-        writeFile "out-temp.ll" llvm_file_content
+        writeFile "out.ll" llvm_file_content
         callCommand "llvm-as lib/runtime.ll"
-        callCommand "llvm-as out-temp.ll"
-        callCommand "llvm-link out-temp.bc lib/runtime.bc -o out.bc"
+        callCommand "llvm-as out.ll"
+        callCommand "llvm-link out.bc lib/runtime.bc -o out.bc"
         exitSuccess
       else do
         exitFailure
