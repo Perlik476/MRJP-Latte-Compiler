@@ -3,6 +3,7 @@
 @d   = internal constant [4 x i8] c"%d \00"	
 @lf  = internal constant [4 x i8] c"%lf\00"
 @str.error = internal constant [15 x i8] c"runtime error\0A\00"	
+@stdin = external global i8
 
 declare i32 @printf(i8*, ...) 
 declare i32 @scanf(i8*, ...)
@@ -14,6 +15,7 @@ declare i32 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
 declare i8* @strcat(i8*, i8*)
 declare i32 @strcmp(i8*, i8*)
+declare i8* @readline()
 
 
 define void @fun.printInt(i32 %x) {
@@ -36,9 +38,7 @@ define void @fun.printString(i8* %str) {
 }
 
 define i8* @fun.readString() {
-  ; TODO : implement dynamic string reading
-  %r1 = call i8* @malloc(i32 4096)
-  %r2 = call i8* @gets(i8* %r1)
+  %r1 = call i8* @readline()
   ret i8* %r1
 }
 
