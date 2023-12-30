@@ -1,12 +1,10 @@
 /* parity of positive integers by loop */
 
 int main () {
-  string s1 = readString();
-  string s2 = readString();
-  string s = s1 + s2;
-  if (s1 == s2)
-    printString(s);
-  else
-    printString(s1);
+  string x = readString();
+  int y = readInt();
+  string z = readString();
+  printInt(y);
+  printString(x + z);
   return 0;
 }

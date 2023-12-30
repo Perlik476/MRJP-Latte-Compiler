@@ -1,6 +1,6 @@
 @dnl = internal constant [4 x i8] c"%d\0A\00"
 @fnl = internal constant [6 x i8] c"%.1f\0A\00"
-@d   = internal constant [3 x i8] c"%d\00"	
+@d   = internal constant [4 x i8] c"%d \00"	
 @lf  = internal constant [4 x i8] c"%lf\00"
 @str.error = internal constant [15 x i8] c"runtime error\0A\00"	
 
@@ -20,6 +20,14 @@ define void @fun.printInt(i32 %x) {
   %r0 = getelementptr [4 x i8], [4 x i8]* @dnl, i32 0, i32 0
   call i32 (i8*, ...) @printf(i8* %r0, i32 %x) 
   ret void
+}
+
+define i32 @fun.readInt() {
+  %res = alloca i32
+  %r1 = getelementptr [4 x i8], [4 x i8]* @d, i32 0, i32 0
+  call i32 (i8*, ...) @scanf(i8* %r1, i32* %res)
+  %r2 = load i32, i32* %res
+  ret i32 %r2
 }
 
 define void @fun.printString(i8* %str) {
@@ -49,14 +57,6 @@ define i1 @fun.internal.compareStrings(i8* %str1, i8* %str2) {
   %1 = call i32 @strcmp(i8* %str1, i8* %str2)
   %2 = icmp eq i32 %1, 0
   ret i1 %2
-}
-
-define i32 @fun.readInt() {
-  %res = alloca i32
-  %r1 = getelementptr [3 x i8], [3 x i8]* @d, i32 0, i32 0
-	call i32 (i8*, ...) @scanf(i8* %r1, i32* %res)
-	%r2 = load i32, i32* %res
-	ret i32 %r2
 }
 
 define void @fun.error() {
