@@ -141,7 +141,11 @@ data Instr =
   IBr Address Label Label |
   IPhi' Address PhiID |
   IPhi Address [(Label, Address)] |
-  IString Address Integer Integer
+  IString Address Integer Integer |
+  IAlloca Address CType (Maybe Address) |
+  IStore Address Address |
+  ILoad Address Address |
+  IGetElementPtr Address Address [Address]
 instance Show Instr where
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
@@ -157,7 +161,15 @@ instance Show Instr where
   show (IPhi' addr phiId) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ show phiId
   show (IPhi addr vals) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ Data.List.intercalate ", " (map (\(label, addr) -> "[" ++ show addr ++ ", %" ++ label ++ "]") vals)
   show (IString addr ident len) = show addr ++ " = bitcast [" ++ show len ++ " x i8]* " ++ showStrName ident ++ " to i8*"
-
+  show (IAlloca addr t Nothing) = show addr ++ " = alloca " ++ show t
+  show (IAlloca addr t (Just addr2)) = show addr ++ " = alloca " ++ show t ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
+  show (IStore addr1 addr2) = "store " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
+  show (ILoad addr1 addr2) = show addr1 ++ " = load " ++ showAddrType addr1 ++ ", " ++ showAddrType addr1 ++ "* " ++ show addr2
+  show (IGetElementPtr addr1 addr2 args) = 
+    show addr1 ++ " = getelementptr " ++ show (dereferencedType (getAddrType addr2)) ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2 ++ ", " ++
+    Data.List.intercalate ", " (map (\arg -> showAddrType arg ++ " " ++ show arg) args)
+    where dereferencedType (CPtr t) = t
+          dereferencedType t = error $ "Cannot derederence element of type " ++ show t
 
 showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
@@ -191,24 +203,29 @@ data EVal =
   EVUndef CType |
   EVVoid |
   EVInt Integer |
-  EVBool Bool
+  EVBool Bool |
+  EVNull CType
 instance Show EVal where
+  show (EVUndef t) = "undef"
+  show EVVoid = ""
   show (EVInt n) = show n
   show (EVBool b) = if b then "1" else "0"
-  show EVVoid = ""
-  show (EVUndef t) = "undef"
+  show (EVNull t) = "null"
 
 getEvalType :: EVal -> CType
 getEvalType (EVInt _) = CInt
 getEvalType (EVBool _) = CBool
 getEvalType EVVoid = CVoid
 getEvalType (EVUndef t) = t
+getEvalType (EVNull t) = t
 
 data CType =
   CInt |
   CBool |
   CVoid |
-  CString
+  CString |
+  CPtr CType |
+  CStruct [String] (Map String CType)
 -- TODO
   deriving (Eq, Ord, Read)
 instance Show CType where
@@ -216,3 +233,5 @@ instance Show CType where
   show CBool = "i1"
   show CVoid = "void"
   show CString = "i8*"
+  show (CPtr t) = show t ++ "*"
+  show (CStruct fieldNames fields) = "{" ++ Data.List.intercalate ", " (map (\name -> show (fields Map.! name)) fieldNames) ++ "}"

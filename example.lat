@@ -1,8 +1,13 @@
 int main () {
-  string x = readString();
-  int y = readInt();
-  string z = readString();
-  printInt(y);
-  printString(x + z);
+  int[] a = new int[10];
+  a[1] = 1;
+  a[5] = 2;
+  printInt(a[5]);
+  printInt(a[1]);
+  int x = 0;
+  while (x < 10) {
+    printInt(a[x]);
+    x = x - 1;
+  }
   return 0;
 }

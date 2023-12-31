@@ -11,6 +11,7 @@ import Latte.Par   ( pProgram, myLexer )
 import Latte.Print ( Print, printTree )
 import Latte.Skel  ()
 
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Monad.State
 import Control.Monad.Except
@@ -182,8 +183,12 @@ genStmt (SAss expr1 expr2) = do
       let ident = getVarName expr1
       addVarAddr ident addr2
     ARegister _ t -> do
-      let ident = getVarName expr1
-      addVarAddr ident addr2
+      liftIO $ putStrLn $ "type of addr1 is " ++ show t ++ " and type of expr2 is " ++ show (getAddrType addr2)
+      case t of
+        CPtr _ -> emitInstr $ IStore addr2 addr1
+        _ -> do
+          let ident = getVarName expr1
+          addVarAddr ident addr2
     APhi {} -> error "Cannot assign to phi"
     -- TODO
   return ()
@@ -375,6 +380,7 @@ toCompType TInt = CInt
 toCompType TBool = CBool
 toCompType TVoid = CVoid
 toCompType TStr = CString
+toCompType (TArray t) = CStruct ["length", "data"] $ Map.fromList [("length", CInt), ("data", CPtr $ toCompType t)]
 -- TODO
 
 
@@ -423,7 +429,49 @@ genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
 genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
 genExpr expr@(EAnd _ _) = genBoolExpr True expr
 genExpr expr@(EOr _ _) = genBoolExpr True expr
+genExpr (ECastNull t) = pure $ AImmediate $ EVNull (toCompType t)
+genExpr (EArrayNew t expr) = do
+  addr <- genExpr expr
+  let ct = toCompType t
+  let t' = TArray t
+  let ct' = toCompType t'
+  addr' <- freshReg (CPtr ct)
+  emitInstr $ IAlloca addr' ct (Just addr)
+  genStruct ct' ["length", "data"] $ Map.fromList [("length", addr), ("data", addr')]
+genExpr (EArrayElem expr1 expr2) = do
+  addr1 <- genExpr expr1
+  addr2 <- genExpr expr2
+  let t = getAddrType addr1
+  let (CPtr (CStruct _ fields)) = t
+  let t' = CPtr $ fields Map.! "data"
+  addr <- freshReg t'
+  emitInstr $ IGetElementPtr addr addr1 [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
+  let (CPtr t'') = t'
+  addr' <- freshReg t''
+  emitInstr $ ILoad addr' addr
+  addr'' <- freshReg t''
+  emitInstr $ IGetElementPtr addr'' addr' [addr2]
+  let (CPtr t''') = t''
+  addr''' <- freshReg t'''
+  emitInstr $ ILoad addr''' addr''
+  return addr'''
 
+genStruct :: CType -> [String] -> Map String Address -> GenM Address
+genStruct t fieldNames fields = do
+  addr <- freshReg (CPtr t)
+  emitInstr $ IAlloca addr t Nothing
+  mapM_ (\(name, n) -> do
+    let addr' = fields Map.! name
+    let t' = getAddrType addr'
+    liftIO $ putStrLn $ "Type of " ++ name ++ " is " ++ show t'
+    let t'' = CPtr t'
+    addr'' <- freshReg t''
+    emitInstr $ IAlloca addr'' t' Nothing
+    addr''' <- freshReg t''
+    emitInstr $ IGetElementPtr addr''' addr [AImmediate $ EVInt 0, AImmediate $ EVInt n]
+    emitInstr $ IStore addr' addr'''
+    ) (fieldNames `zip` [0..])
+  return addr
 
 
 genBoolExpr :: Bool -> Expr -> GenM Address
@@ -476,7 +524,7 @@ genRelOp op e1 e2 = do
   addr <- freshReg CBool
   case getAddrType addr1 of
     CString -> do
-      case op of 
+      case op of
         OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1, addr2]
         ONE -> do
           addr' <- freshReg CBool
@@ -490,6 +538,20 @@ genLhs :: Expr -> GenM Address
 genLhs (EVar ident) = do
   label <- getLabel
   readVar ident label
+genLhs (EArrayElem expr1 expr2) = do
+  addr1 <- genLhs expr1
+  addr2 <- genExpr expr2
+  let t = getAddrType addr1
+  let (CPtr (CStruct _ fields)) = t
+  let t' = fields Map.! "data"
+  addr <- freshReg t'
+  emitInstr $ IGetElementPtr addr addr1 [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
+  let (CPtr t'') = t'
+  addr' <- freshReg t'  -- TODO ?
+  emitInstr $ ILoad addr' addr
+  addr'' <- freshReg t'  -- TODO ?
+  emitInstr $ IGetElementPtr addr'' addr' [addr2]
+  return addr''
 
 freshReg :: CType -> GenM Address
 freshReg t = do

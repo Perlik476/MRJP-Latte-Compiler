@@ -141,6 +141,7 @@ defaultValue :: AST.Type -> AST.Expr
 defaultValue AST.TInt = AST.ELitInt 0
 defaultValue AST.TStr = AST.EString ""
 defaultValue AST.TBool = AST.ELitFalse
+defaultValue t@(AST.TArray _) = AST.ECastNull t
 
 
 transformType :: Abs.Type -> TM AST.Type
