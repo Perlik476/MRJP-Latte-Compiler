@@ -98,13 +98,19 @@ addFunsAndClassesToEnvs (PFunDef t ident args block) = do
   funEntry <- freshLabel
   setCurrentLabel funEntry
   args' <- mapM (\(PArg t ident') -> do
-    addr <- freshReg (toCompType t)
+    let t' = case t of
+          TArray _ -> CPtr $ toCompType t  -- TODO
+          _ -> toCompType t
+    addr <- freshReg t'
     addVarAddr ident' addr
-    addVarType ident' (toCompType t)
-    return (addr, toCompType t)
+    addVarType ident' t'
+    return (addr, t')
     ) args
+  let t' = case t of
+        TArray _ -> CPtr $ toCompType t  -- TODO
+        _ -> toCompType t
   modify $ \s -> s {
-    getFEnv = Map.insert ident (FunType funEntry (toCompType t) args') (getFEnv s),
+    getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
     getCurrentFunLabels = []
   }
 addFunsAndClassesToEnvs _ = error "Classes not implemented"
@@ -147,10 +153,13 @@ genTopDef (PFunDef t ident args block) = do
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
   let args' = getFunTypeArgs funType
+  let t' = case t of
+        TArray _ -> CPtr $ toCompType t  -- TODO
+        _ -> toCompType t
   modify $ \s -> s {
     getCurrentFunLabels = [],
     getFunctions =
-      Map.insert ident (FunBlock ident (toCompType t) args' funBasicBlocks) (getFunctions s)
+      Map.insert ident (FunBlock ident t' args' funBasicBlocks) (getFunctions s)
   }
   return ()
 
