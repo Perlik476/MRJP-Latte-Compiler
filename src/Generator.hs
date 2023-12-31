@@ -257,7 +257,16 @@ genStmt (SWhile expr stmt) = do
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
-genStmt s = error $ "Not implemented " ++ show s
+genStmt (SFor t ident expr stmt) = do
+  let iterIdent = "iter." ++ ident
+  genStmt (SDecl t iterIdent (AST.ELitInt 0))
+  genStmt (SWhile (AST.ERel (AST.EVar iterIdent) AST.OLTH (AST.EClassAttr expr "length")) 
+    (AST.SBStmt $ AST.SBlock [
+      AST.SDecl t ident (AST.EArrayElem expr (AST.EVar iterIdent)), 
+      stmt,
+      AST.SIncr (AST.EVar iterIdent)
+    ])
+    )
 
 
 

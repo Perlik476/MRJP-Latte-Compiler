@@ -112,7 +112,10 @@ transformStmt' (Abs.SWhile _ expr stmt) = do
     AST.ELitTrue -> AST.SWhile tExpr <$> transformStmt' stmt
     AST.ELitFalse -> return AST.SEmpty
     _ -> AST.SWhile tExpr <$> transformStmt' stmt
-transformStmt' (Abs.SFor _ t ident expr stmt) = AST.SFor <$> transformType t <*> transformIIdent ident <*> transformExpr expr <*> transformStmt' stmt
+transformStmt' (Abs.SFor _ t ident expr stmt) = do
+  newIdent <- getNewName (fromIIdent ident)
+  modify (\s -> s { getEnv = Map.insert (fromIIdent ident) newIdent (getEnv s) })
+  AST.SFor <$> transformType t <*> pure newIdent <*> transformExpr expr <*> transformStmt' stmt
 transformStmt' (Abs.SExp _ expr) = AST.SExp <$> transformExpr expr
 
 transformStmts :: [Abs.Stmt] -> TM [AST.Stmt]
