@@ -173,7 +173,7 @@ genStmt (SBStmt block) = do
 genStmt (SDecl t ident expr) = do
   addr <- genExpr expr
   addVarAddr ident addr
-  addVarType ident (toCompType t)
+  addVarType ident (getAddrType addr)
   return ()
 genStmt (SAss expr1 expr2) = do
   addr1 <- genLhs expr1
@@ -613,9 +613,12 @@ readVar ident label = do
   liftIO $ putStrLn $ "Reading " ++ ident ++ " from " ++ label
   venv <- gets getVEnv
   case Map.lookup ident venv of
-    Just m -> case Map.lookup label m of
-      Just addr -> return addr
-      Nothing -> readVarRec ident label
+    Just m -> do
+      addr' <- case Map.lookup label m of
+        Just addr -> return addr
+        Nothing -> readVarRec ident label
+      liftIO $ putStrLn $ "Read " ++ ident ++ " from " ++ label ++ " has type " ++ showAddrType addr'
+      return addr'
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."
 
