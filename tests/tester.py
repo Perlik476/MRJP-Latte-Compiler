@@ -3,12 +3,14 @@ import os
 import subprocess
 from tqdm import tqdm
 
-latte_dir = "tests/lattests/good"
+# latte_dir = "tests/lattests/good"
+latte_dir = "tests/lattests/extensions/arrays1"
 # latte_dir = "tests/mrjp-tests-good/good"
 # latte_dir = "tests/mrjp-tests-benek/gr5"
 test_latte = "./latc_llvm"
 
 errs = 0
+all = 0
 files = sorted([f for f in os.listdir(latte_dir) if f.endswith(".lat")])
 for file in tqdm(files):
     result = subprocess.run([test_latte, os.path.join(latte_dir, file)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -30,6 +32,6 @@ for file in tqdm(files):
             print(f"Got: {result.stdout.decode('utf-8')}")
             errs += 1
     
-print(f"Errors: {errs} out of {len(os.listdir(latte_dir))} files")
+print(f"Errors: {errs} out of {len(files)} files")
 
 print("All files processed successfully")

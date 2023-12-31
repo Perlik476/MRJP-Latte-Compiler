@@ -169,7 +169,7 @@ instance Show Instr where
     show addr1 ++ " = getelementptr " ++ show (dereferencedType (getAddrType addr2)) ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2 ++ ", " ++
     Data.List.intercalate ", " (map (\arg -> showAddrType arg ++ " " ++ show arg) args)
     where dereferencedType (CPtr t) = t
-          -- dereferencedType t = error $ "Cannot dereference type " ++ show t
+          dereferencedType t = error $ "Cannot dereference type " ++ show t
 
 showStrName :: Integer -> String
 showStrName n = "@str." ++ show n

@@ -1,14 +1,21 @@
 int main () {
-  int[] a = new int[10];
+  int[] a;
+  a = new int[10];
   int x = 0;
-  while (x < 10) {
+  int len = a.length;
+  {
+    printInt(len);
+  }
+  a[x] = 1;
+  while (x < len) {
     a[x] = x;
-    x = x + 1;
+    x++;
   }
-  x = 0;
-  while (x < 10) {
+  while (x > 0) {
     printInt(a[x]);
-    x = x + 1;
+    x--;
   }
+  a = new int[1];
+  printInt(a.length);
   return 0;
 }
