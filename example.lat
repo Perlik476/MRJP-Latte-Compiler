@@ -3,9 +3,13 @@ class A {
   A a;
 }
 
+A f(A a) {
+  return a;
+}
+
 int main () {
   A a = new A;
-  a = a.a;
-  // a.a = a;
+  f(a).x = 1;
+  printInt(a.x);
   return 0;
 }

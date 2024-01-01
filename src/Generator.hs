@@ -690,6 +690,8 @@ genLhs' (EClassAttr expr ident) = do
   addr' <- freshReg $ CPtr t'
   emitInstr $ IGetElementPtr addr' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
   return addr'
+genLhs' (EFunctionCall ident exprs) = genExpr (EFunctionCall ident exprs)
+genLhs' expr = error $ "Not an lvalue: " ++ show expr
 
 
 freshReg :: CType -> GenM Address
