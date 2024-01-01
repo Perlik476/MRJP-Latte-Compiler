@@ -107,10 +107,9 @@ addFunsAndClassesToEnvs (PFunDef t ident args block) = do
     addVarType ident' t'
     return (addr, t')
     ) args
-  -- let t' = case t of
-  --       TArray _ -> CPtr $ toCompType t  -- TODO
-  --       _ -> toCompType t
-  let t' = toCompType t
+  let t' = case t of
+        TArray _ -> CPtr $ toCompType t  -- TODO
+        _ -> toCompType t
   modify $ \s -> s {
     getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
     getCurrentFunLabels = []
@@ -158,7 +157,7 @@ genTopDef (PFunDef t ident args block) = do
   -- let t' = case t of
   --       TArray _ -> CPtr $ toCompType t  -- TODO
   --       _ -> toCompType t
-  let t' = toCompType t
+  let t' = getFunTypeRet funType
   modify $ \s -> s {
     getCurrentFunLabels = [],
     getFunctions =
@@ -212,13 +211,7 @@ genStmt (SIncr expr) = genStmt (SAss expr (EOp expr OPlus (ELitInt 1)))
 genStmt (SDecr expr) = genStmt (SAss expr (EOp expr OMinus (ELitInt 1)))
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  addr' <- case getAddrType addr of
-    CPtr t -> do
-      addr' <- freshReg t
-      emitInstr $ ILoad addr' addr
-      return addr'
-    _ -> return addr
-  emitRet addr'
+  emitRet addr
   return ()
 genStmt SVRet = do
   emitVRet
