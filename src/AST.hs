@@ -21,11 +21,8 @@ newtype ClassDef = ClassDef [ClassElem]
   deriving (Eq, Ord, Show, Read)
 
 data ClassElem
-    = ClassAttrDef Type [ClassItem]
+    = ClassAttrDef Type Ident
     | ClassMethodDef Type Ident [Arg] Block
-  deriving (Eq, Ord, Show, Read)
-
-newtype ClassItem = ClassItem Ident
   deriving (Eq, Ord, Show, Read)
 
 newtype Block = SBlock [Stmt]

@@ -1,17 +1,20 @@
-int[] newIntArray(int size) {
-  int[] a = new int[size];
+class A {
+  int x;
+}
+
+A f() {
+  A a = new A;
+  a.x = 2;
   return a;
 }
 
 int main () {
-  int[] a = newIntArray(10);
-  int i = 0;
-  while (i < 10) {
-    a[i] = i;
-    i = i + 1;
-  }
-  for (int x : a) {
-    printInt(x);
-  }
+  A a = new A;
+  a.x = 1;
+  printInt(a.x);
+  a = new A;
+  printInt(a.x);
+  a = f();
+  printInt(a.x);
   return 0;
 }

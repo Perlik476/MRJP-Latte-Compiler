@@ -32,7 +32,7 @@ data GenState = GenState {
   getBasicBlockEnv :: Map Label BasicBlock,
   getFunctions :: Map String FunBlock,
   getFEnv :: Map String FunType,
-  getCVenv :: Map String Address, -- TODO
+  getCEnv :: Map String CType,
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
@@ -217,6 +217,14 @@ getEvalType (EVBool _) = CBool
 getEvalType EVVoid = CVoid
 getEvalType (EVUndef t) = t
 getEvalType (EVNull t) = t
+
+getDefaultValue :: CType -> Address
+getDefaultValue CInt = AImmediate $ EVInt 0
+getDefaultValue CBool = AImmediate $ EVBool False
+getDefaultValue CVoid = AImmediate EVVoid
+getDefaultValue (CPtr _) = AImmediate $ EVNull CVoid
+getDefaultValue t = error $ "Cannot get default value of the type" ++ show t
+
 
 data CType =
   CInt |

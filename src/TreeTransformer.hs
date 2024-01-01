@@ -62,13 +62,20 @@ transformArg :: Abs.Arg -> TM AST.Arg
 transformArg (Abs.PArg _ t ident) = AST.PArg <$> transformType t <*> transformIIdent ident
 
 transformClassDef :: Abs.ClassDef -> TM AST.ClassDef
-transformClassDef (Abs.ClassDef _ classElems) = AST.ClassDef <$> mapM transformClassElem classElems
+transformClassDef (Abs.ClassDef _ classElems) = do
+  tClassElems <- mapM transformClassElem classElems
+  let tClassElemsFlat = Data.List.concat tClassElems
+  return $ AST.ClassDef tClassElemsFlat
 
-transformClassElem :: Abs.ClassElem -> TM AST.ClassElem
-transformClassElem (Abs.ClassAttrDef _ t classItems) = AST.ClassAttrDef <$> transformType t <*> mapM transformClassItem classItems
+transformClassElem :: Abs.ClassElem -> TM [AST.ClassElem]
+transformClassElem (Abs.ClassAttrDef _ t classItems) = do
+  idents <- mapM transformClassItem classItems
+  t' <- transformType t
+  return $ map (AST.ClassAttrDef t') idents
+transformClassElem (Abs.ClassMethodDef _ t ident args block) = error "Class methods not supported"
 
-transformClassItem :: Abs.ClassItem -> TM AST.ClassItem
-transformClassItem (Abs.ClassItem _ ident) = AST.ClassItem <$> transformIIdent ident
+transformClassItem :: Abs.ClassItem -> TM AST.Ident
+transformClassItem (Abs.ClassItem _ ident) = transformIIdent ident
 
 transformBlock :: Abs.Block -> TM AST.Block
 transformBlock (Abs.SBlock _ stmts) = do
@@ -145,6 +152,7 @@ defaultValue AST.TInt = AST.ELitInt 0
 defaultValue AST.TStr = AST.EString ""
 defaultValue AST.TBool = AST.ELitFalse
 defaultValue t@(AST.TArray _) = AST.ECastNull t
+defaultValue t@(AST.TClass _) = AST.ECastNull t
 
 
 transformType :: Abs.Type -> TM AST.Type
@@ -153,7 +161,7 @@ transformType (Abs.TStr _) = pure AST.TStr
 transformType (Abs.TBool _) = pure AST.TBool
 transformType (Abs.TVoid _) = pure AST.TVoid
 transformType (Abs.TArray _ t) = AST.TArray <$> transformType t
-transformType (Abs.TClass _ ident) = AST.TClass <$> transformIIdent ident
+transformType (Abs.TClass _ ident) = AST.TClass <$> transformIIdentClass ident
 
 transformExpr :: Abs.Expr -> TM AST.Expr
 transformExpr (Abs.EVar _ ident) = AST.EVar <$> transformIIdent ident

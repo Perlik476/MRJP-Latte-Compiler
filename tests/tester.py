@@ -4,7 +4,8 @@ import subprocess
 from tqdm import tqdm
 
 # latte_dir = "tests/lattests/good"
-latte_dir = "tests/lattests/extensions/arrays1"
+# latte_dir = "tests/lattests/extensions/arrays1"
+latte_dir = "tests/lattests/extensions/struct"
 # latte_dir = "tests/mrjp-tests-good/good"
 # latte_dir = "tests/mrjp-tests-benek/gr5"
 test_latte = "./latc_llvm"
