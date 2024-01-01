@@ -47,6 +47,7 @@ compile ast =
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
     let stringPool = getStringPool $ snd result
+    let cenv = getCEnv $ snd result
     let lines = [
           "declare i8* @malloc(i32)",
           "declare void @fun.printInt(i32)",
@@ -58,6 +59,8 @@ compile ast =
           "declare i1 @fun.internal.compareStrings(i8*, i8*)",
           ""
           ] ++
+          map showClass (Map.toList cenv) ++
+          [""] ++
           map showStrPool (Map.toList stringPool) ++ ["\n"] ++
           map show funs ++
           ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
@@ -74,7 +77,8 @@ isPhiInstr _ = False
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
   addStdLib
-  mapM_ addFunsAndClassesToEnvs topDefs
+  mapM_ addClassToCEnv topDefs
+  mapM_ addFunToFEnv topDefs
   mapM_ genTopDef topDefs
   funs <- gets getFunctions
   funs' <- mapM translatePhis funs
@@ -94,14 +98,33 @@ addStdLib = do
   modify $ \s -> s { getFEnv = fenv' }
 
 
-addFunsAndClassesToEnvs :: TopDef -> GenM ()
-addFunsAndClassesToEnvs (PFunDef t ident args block) = do
+addClassToCEnv :: TopDef-> GenM ()
+addClassToCEnv (PClassDef ident (ClassDef classItems)) = do
+  let classFields = filter (\classItem -> case classItem of
+        ClassAttrDef _ _ -> True
+        _ -> False
+        ) classItems
+  classFields' <- mapM (\classItem -> case classItem of
+    ClassAttrDef t ident' -> do
+      t' <- case t of
+            TArray _ -> CPtr <$> toCompTypeClass t
+            TClass {} -> CPtr <$> toCompTypeClass t
+            _ -> toCompType t
+      return (ident', t')
+    ) classFields
+  let classType = CStruct (map fst classFields') $ Map.fromList classFields'
+  modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
+addClassToCEnv (PClassDefExt {}) = error "Inheritence not implemented"
+addClassToCEnv _ = pure ()
+
+addFunToFEnv :: TopDef -> GenM ()
+addFunToFEnv (PFunDef t ident args block) = do
   funEntry <- freshLabel
   setCurrentLabel funEntry
   args' <- mapM (\(PArg t ident') -> do
     t' <- case t of
           TArray _ -> CPtr <$> toCompType t
-          TClass {} -> CPtr <$> toCompType t
+          TClass ident' -> return $ CPtr $ CClass ident'
           _ -> toCompType t
     addr <- freshReg t'
     addVarAddr ident' addr
@@ -110,28 +133,13 @@ addFunsAndClassesToEnvs (PFunDef t ident args block) = do
     ) args
   t' <- case t of
         TArray _ -> CPtr <$> toCompType t  -- TODO
-        TClass {} -> CPtr <$> toCompType t
+        TClass ident' -> return $ CPtr $ CClass ident'
         _ -> toCompType t
   modify $ \s -> s {
     getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
     getCurrentFunLabels = []
   }
-addFunsAndClassesToEnvs (PClassDef ident (ClassDef classItems)) = do
-  let classFields = filter (\classItem -> case classItem of
-        ClassAttrDef _ _ -> True
-        _ -> False
-        ) classItems
-  classFields' <- mapM (\classItem -> case classItem of
-    ClassAttrDef t ident' -> do
-      t' <- case t of
-            TArray _ -> CPtr <$> toCompType t
-            TClass {} -> CPtr <$> toCompType t
-            _ -> toCompType t
-      return (ident', t')
-    ) classFields
-  let classType = CStruct (map fst classFields') $ Map.fromList classFields'
-  modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
-addFunsAndClassesToEnvs _ = error "Inheritence not implemented"
+addFunToFEnv _ = pure ()
 
 translatePhis :: FunBlock -> GenM FunBlock
 translatePhis fun = do
@@ -194,50 +202,56 @@ genBlock (SBlock stmts) = mapM_ genStmt stmts
 
 
 genStmt :: Stmt -> GenM ()
-genStmt SEmpty = pure ()
-genStmt (SExp expr) = do
+genStmt s = do
+  emitInstr $ IComment $ show s
+  genStmt' s
+
+genStmt' :: Stmt -> GenM ()
+genStmt' SEmpty = pure ()
+genStmt' (SExp expr) = do
   genExpr expr
   return ()
-genStmt (SBStmt block) = do
+genStmt' (SBStmt block) = do
   genBlock block
   return ()
-genStmt (SDecl t ident expr) = do
+genStmt' (SDecl t ident expr) = do
   addr <- genExpr expr
   addVarAddr ident addr
   addVarType ident (getAddrType addr)
   liftIO $ putStrLn $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
   return ()
-genStmt (SAss expr1 expr2) = do
+genStmt' (SAss expr1 expr2) = do
   addr1 <- genLhs expr1
   addr2 <- genExpr expr2
   case addr1 of
     AImmediate val -> do
       let ident = getVarName expr1
       addVarAddr ident addr2
-    ARegister _ t -> do
-      liftIO $ putStrLn $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t
-      let t' = getAddrType addr2
-      if t == CPtr t' then do
-        liftIO $ putStrLn $ "emitting store " ++ show addr2 ++ " of type " ++ show t' ++ " to " ++ show addr1 ++ " of type " ++ show t
+    ARegister _ t1 -> do
+      let t2 = getAddrType addr2
+      liftIO $ putStrLn $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t1
+      liftIO $ putStrLn $ "addr2 in SAss is " ++ show addr2 ++ " of type " ++ show t2
+      if t1 == CPtr t2 then do -- TODO check if t1 and t2 are compatible (structs/classes)
+        liftIO $ putStrLn $ "emitting store " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
         emitInstr $ IStore addr2 addr1
       else do
-        unless (t == t') $ error "Types must match in assignment"
+        unless (t1 == t2) $ error "Types must match in assignment"
         let ident = getVarName expr1
         addVarAddr ident addr2
-      liftIO $ putStrLn $ "Assignment: " ++ show addr2 ++ " of type " ++ show t' ++ " to " ++ show addr1 ++ " of type " ++ show t
+      liftIO $ putStrLn $ "Assignment: " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
     APhi {} -> error "Cannot assign to phi"
     -- TODO
   return ()
-genStmt (SIncr expr) = genStmt (SAss expr (EOp expr OPlus (ELitInt 1)))
-genStmt (SDecr expr) = genStmt (SAss expr (EOp expr OMinus (ELitInt 1)))
-genStmt (SRet expr) = do
+genStmt' (SIncr expr) = genStmt' (SAss expr (EOp expr OPlus (ELitInt 1)))
+genStmt' (SDecr expr) = genStmt' (SAss expr (EOp expr OMinus (ELitInt 1)))
+genStmt' (SRet expr) = do
   addr <- genExpr expr
   emitRet addr
   return ()
-genStmt SVRet = do
+genStmt' SVRet = do
   emitVRet
   return ()
-genStmt (SCondElse expr thenStmt elseStmt) = do
+genStmt' (SCondElse expr thenStmt elseStmt) = do
   thenLabel <- freshLabel
   elseLabel <- freshLabel
   endLabel <- freshLabel
@@ -257,7 +271,7 @@ genStmt (SCondElse expr thenStmt elseStmt) = do
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
-genStmt (SCond expr thenStmt) = do
+genStmt' (SCond expr thenStmt) = do
   thenLabel <- freshLabel
   endLabel <- freshLabel
 
@@ -271,7 +285,7 @@ genStmt (SCond expr thenStmt) = do
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
-genStmt (SWhile expr stmt) = do
+genStmt' (SWhile expr stmt) = do
   condLabel <- freshLabel
   bodyLabel <- freshLabel
   endLabel <- freshLabel
@@ -289,12 +303,12 @@ genStmt (SWhile expr stmt) = do
   sealBlock endLabel
   setCurrentLabel endLabel
   return ()
-genStmt (SFor t ident expr stmt) = do
+genStmt' (SFor t ident expr stmt) = do
   let iterIdent = "iter." ++ ident
-  genStmt (SDecl t iterIdent (AST.ELitInt 0))
-  genStmt (SWhile (AST.ERel (AST.EVar iterIdent) AST.OLTH (AST.EClassAttr expr "length")) 
+  genStmt' (SDecl t iterIdent (AST.ELitInt 0))
+  genStmt' (SWhile (AST.ERel (AST.EVar iterIdent) AST.OLTH (AST.EClassAttr expr "attr.length"))
     (AST.SBStmt $ AST.SBlock [
-      AST.SDecl t ident (AST.EArrayElem expr (AST.EVar iterIdent)), 
+      AST.SDecl t ident (AST.EArrayElem expr (AST.EVar iterIdent)),
       stmt,
       AST.SIncr (AST.EVar iterIdent)
     ])
@@ -420,6 +434,17 @@ getVarName :: Expr -> String
 getVarName (EVar ident) = ident
 getVarName _ = error "Not a variable"
 
+toCompTypeClass :: Type -> GenM CType
+toCompTypeClass TInt = pure CInt
+toCompTypeClass TBool = pure CBool
+toCompTypeClass TVoid = pure CVoid
+toCompTypeClass TStr = pure CString
+toCompTypeClass (TArray t) = do
+  ct <- toCompTypeClass t
+  return $ CStruct ["attr.length", "attr.data"] $ Map.fromList [("attr.length", CInt), ("attr.data", CPtr ct)]
+toCompTypeClass (TClass ident) = pure (CClass ident)
+-- TODO
+
 toCompType :: Type -> GenM CType
 toCompType TInt = pure CInt
 toCompType TBool = pure CBool
@@ -427,13 +452,8 @@ toCompType TVoid = pure CVoid
 toCompType TStr = pure CString
 toCompType (TArray t) = do
   ct <- toCompType t
-  return $ CStruct ["length", "data"] $ Map.fromList [("length", CInt), ("data", CPtr ct)]
-toCompType (TClass ident) = do
-  cenv <- gets getCEnv
-  case Map.lookup ident cenv of
-    Just t -> pure t
-    Nothing -> error $ "Class " ++ ident ++ " not found in environment"
--- TODO
+  return $ CStruct ["attr.length", "attr.data"] $ Map.fromList [("attr.length", CInt), ("attr.data", CPtr ct)]
+toCompType (TClass ident) = pure (CClass ident)
 
 
 newStringConst :: String -> GenM Integer
@@ -443,12 +463,18 @@ newStringConst str = do
   return stringPoolCount
 
 
-genRhs, genExpr :: Expr -> GenM Address
-genRhs = genExpr
-genExpr (ELitInt n) = return $ AImmediate $ EVInt n
-genExpr ELitTrue = return $ AImmediate $ EVBool True
-genExpr ELitFalse = return $ AImmediate $ EVBool False
-genExpr (EString str) = do
+genExpr :: Expr -> GenM Address
+genExpr expr = do
+  emitInstr $ IComment $ "genExpr " ++ show expr
+  addr <- genExpr' expr
+  emitInstr $ IComment $ "genExpr " ++ show expr ++ " done"
+  return addr
+
+genExpr' :: Expr -> GenM Address
+genExpr' (ELitInt n) = return $ AImmediate $ EVInt n
+genExpr' ELitTrue = return $ AImmediate $ EVBool True
+genExpr' ELitFalse = return $ AImmediate $ EVBool False
+genExpr' (EString str) = do
   let strLen = 1 + toInteger (length str)
   pool <- gets getStringPool
   case Map.lookup str pool of
@@ -461,10 +487,10 @@ genExpr (EString str) = do
       addr <- freshReg CString
       emitInstr $ IString addr strNum strLen
       return addr
-genExpr (EVar ident) = do
+genExpr' (EVar ident) = do
   label <- getLabel
   readVar ident label
-genExpr (EFunctionCall ident exprs) = do
+genExpr' (EFunctionCall ident exprs) = do
   args <- mapM genExpr exprs
   funType <- gets $ (Map.! ident) . getFEnv
   let retType = getFunTypeRet funType
@@ -475,14 +501,14 @@ genExpr (EFunctionCall ident exprs) = do
     addr <- freshReg retType
     emitInstr $ ICall addr ident args
     return addr
-genExpr (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
-genExpr (ENot expr) = genBoolExpr False expr
-genExpr (EOp expr1 op expr2) = genBinOp op expr1 expr2
-genExpr (ERel expr1 op expr2) = genRelOp op expr1 expr2
-genExpr expr@(EAnd _ _) = genBoolExpr True expr
-genExpr expr@(EOr _ _) = genBoolExpr True expr
-genExpr (ECastNull t) = AImmediate . EVNull . CPtr <$> toCompType t
-genExpr (EArrayNew t expr) = do
+genExpr' (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
+genExpr' (ENot expr) = genBoolExpr False expr
+genExpr' (EOp expr1 op expr2) = genBinOp op expr1 expr2
+genExpr' (ERel expr1 op expr2) = genRelOp op expr1 expr2
+genExpr' expr@(EAnd _ _) = genBoolExpr True expr
+genExpr' expr@(EOr _ _) = genBoolExpr True expr
+genExpr' (ECastNull t) = AImmediate . EVNull . CPtr <$> toCompType t
+genExpr' (EArrayNew t expr) = do
   addr <- genExpr expr
   ct <- toCompType t
   let t' = TArray t
@@ -490,14 +516,14 @@ genExpr (EArrayNew t expr) = do
   addr' <- freshReg CInt
   emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize CInt)
   addr'' <- genAllocate (CPtr ct) addr'
-  genStruct (CPtr ct') ["length", "data"] $ Map.fromList [("length", addr), ("data", addr'')]
-genExpr (EArrayElem expr1 expr2) = do
+  genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
+genExpr' (EArrayElem expr1 expr2) = do
   addr1 <- genExpr expr1
   addr2 <- genExpr expr2
-  let t = getAddrType addr1
+  t <- getStructPtrFromClassPtr $ getAddrType addr1
   liftIO $ putStrLn "genExpr EArrayElem"
   let (CPtr (CStruct _ fields)) = t
-  let t' = CPtr $ fields Map.! "data"
+  let t' = CPtr $ fields Map.! "attr.data"
   addr <- freshReg t'
   emitInstr $ IGetElementPtr addr addr1 [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
   let (CPtr t'') = t'
@@ -509,9 +535,9 @@ genExpr (EArrayElem expr1 expr2) = do
   addr''' <- freshReg t'''
   emitInstr $ ILoad addr''' addr''
   return addr'''
-genExpr (EClassAttr expr ident) = do
+genExpr' (EClassAttr expr ident) = do
   addr <- genExpr expr
-  let t = getAddrType addr
+  t <- getStructPtrFromClassPtr $ getAddrType addr
   liftIO $ putStrLn "genExpr EClassAttr"
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = CPtr $ fields Map.! ident
@@ -519,13 +545,15 @@ genExpr (EClassAttr expr ident) = do
   addr' <- freshReg t'
   emitInstr $ IGetElementPtr addr' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
   let (CPtr t'') = t'
+  -- TODO!!!
   addr'' <- freshReg t''
   emitInstr $ ILoad addr'' addr'
   return addr''
-genExpr (EClassNew ident) = do
+  -- return addr'
+genExpr' (EClassNew ident) = do
   cenv <- gets getCEnv
   let classType@(CStruct fieldNames fields) = cenv Map.! ident
-  let t = CPtr classType
+  let t = CPtr $ CClass ident
   addrs <- mapM (\name -> do
     let t = fields Map.! name
     let addr = getDefaultValue t
@@ -533,6 +561,13 @@ genExpr (EClassNew ident) = do
     ) fieldNames
   genStruct t fieldNames $ Map.fromList addrs
 
+
+getStructPtrFromClassPtr :: CType -> GenM CType
+getStructPtrFromClassPtr (CPtr (CClass ident)) = do
+  cenv <- gets getCEnv
+  return $ CPtr $ cenv Map.! ident
+getStructPtrFromClassPtr t@(CPtr (CStruct _ _)) = pure t
+getStructPtrFromClassPtr t = error $ "Cannot get class from type " ++ show t
 
 genAllocate :: CType -> Address -> GenM Address
 genAllocate t sizeAddr = do
@@ -619,17 +654,24 @@ genRelOp op e1 e2 = do
   return addr
 
 genLhs :: Expr -> GenM Address
-genLhs (EVar ident) = do
+genLhs expr = do
+  emitInstr $ IComment $ "genLhs " ++ show expr
+  addr <- genLhs' expr
+  emitInstr $ IComment $ "genLhs " ++ show expr ++ " done"
+  return addr
+
+genLhs' :: Expr -> GenM Address
+genLhs' (EVar ident) = do
   label <- getLabel
   readVar ident label
-genLhs (EArrayElem expr1 expr2) = do
+genLhs' (EArrayElem expr1 expr2) = do
   addr1 <- genLhs expr1
   addr2 <- genExpr expr2
-  let t = getAddrType addr1
+  t <- getStructPtrFromClassPtr $ getAddrType addr1
   liftIO $ putStrLn "genLhs EArrayElem"
   liftIO $ print t
   let (CPtr (CStruct _ fields)) = t
-  let t' = fields Map.! "data"
+  let t' = fields Map.! "attr.data"
   addr <- freshReg t'
   emitInstr $ IGetElementPtr addr addr1 [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
   let (CPtr t'') = t'
@@ -638,10 +680,10 @@ genLhs (EArrayElem expr1 expr2) = do
   addr'' <- freshReg t'  -- TODO ?
   emitInstr $ IGetElementPtr addr'' addr' [addr2]
   return addr''
-genLhs (EClassAttr expr ident) = do
+genLhs' (EClassAttr expr ident) = do
   addr <- genLhs expr
-  let t = getAddrType addr
-  liftIO $ putStrLn "genLhs EClassAttr"
+  t <- getStructPtrFromClassPtr $ getAddrType addr
+  liftIO $ putStrLn $ "genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames

@@ -31,8 +31,8 @@ data GenState = GenState {
   getLabelCount :: Integer,
   getBasicBlockEnv :: Map Label BasicBlock,
   getFunctions :: Map String FunBlock,
-  getFEnv :: Map String FunType,
-  getCEnv :: Map String CType,
+  getFEnv :: Map Ident FunType,
+  getCEnv :: Map Ident CType,
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
@@ -63,6 +63,7 @@ addInstr label instr = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
   modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockInstrs = instrs ++ [instr] }) blockEnv }
+  liftIO $ putStrLn $ "Added instruction " ++ show instr ++ " to block " ++ label
 
 getTerminator :: GenM (Maybe Instr)
 getTerminator = getCurrentBasicBlock >>= return . getBlockTerminator
@@ -131,6 +132,7 @@ nothingBlock = BasicBlock "" [] Nothing [] Map.empty
 type Label = String
 
 data Instr =
+  IComment String |
   IBinOp Address Address ArithOp Address |
   IRelOp Address Address RelOp Address |
   ICall Address String [Address] |
@@ -147,6 +149,7 @@ data Instr =
   ILoad Address Address |
   IGetElementPtr Address Address [Address]
 instance Show Instr where
+  show (IComment str) = "; " ++ str
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (ICall addr name args) = 
@@ -175,6 +178,9 @@ showStrName n = "@str." ++ show n
 
 showStrPool :: (String, Integer) -> String
 showStrPool (str, n) = showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ str ++ "\\00\""
+
+showClass :: (String, CType) -> String
+showClass (name, t) = "%" ++ name ++ " = type " ++ show t
 
 
 data Address =
@@ -222,7 +228,7 @@ getDefaultValue :: CType -> Address
 getDefaultValue CInt = AImmediate $ EVInt 0
 getDefaultValue CBool = AImmediate $ EVBool False
 getDefaultValue CVoid = AImmediate EVVoid
-getDefaultValue (CPtr _) = AImmediate $ EVNull CVoid
+getDefaultValue t@(CPtr _) = AImmediate $ EVNull t
 getDefaultValue t = error $ "Cannot get default value of the type" ++ show t
 
 
@@ -233,6 +239,7 @@ data CType =
   CChar |
   CString | -- TODO
   CPtr CType |
+  CClass Ident |
   CStruct [String] (Map String CType)
 -- TODO
   deriving (Eq, Ord, Read)
@@ -243,7 +250,15 @@ instance Show CType where
   show CChar = "i8"
   show CString = "i8*"
   show (CPtr t) = show t ++ "*"
+  show (CClass ident) = "%" ++ ident
   show (CStruct fieldNames fields) = "{" ++ Data.List.intercalate ", " (map (\name -> show (fields Map.! name)) fieldNames) ++ "}"
+
+classToStruct :: CType -> GenM CType
+classToStruct (CClass ident) = do
+  cenv <- gets getCEnv
+  case Map.lookup ident cenv of
+    Just t -> return t
+    Nothing -> error $ "Class " ++ show ident ++ " not found"
 
 getTypeSize :: CType -> Integer
 getTypeSize CInt = 4

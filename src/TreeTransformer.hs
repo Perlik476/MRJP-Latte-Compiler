@@ -75,7 +75,7 @@ transformClassElem (Abs.ClassAttrDef _ t classItems) = do
 transformClassElem (Abs.ClassMethodDef _ t ident args block) = error "Class methods not supported"
 
 transformClassItem :: Abs.ClassItem -> TM AST.Ident
-transformClassItem (Abs.ClassItem _ ident) = transformIIdent ident
+transformClassItem (Abs.ClassItem _ ident) = transformIIdentClassAttr ident
 
 transformBlock :: Abs.Block -> TM AST.Block
 transformBlock (Abs.SBlock _ stmts) = do
@@ -172,8 +172,8 @@ transformExpr (Abs.ECastNull _ t) = AST.ECastNull <$> transformType t
 transformExpr (Abs.EString _ string) = pure $ AST.EString string
 transformExpr (Abs.EFunctionCall _ ident exprs) = AST.EFunctionCall <$> transformIIdentFun ident <*> mapM transformExpr exprs
 transformExpr (Abs.EClassNew _ ident) = AST.EClassNew <$> transformIIdentClass ident
-transformExpr (Abs.EClassAttr _ expr ident) = AST.EClassAttr <$> transformExpr expr <*> transformIIdent ident  -- TODO
-transformExpr (Abs.EMethodCall _ expr ident exprs) = AST.EMethodCall <$> transformExpr expr <*> transformIIdent ident <*> mapM transformExpr exprs
+transformExpr (Abs.EClassAttr _ expr ident) = AST.EClassAttr <$> transformExpr expr <*> transformIIdentClassAttr ident  -- TODO
+transformExpr (Abs.EMethodCall _ expr ident exprs) = AST.EMethodCall <$> transformExpr expr <*> transformIIdentClassMethod ident <*> mapM transformExpr exprs
 transformExpr (Abs.EArrayNew _ t expr) = AST.EArrayNew <$> transformType t <*> transformExpr expr
 transformExpr (Abs.EArrayElem _ expr expr') = AST.EArrayElem <$> transformExpr expr <*> transformExpr expr'
 transformExpr (Abs.ENeg _ expr) = do
@@ -293,6 +293,12 @@ transformIIdentClass = transformIIdent' "class"
 
 transformIIdentFun :: Abs.IIdent -> TM AST.Ident
 transformIIdentFun = transformIIdent' "fun"
+
+transformIIdentClassAttr :: Abs.IIdent -> TM AST.Ident
+transformIIdentClassAttr = transformIIdent' "attr"
+
+transformIIdentClassMethod :: Abs.IIdent -> TM AST.Ident
+transformIIdentClassMethod = transformIIdent' "method"
 
 fromIIdent :: Abs.IIdent -> String
 fromIIdent (Abs.IIdent _ (Abs.Ident ident)) = ident

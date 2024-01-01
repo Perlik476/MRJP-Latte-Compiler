@@ -1,20 +1,11 @@
 class A {
   int x;
-}
-
-A f() {
-  A a = new A;
-  a.x = 2;
-  return a;
+  A a;
 }
 
 int main () {
   A a = new A;
-  a.x = 1;
-  printInt(a.x);
-  a = new A;
-  printInt(a.x);
-  a = f();
-  printInt(a.x);
+  a = a.a;
+  // a.a = a;
   return 0;
 }
