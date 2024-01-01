@@ -1,11 +1,17 @@
-int[] f(int[] a) {
-  a[0] = 1;
+int[] newIntArray(int size) {
+  int[] a = new int[size];
   return a;
 }
 
 int main () {
-  int[] a = new int[5];
-  a = f(a);
-  printInt(a[0]);
+  int[] a = newIntArray(10);
+  int i = 0;
+  while (i < 10) {
+    a[i] = i;
+    i = i + 1;
+  }
+  for (int x : a) {
+    printInt(x);
+  }
   return 0;
 }

@@ -48,6 +48,7 @@ compile ast =
     let funs = Map.elems $ getFunctions $ snd result
     let stringPool = getStringPool $ snd result
     let lines = [
+          "declare i8* @malloc(i32)",
           "declare void @fun.printInt(i32)",
           "declare i32 @fun.readInt()",
           "declare void @fun.printString(i8*)",
@@ -106,9 +107,10 @@ addFunsAndClassesToEnvs (PFunDef t ident args block) = do
     addVarType ident' t'
     return (addr, t')
     ) args
-  let t' = case t of
-        TArray _ -> CPtr $ toCompType t  -- TODO
-        _ -> toCompType t
+  -- let t' = case t of
+  --       TArray _ -> CPtr $ toCompType t  -- TODO
+  --       _ -> toCompType t
+  let t' = toCompType t
   modify $ \s -> s {
     getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
     getCurrentFunLabels = []
@@ -153,9 +155,10 @@ genTopDef (PFunDef t ident args block) = do
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
   let args' = getFunTypeArgs funType
-  let t' = case t of
-        TArray _ -> CPtr $ toCompType t  -- TODO
-        _ -> toCompType t
+  -- let t' = case t of
+  --       TArray _ -> CPtr $ toCompType t  -- TODO
+  --       _ -> toCompType t
+  let t' = toCompType t
   modify $ \s -> s {
     getCurrentFunLabels = [],
     getFunctions =
@@ -209,7 +212,13 @@ genStmt (SIncr expr) = genStmt (SAss expr (EOp expr OPlus (ELitInt 1)))
 genStmt (SDecr expr) = genStmt (SAss expr (EOp expr OMinus (ELitInt 1)))
 genStmt (SRet expr) = do
   addr <- genExpr expr
-  emitRet addr
+  addr' <- case getAddrType addr of
+    CPtr t -> do
+      addr' <- freshReg t
+      emitInstr $ ILoad addr' addr
+      return addr'
+    _ -> return addr
+  emitRet addr'
   return ()
 genStmt SVRet = do
   emitVRet
@@ -457,9 +466,10 @@ genExpr (EArrayNew t expr) = do
   let ct = toCompType t
   let t' = TArray t
   let ct' = toCompType t'
-  addr' <- freshReg (CPtr ct)
-  emitInstr $ IAlloca addr' ct (Just addr)
-  genStruct ct' ["length", "data"] $ Map.fromList [("length", addr), ("data", addr')]
+  addr' <- freshReg CInt
+  emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize CInt)
+  addr'' <- genAllocate (CPtr ct) addr'
+  genStruct (CPtr ct') ["length", "data"] $ Map.fromList [("length", addr), ("data", addr'')]
 genExpr (EArrayElem expr1 expr2) = do
   addr1 <- genExpr expr1
   addr2 <- genExpr expr2
@@ -492,20 +502,27 @@ genExpr (EClassAttr expr ident) = do
   emitInstr $ ILoad addr'' addr'
   return addr''
 
+
+genAllocate :: CType -> Address -> GenM Address
+genAllocate t sizeAddr = do
+  -- assuming t is a pointer type
+  addr <- freshReg (CPtr CChar)
+  emitInstr $ ICall addr "malloc" [sizeAddr]
+  -- TODO
+  addr' <- freshReg t
+  emitInstr $ IBitcast addr' addr
+  return addr'
+
 genStruct :: CType -> [String] -> Map String Address -> GenM Address
 genStruct t fieldNames fields = do
-  addr <- freshReg (CPtr t)
-  emitInstr $ IAlloca addr t Nothing
+  -- assuming t is a pointer type
+  addr <- genAllocate t (AImmediate $ EVInt $ getTypeSize t)
   mapM_ (\(name, n) -> do
     let addr' = fields Map.! name
     let t' = getAddrType addr'
-    liftIO $ putStrLn $ "Type of " ++ name ++ " is " ++ show t'
-    let t'' = CPtr t'
-    addr'' <- freshReg t''
-    emitInstr $ IAlloca addr'' t' Nothing
-    addr''' <- freshReg t''
-    emitInstr $ IGetElementPtr addr''' addr [AImmediate $ EVInt 0, AImmediate $ EVInt n]
-    emitInstr $ IStore addr' addr'''
+    addr'' <- freshReg (CPtr t')
+    emitInstr $ IGetElementPtr addr'' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger n]
+    emitInstr $ IStore addr' addr''
     ) (fieldNames `zip` [0..])
   return addr
 

@@ -142,7 +142,7 @@ data Instr =
   IPhi' Address PhiID |
   IPhi Address [(Label, Address)] |
   IString Address Integer Integer |
-  IAlloca Address CType (Maybe Address) |
+  IBitcast Address Address |
   IStore Address Address |
   ILoad Address Address |
   IGetElementPtr Address Address [Address]
@@ -161,8 +161,7 @@ instance Show Instr where
   show (IPhi' addr phiId) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ show phiId
   show (IPhi addr vals) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ Data.List.intercalate ", " (map (\(label, addr) -> "[" ++ show addr ++ ", %" ++ label ++ "]") vals)
   show (IString addr ident len) = show addr ++ " = bitcast [" ++ show len ++ " x i8]* " ++ showStrName ident ++ " to i8*"
-  show (IAlloca addr t Nothing) = show addr ++ " = alloca " ++ show t
-  show (IAlloca addr t (Just addr2)) = show addr ++ " = alloca " ++ show t ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
+  show (IBitcast addr1 addr2) = show addr1 ++ " = bitcast " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to " ++ showAddrType addr1
   show (IStore addr1 addr2) = "store " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
   show (ILoad addr1 addr2) = show addr1 ++ " = load " ++ showAddrType addr1 ++ ", " ++ showAddrType addr1 ++ "* " ++ show addr2
   show (IGetElementPtr addr1 addr2 args) = 
@@ -223,7 +222,8 @@ data CType =
   CInt |
   CBool |
   CVoid |
-  CString |
+  CChar |
+  CString | -- TODO
   CPtr CType |
   CStruct [String] (Map String CType)
 -- TODO
@@ -232,6 +232,15 @@ instance Show CType where
   show CInt = "i32"
   show CBool = "i1"
   show CVoid = "void"
+  show CChar = "i8"
   show CString = "i8*"
   show (CPtr t) = show t ++ "*"
   show (CStruct fieldNames fields) = "{" ++ Data.List.intercalate ", " (map (\name -> show (fields Map.! name)) fieldNames) ++ "}"
+
+getTypeSize :: CType -> Integer
+getTypeSize CInt = 4
+getTypeSize CBool = 1
+getTypeSize CVoid = 0
+getTypeSize CString = 8
+getTypeSize (CPtr _) = 8
+getTypeSize (CStruct _ fields) = sum $ map getTypeSize $ Map.elems fields  -- TODO
