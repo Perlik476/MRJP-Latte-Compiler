@@ -39,7 +39,8 @@ data GenState = GenState {
   getPhiEnv :: Map PhiID Address,
   getVarType :: Map String CType,
   getStringPool :: Map String Integer,
-  getStringPoolCount :: Integer
+  getStringPoolCount :: Integer,
+  getInternalVarIdentCount :: Integer
   -- TODO
 }
 

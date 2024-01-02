@@ -1,15 +1,18 @@
-class A {
-  int x;
-  A a;
+
+int[] makeArray(int n) {
+  printString("test");
+  return new int[n];
 }
 
-A f(A a) {
-  return a;
+void printArray() {
+  for (int x : makeArray(10)) {
+    printInt(x);
+  }
 }
 
-int main () {
-  A a = new A;
-  f(a).x = 1;
-  printInt(a.x);
+int main() {
+
+  printArray();
+
   return 0;
 }

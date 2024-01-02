@@ -41,7 +41,8 @@ compile ast =
     getPhiEnv = Map.empty,
     getVarType = Map.empty,
     getStringPool = Map.empty,
-    getStringPoolCount = 0
+    getStringPoolCount = 0,
+    getInternalVarIdentCount = 0
     -- TODO
   } in do
     result <- runStateT (genProgram ast) initState
@@ -306,9 +307,13 @@ genStmt' (SWhile expr stmt) = do
 genStmt' (SFor t ident expr stmt) = do
   let iterIdent = "iter." ++ ident
   genStmt' (SDecl t iterIdent (AST.ELitInt 0))
-  genStmt' (SWhile (AST.ERel (AST.EVar iterIdent) AST.OLTH (AST.EClassAttr expr "attr.length"))
+  tempArrayIdent <- freshInternalVarIdent "temp.array"
+  genStmt' (SDecl (AST.TArray t) tempArrayIdent expr)
+  tempArrayLength <- freshInternalVarIdent "temp.array.length"
+  genStmt' (SDecl AST.TInt tempArrayLength (AST.EClassAttr (AST.EVar tempArrayIdent) "attr.length"))
+  genStmt' (SWhile (AST.ERel (AST.EVar iterIdent) AST.OLTH (AST.EVar tempArrayLength))
     (AST.SBStmt $ AST.SBlock [
-      AST.SDecl t ident (AST.EArrayElem expr (AST.EVar iterIdent)),
+      AST.SDecl t ident (AST.EArrayElem (AST.EVar tempArrayIdent) (AST.EVar iterIdent)),
       stmt,
       AST.SIncr (AST.EVar iterIdent)
     ])
@@ -720,6 +725,12 @@ freshPhi label t = do
   newReg <- freshReg (getAddrType phi)
   addInstr label $ IPhi' newReg phiId
   return (newReg, phiId)
+
+freshInternalVarIdent :: Ident -> GenM Ident
+freshInternalVarIdent ident = do
+  n <- gets getInternalVarIdentCount
+  modify $ \s -> s { getInternalVarIdentCount = getInternalVarIdentCount s + 1 }
+  return $ ident ++ "." ++ show n
 
 setCurrentLabel :: String -> GenM ()
 setCurrentLabel label = do
