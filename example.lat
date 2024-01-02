@@ -1,15 +1,4 @@
-// Author: Krzysztof Małysa (2020)
-class C {
-  int fld;
-}
-class D {
-  C c;
-}
-
-void tester() {
-  (new D).c.fld++;
-}
-
 int main() {
+  error();
   return 0;
 }

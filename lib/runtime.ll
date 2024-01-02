@@ -57,6 +57,6 @@ define i1 @fun.internal.compareStrings(i8* %str1, i8* %str2) {
 
 define void @fun.error() {
   %r0 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.error, i64 0, i64 0))
-  call void @exit(i32 1)
+  call void @exit(i32 134)
   unreachable
 }

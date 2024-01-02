@@ -17,8 +17,16 @@ files = [f"{d}/{f}" for d in latte_dirs for f in os.listdir(d) if f.endswith(".l
 files = sorted(files)
 for file in tqdm(files):
     result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if result.returncode != 0:
-        print(f"Error processing {file}")
+    if os.path.exists(file.replace(".lat", ".exit_code")):
+        with open(file.replace(".lat", ".exit_code"), "r") as f:
+            exit_code_expected = int(f.read())
+        if result.returncode != exit_code_expected:
+            print(f"Error processing {file}")
+            print(f"Expected exit code: {exit_code_expected}, got: {result.returncode}")
+            errs += 1
+            continue
+    elif result.returncode != 0:
+        print(f"Error processing {file}, expected exit code: 0, got: {result.returncode}")
         errs += 1
     else:
         # if exists file with .input extension, use it as input
