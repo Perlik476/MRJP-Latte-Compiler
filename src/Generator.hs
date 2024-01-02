@@ -707,15 +707,19 @@ genLhs' (EArrayElem expr1 expr2) = do
   return addr''
 genLhs' (EClassAttr expr ident) = do
   addr <- genLhs expr
-  t <- getStructPtrFromClassPtr $ getAddrType addr
+  addr' <- genDereferencePtrIfDoublePtr addr
+  t <- getStructPtrFromClassPtr $ getAddrType addr'
   liftIO $ putStrLn $ "genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
-  addr' <- freshReg $ CPtr t'
-  emitInstr $ IGetElementPtr addr' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
-  return addr'
+  addr'' <- freshReg $ CPtr t'
+  emitInstr $ IGetElementPtr addr'' addr' [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
+  return addr''
 genLhs' (EFunctionCall ident exprs) = genExpr (EFunctionCall ident exprs)
+genLhs' (EArrayNew t expr) = genExpr (EArrayNew t expr)
+genLhs' (ECastNull t) = genExpr (ECastNull t)
+genLhs' (EClassNew ident) = genExpr (EClassNew ident)
 genLhs' expr = error $ "Not an lvalue: " ++ show expr
 
 
