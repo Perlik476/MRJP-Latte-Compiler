@@ -133,9 +133,10 @@ transformStmt' (Abs.SWhile _ expr stmt) = do
 transformStmt' (Abs.SFor _ t ident expr stmt) = do
   let block = getStmtsBlock stmt
   newIdent <- getNewName (fromIIdent ident)
+  env <- gets getEnv
   modify (\s -> s { getEnv = Map.insert (fromIIdent ident) newIdent (getEnv s) })
   tBlock <- transformBlock block
-  modify (\s -> s { getEnv = Map.delete (fromIIdent ident) (getEnv s) })
+  modify (\s -> s { getEnv = env })
   AST.SFor <$> transformType t <*> pure newIdent <*> transformExpr expr <*> pure (AST.SBStmt tBlock)
 transformStmt' (Abs.SExp _ expr) = AST.SExp <$> transformExpr expr
 

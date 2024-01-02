@@ -180,7 +180,8 @@ showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
 
 showStrPool :: (String, Integer) -> String
-showStrPool (str, n) = showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ concatMap encodeChar str ++ "\\00\""
+showStrPool (str, n) = 
+  showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ concatMap encodeChar str ++ "\\00\""
 
 encodeChar :: Char -> String
 encodeChar c = "\\" ++ Numeric.showHex (Data.Char.ord c) ""
