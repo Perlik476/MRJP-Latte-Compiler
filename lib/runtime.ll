@@ -51,7 +51,7 @@ define i8* @fun.internal.concatStrings(i8* %str1, i8* %str2) {
 
 define i1 @fun.internal.compareStrings(i8* %str1, i8* %str2) {
   %r1 = call i32 @_compareStrings(i8* %str1, i8* %str2)
-  %r2 = icmp eq i32 %r1, 0
+  %r2 = icmp eq i32 %r1, 1
   ret i1 %r2
 }
 

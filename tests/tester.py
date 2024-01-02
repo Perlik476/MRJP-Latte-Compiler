@@ -31,8 +31,10 @@ for file in tqdm(files):
             expected = f.read()
         if result.stdout.decode("utf-8") != expected:
             print(f"Error processing {file}")
-            print(f"Expected: {expected}")
-            print(f"Got: {result.stdout.decode('utf-8')}")
+            # print the result of diff on the output and expected
+            output = result.stdout.decode("utf-8")
+            diff = subprocess.run(["diff", "-u", file.replace(".lat", ".output"), "-"], input=output.encode("utf-8"), stdout=subprocess.PIPE)
+            print(diff.stdout.decode("utf-8"))
             errs += 1
     
 print(f"Errors: {errs} out of {len(files)} files")
