@@ -62,7 +62,8 @@ compile ast =
           ] ++
           map showClass (Map.toList cenv) ++
           [""] ++
-          map showStrPool (Map.toList stringPool) ++ ["\n"] ++
+          map showStrPool (Map.toList stringPool) ++ 
+          [""] ++
           map show funs ++
           ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
     return $ unlines lines

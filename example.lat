@@ -1,8 +1,5 @@
 int main() {
   string s = "abc";
-  if (s == "") {
-    s = readString();
-    printString(s);
-  }
+  printString(s);
   return 0 ;
 }

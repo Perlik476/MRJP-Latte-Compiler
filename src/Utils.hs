@@ -17,6 +17,8 @@ import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Reader
 import qualified Data.List
+import qualified Data.Char
+import qualified Numeric
 
 import AST
 
@@ -153,7 +155,7 @@ instance Show Instr where
   show (IComment str) = "; " ++ str
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
-  show (ICall addr name args) = 
+  show (ICall addr name args) =
     show addr ++ " = call " ++ showAddrType addr ++ " @" ++ name ++ "(" ++ Data.List.intercalate ", " (
       map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
   show (IVCall name args) = "call void @" ++ name ++ "(" ++ Data.List.intercalate ", " (
@@ -168,7 +170,7 @@ instance Show Instr where
   show (IBitcast addr1 addr2) = show addr1 ++ " = bitcast " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to " ++ showAddrType addr1
   show (IStore addr1 addr2) = "store " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
   show (ILoad addr1 addr2) = show addr1 ++ " = load " ++ showAddrType addr1 ++ ", " ++ showAddrType addr1 ++ "* " ++ show addr2
-  show (IGetElementPtr addr1 addr2 args) = 
+  show (IGetElementPtr addr1 addr2 args) =
     show addr1 ++ " = getelementptr " ++ show (dereferencedType (getAddrType addr2)) ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2 ++ ", " ++
     Data.List.intercalate ", " (map (\arg -> showAddrType arg ++ " " ++ show arg) args)
     where dereferencedType (CPtr t) = t
@@ -178,7 +180,12 @@ showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
 
 showStrPool :: (String, Integer) -> String
-showStrPool (str, n) = showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ str ++ "\\00\""
+showStrPool (str, n) = showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ concatMap encodeChar str ++ "\\00\""
+
+encodeChar :: Char -> String
+encodeChar c = "\\" ++ Numeric.showHex (Data.Char.ord c) ""
+
+
 
 showClass :: (String, CType) -> String
 showClass (name, t) = "%" ++ name ++ " = type " ++ show t
