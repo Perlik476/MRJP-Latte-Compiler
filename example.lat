@@ -1,15 +1,11 @@
 class A {
-  int x;
+  string s;
+  string s2;
+  string s3;
 }
 
 int main() {
-  A a = new A;
-  a.x = 1;
-  A[] arr = new A[10];
-  arr[0] = a;
-  printInt(arr[0].x);
-  // int[] arr = new int[10];
-  // arr[0] = 1;
-  // printInt(arr[0]);
+  string s;
+  printString(s);
   return 0;
 }

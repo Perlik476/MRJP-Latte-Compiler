@@ -225,13 +225,6 @@ getEvalType EVVoid = CVoid
 getEvalType (EVUndef t) = t
 getEvalType (EVNull t) = t
 
-getDefaultValue :: CType -> Address
-getDefaultValue CInt = AImmediate $ EVInt 0
-getDefaultValue CBool = AImmediate $ EVBool False
-getDefaultValue CVoid = AImmediate EVVoid
-getDefaultValue t@(CPtr _) = AImmediate $ EVNull t
-getDefaultValue t = error $ "Cannot get default value of the type" ++ show t
-
 
 data CType =
   CInt |

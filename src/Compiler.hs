@@ -50,11 +50,11 @@ run v p s =
         llvm_file_content <- compile ast
         liftIO $ putStrLn llvm_file_content
         writeFile "out.ll" llvm_file_content
-        callCommand "clang -S -emit-llvm lib/readline.c -o lib/readline.ll"
-        callCommand "llvm-as lib/readline.ll"
+        callCommand "clang -S -emit-llvm lib/runtime_c.c -o lib/runtime_c.ll"
+        callCommand "llvm-as lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime.ll"
         callCommand "llvm-as out.ll"
-        callCommand "llvm-link out.bc lib/runtime.bc lib/readline.bc -o out.bc"
+        callCommand "llvm-link out.bc lib/runtime.bc lib/runtime_c.bc -o out.bc"
         exitSuccess
       else do
         exitFailure

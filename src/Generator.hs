@@ -483,18 +483,21 @@ genExpr' (ELitInt n) = return $ AImmediate $ EVInt n
 genExpr' ELitTrue = return $ AImmediate $ EVBool True
 genExpr' ELitFalse = return $ AImmediate $ EVBool False
 genExpr' (EString str) = do
-  let strLen = 1 + toInteger (length str)
-  pool <- gets getStringPool
-  case Map.lookup str pool of
-    Just strNum -> do
-      addr <- freshReg CString
-      emitInstr $ IString addr strNum strLen
-      return addr
-    Nothing -> do
-      strNum <- newStringConst str
-      addr <- freshReg CString
-      emitInstr $ IString addr strNum strLen
-      return addr
+  case str of
+    "" -> return $ AImmediate $ EVNull CString
+    _ -> do
+      let strLen = 1 + toInteger (length str)
+      pool <- gets getStringPool
+      case Map.lookup str pool of
+        Just strNum -> do
+          addr <- freshReg CString
+          emitInstr $ IString addr strNum strLen
+          return addr
+        Nothing -> do
+          strNum <- newStringConst str
+          addr <- freshReg CString
+          emitInstr $ IString addr strNum strLen
+          return addr
 genExpr' (EVar ident) = do
   label <- getLabel
   readVar ident label
@@ -523,7 +526,7 @@ genExpr' (EArrayNew t expr) = do
   let (CStruct _ fields) = ct'
   let ct = fields Map.! "attr.data"
   addr' <- freshReg CInt
-  emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize CInt)
+  emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize ct)
   addr'' <- genAllocate ct addr'
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do

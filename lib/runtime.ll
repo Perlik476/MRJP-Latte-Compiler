@@ -7,7 +7,6 @@
 
 declare i32 @printf(i8*, ...) 
 declare i32 @scanf(i8*, ...)
-declare i32 @puts(i8*)
 declare i8* @gets(i8*)
 declare void @exit(i32)
 declare i8* @malloc(i32)
@@ -15,7 +14,10 @@ declare i32 @strlen(i8*)
 declare i8* @strcpy(i8*, i8*)
 declare i8* @strcat(i8*, i8*)
 declare i32 @strcmp(i8*, i8*)
-declare i8* @readline()
+declare i32 @_printString(i8*)
+declare i8* @_readString()
+declare i32 @_compareStrings(i8*, i8*)
+declare i8* @_concatStrings(i8*, i8*)
 
 
 define void @fun.printInt(i32 %x) {
@@ -33,30 +35,24 @@ define i32 @fun.readInt() {
 }
 
 define void @fun.printString(i8* %str) {
-  call i32 @puts(i8* %str)
+  call i32 @_printString(i8* %str)
 	ret void
 }
 
 define i8* @fun.readString() {
-  %r1 = call i8* @readline()
+  %r1 = call i8* @_readString()
   ret i8* %r1
 }
 
 define i8* @fun.internal.concatStrings(i8* %str1, i8* %str2) {
-  %r1 = call i32 @strlen(i8* %str1)
-  %r2 = call i32 @strlen(i8* %str2)
-  %r3 = add i32 %r1, 1
-  %r4 = add i32 %r3, %r2
-  %r5 = call i8* @malloc(i32 %r4)
-  %r6 = call i8* @strcpy(i8* %r5, i8* %str1)
-  %r7 = call i8* @strcat(i8* %r6, i8* %str2)
-  ret i8* %r7
+  %r1 = call i8* @_concatStrings(i8* %str1, i8* %str2)
+  ret i8* %r1
 }
 
 define i1 @fun.internal.compareStrings(i8* %str1, i8* %str2) {
-  %1 = call i32 @strcmp(i8* %str1, i8* %str2)
-  %2 = icmp eq i32 %1, 0
-  ret i1 %2
+  %r1 = call i32 @_compareStrings(i8* %str1, i8* %str2)
+  %r2 = icmp eq i32 %r1, 0
+  ret i1 %r2
 }
 
 define void @fun.error() {
