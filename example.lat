@@ -1,18 +1,13 @@
-
-int[] makeArray(int n) {
-  printString("test");
-  return new int[n];
-}
-
-void printArray() {
-  for (int x : makeArray(10)) {
-    printInt(x);
-  }
+class A {
+  int[] arr;
 }
 
 int main() {
-
-  printArray();
-
+  A a = new A;
+  a.arr = new int[10];
+  // int[] arr = a.arr;
+  // arr[0] = 1;
+  a.arr[0] = 1;
+  printInt(a.arr[0]);
   return 0;
 }

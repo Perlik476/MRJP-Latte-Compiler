@@ -523,10 +523,10 @@ genExpr' (EArrayNew t expr) = do
   addr'' <- genAllocate (CPtr ct) addr'
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do
+  liftIO $ putStrLn "genExpr EArrayElem"
   addr1 <- genExpr expr1
   addr2 <- genExpr expr2
   t <- getStructPtrFromClassPtr $ getAddrType addr1
-  liftIO $ putStrLn "genExpr EArrayElem"
   let (CPtr (CStruct _ fields)) = t
   let t' = CPtr $ fields Map.! "attr.data"
   addr <- freshReg t'
@@ -573,6 +573,20 @@ getStructPtrFromClassPtr (CPtr (CClass ident)) = do
   return $ CPtr $ cenv Map.! ident
 getStructPtrFromClassPtr t@(CPtr (CStruct _ _)) = pure t
 getStructPtrFromClassPtr t = error $ "Cannot get class from type " ++ show t
+
+genDereferencePtrIfDoublePtr :: Address -> GenM Address
+genDereferencePtrIfDoublePtr addr = do
+  let (CPtr t) = getAddrType addr
+  case t of
+    CPtr _ -> genDereferencePtr addr
+    _ -> return addr
+
+genDereferencePtr :: Address -> GenM Address
+genDereferencePtr addr = do
+  let (CPtr t) = getAddrType addr
+  addr' <- freshReg t
+  emitInstr $ ILoad addr' addr
+  return addr'
 
 genAllocate :: CType -> Address -> GenM Address
 genAllocate t sizeAddr = do
@@ -672,13 +686,14 @@ genLhs' (EVar ident) = do
 genLhs' (EArrayElem expr1 expr2) = do
   addr1 <- genLhs expr1
   addr2 <- genExpr expr2
-  t <- getStructPtrFromClassPtr $ getAddrType addr1
+  addr1' <- genDereferencePtrIfDoublePtr addr1
+  t <- getStructPtrFromClassPtr $ getAddrType addr1'
   liftIO $ putStrLn "genLhs EArrayElem"
   liftIO $ print t
   let (CPtr (CStruct _ fields)) = t
   let t' = fields Map.! "attr.data"
   addr <- freshReg t'
-  emitInstr $ IGetElementPtr addr addr1 [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
+  emitInstr $ IGetElementPtr addr addr1' [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
   let (CPtr t'') = t'
   addr' <- freshReg t'  -- TODO ?
   emitInstr $ ILoad addr' addr
