@@ -559,12 +559,7 @@ genExpr' (EClassNew ident) = do
   cenv <- gets getCEnv
   let classType@(CStruct fieldNames fields) = cenv Map.! ident
   let t = CPtr $ CClass ident
-  addrs <- mapM (\name -> do
-    let t = fields Map.! name
-    let addr = getDefaultValue t
-    return (name, addr)
-    ) fieldNames
-  genStruct t fieldNames $ Map.fromList addrs
+  genStruct t fieldNames $ Map.empty
 
 
 getStructPtrFromClassPtr :: CType -> GenM CType
@@ -603,11 +598,13 @@ genStruct t fieldNames fields = do
   -- assuming t is a pointer type
   addr <- genAllocate t (AImmediate $ EVInt $ getTypeSize t)
   mapM_ (\(name, n) -> do
-    let addr' = fields Map.! name
-    let t' = getAddrType addr'
-    addr'' <- freshReg (CPtr t')
-    emitInstr $ IGetElementPtr addr'' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger n]
-    emitInstr $ IStore addr' addr''
+    case Map.lookup name fields of
+      Just addr' -> do
+        let t' = getAddrType addr'
+        addr'' <- freshReg (CPtr t')
+        emitInstr $ IGetElementPtr addr'' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger n]
+        emitInstr $ IStore addr' addr''
+      Nothing -> return ()
     ) (fieldNames `zip` [0..])
   return addr
 
