@@ -457,7 +457,10 @@ toCompType TVoid = pure CVoid
 toCompType TStr = pure CString
 toCompType (TArray t) = do
   ct <- toCompType t
-  return $ CStruct ["attr.length", "attr.data"] $ Map.fromList [("attr.length", CInt), ("attr.data", CPtr ct)]
+  let ct' = case ct of
+        CClass _ -> CPtr ct
+        _ -> ct
+  return $ CStruct ["attr.length", "attr.data"] $ Map.fromList [("attr.length", CInt), ("attr.data", CPtr ct')]
 toCompType (TClass ident) = pure (CClass ident)
 
 
@@ -515,12 +518,13 @@ genExpr' expr@(EOr _ _) = genBoolExpr True expr
 genExpr' (ECastNull t) = AImmediate . EVNull . CPtr <$> toCompType t
 genExpr' (EArrayNew t expr) = do
   addr <- genExpr expr
-  ct <- toCompType t
   let t' = TArray t
   ct' <- toCompType t'
+  let (CStruct _ fields) = ct'
+  let ct = fields Map.! "attr.data"
   addr' <- freshReg CInt
   emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize CInt)
-  addr'' <- genAllocate (CPtr ct) addr'
+  addr'' <- genAllocate ct addr'
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do
   liftIO $ putStrLn "genExpr EArrayElem"
