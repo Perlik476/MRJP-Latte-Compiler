@@ -50,7 +50,7 @@ compile ast =
     let stringPool = getStringPool $ snd result
     let cenv = getCEnv $ snd result
     let lines = [
-          "declare i8* @malloc(i32)",
+          "declare i8* @calloc(i32, i32)",
           "declare void @fun.printInt(i32)",
           "declare i32 @fun.readInt()",
           "declare void @fun.printString(i8*)",
@@ -437,7 +437,7 @@ emitIfThenElseBlocks expr thenLabel elseLabel = do
 
 getVarName :: Expr -> String
 getVarName (EVar ident) = ident
-getVarName _ = error "Not a variable"
+getVarName expr = error $ "Not a variable " ++ show expr
 
 toCompTypeClass :: Type -> GenM CType
 toCompTypeClass TInt = pure CInt
@@ -592,7 +592,7 @@ genAllocate :: CType -> Address -> GenM Address
 genAllocate t sizeAddr = do
   -- assuming t is a pointer type
   addr <- freshReg (CPtr CChar)
-  emitInstr $ ICall addr "malloc" [sizeAddr]
+  emitInstr $ ICall addr "calloc" [AImmediate $ EVInt 1, sizeAddr]
   -- TODO
   addr' <- freshReg t
   emitInstr $ IBitcast addr' addr

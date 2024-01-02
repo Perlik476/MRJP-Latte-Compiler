@@ -1,13 +1,7 @@
-class A {
-  int[] arr;
-}
-
 int main() {
-  A a = new A;
-  a.arr = new int[10];
-  // int[] arr = a.arr;
-  // arr[0] = 1;
-  a.arr[0] = 1;
-  printInt(a.arr[0]);
+  int[] arr = new int[10];
+  for (int x : arr) {
+    printInt(x);
+  }
   return 0;
 }
