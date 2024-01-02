@@ -1,11 +1,9 @@
-class A {
-  string s;
-  string s2;
-  string s3;
-}
-
 int main() {
-  string s;
-  printString(s);
-  return 0;
+  int i = 78;
+  if (i > 4) {
+    int i = 4;
+    printInt(i);
+  }
+  printInt(i);
+  return 0 ;
 }

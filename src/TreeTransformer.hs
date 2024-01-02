@@ -104,26 +104,44 @@ transformStmt' (Abs.SVRet _) = pure AST.SVRet
 transformStmt' (Abs.SCond _ expr stmt) = do
   tExpr <- transformExpr expr
   case tExpr of
-    AST.ELitTrue -> transformStmt' stmt
+    AST.ELitTrue -> transformBlock (getStmtsBlock stmt) >>= return . AST.SBStmt
     AST.ELitFalse -> return AST.SEmpty
-    _ -> AST.SCond tExpr <$> transformStmt' stmt
+    _ -> do
+      let block = getStmtsBlock stmt
+      tBlock <- transformBlock block
+      return $ AST.SCond tExpr (AST.SBStmt tBlock)
+      
 transformStmt' (Abs.SCondElse _ expr stmt1 stmt2) = do
   tExpr <- transformExpr expr
   case tExpr of
-    AST.ELitTrue -> transformStmt' stmt1
-    AST.ELitFalse -> transformStmt' stmt2
-    _ -> AST.SCondElse tExpr <$> transformStmt' stmt1 <*> transformStmt' stmt2
+    AST.ELitTrue -> transformBlock (getStmtsBlock stmt1) >>= return . AST.SBStmt
+    AST.ELitFalse -> transformBlock (getStmtsBlock stmt2) >>= return . AST.SBStmt
+    _ -> do
+      let block1 = getStmtsBlock stmt1
+      let block2 = getStmtsBlock stmt2
+      tBlock1 <- transformBlock block1
+      tBlock2 <- transformBlock block2
+      return $ AST.SCondElse tExpr (AST.SBStmt tBlock1) (AST.SBStmt tBlock2)
 transformStmt' (Abs.SWhile _ expr stmt) = do
   tExpr <- transformExpr expr
   case tExpr of
-    AST.ELitTrue -> AST.SWhile tExpr <$> transformStmt' stmt
     AST.ELitFalse -> return AST.SEmpty
-    _ -> AST.SWhile tExpr <$> transformStmt' stmt
+    _ -> do
+      let block = getStmtsBlock stmt
+      tBlock <- transformBlock block
+      return $ AST.SWhile tExpr (AST.SBStmt tBlock)
 transformStmt' (Abs.SFor _ t ident expr stmt) = do
+  let block = getStmtsBlock stmt
   newIdent <- getNewName (fromIIdent ident)
   modify (\s -> s { getEnv = Map.insert (fromIIdent ident) newIdent (getEnv s) })
-  AST.SFor <$> transformType t <*> pure newIdent <*> transformExpr expr <*> transformStmt' stmt
+  tBlock <- transformBlock block
+  modify (\s -> s { getEnv = Map.delete (fromIIdent ident) (getEnv s) })
+  AST.SFor <$> transformType t <*> pure newIdent <*> transformExpr expr <*> pure (AST.SBStmt tBlock)
 transformStmt' (Abs.SExp _ expr) = AST.SExp <$> transformExpr expr
+
+getStmtsBlock :: Abs.Stmt -> Abs.Block
+getStmtsBlock (Abs.SBStmt _ block) = block 
+getStmtsBlock stmt = Abs.SBlock undefined [stmt]
 
 transformStmts :: [Abs.Stmt] -> TM [AST.Stmt]
 transformStmts (Abs.SDecl _ t (item:items):stmts) = 

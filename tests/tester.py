@@ -5,11 +5,10 @@ from tqdm import tqdm
 
 test_latte = "./latc_llvm"
 latte_dirs = [
-    "tests/lattests/good",
-    "tests/lattests/extensions/arrays1",
-    "tests/lattests/extensions/struct",
-    # "tests/mrjp-tests-good/good",
-    # "tests/mrjp-tests-benek/gr5"
+    # "tests/lattests/good",
+    # "tests/lattests/extensions/arrays1",
+    # "tests/lattests/extensions/struct",
+    "tests/mrjp-tests-good/good",
 ]
 
 errs = 0
