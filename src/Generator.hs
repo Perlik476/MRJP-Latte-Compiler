@@ -161,7 +161,7 @@ translatePhis'' instrs = do
   phiInstrs' <- mapM (\instr -> case instr of
     IPhi' reg phiId -> do
       phi <- gets $ (Map.! phiId) . getPhiEnv
-      let (APhi _ _ operands) = phi
+      let operands = getPhiOperands phi
       return $ IPhi reg operands
     _ -> return instr
     ) phiInstrs
@@ -241,8 +241,6 @@ genStmt' (SAss expr1 expr2) = do
         let ident = getVarName expr1
         addVarAddr ident addr2
       liftIO $ putStrLn $ "Assignment: " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
-    APhi {} -> error "Cannot assign to phi"
-    -- TODO
   return ()
 genStmt' (SIncr expr) = genStmt' (SAss expr (EOp expr OPlus (ELitInt 1)))
 genStmt' (SDecr expr) = genStmt' (SAss expr (EOp expr OMinus (ELitInt 1)))
@@ -637,7 +635,7 @@ genBoolExpr b expr = do
   setCurrentLabel labelEnd
 
   (addr, phiId) <- freshPhi labelEnd CBool
-  let phi = APhi phiId CBool [(labelTrue, AImmediate $ EVBool b), (labelFalse, AImmediate $ EVBool $ not b)]
+  let phi = Phi phiId CBool [(labelTrue, AImmediate $ EVBool b), (labelFalse, AImmediate $ EVBool $ not b)]
   modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
 
   return addr
@@ -744,9 +742,9 @@ freshPhi label t = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   modify $ \s -> s { getPhiCount = getPhiCount s + 1 }
   phiId <- gets getPhiCount
-  let phi = APhi phiId t []
+  let phi = Phi phiId t []
   modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
-  newReg <- freshReg (getAddrType phi)
+  newReg <- freshReg (getPhiType phi)
   addInstr label $ IPhi' newReg phiId
   return (newReg, phiId)
 
@@ -842,8 +840,8 @@ addPhiOperands ident phiId label = do
     return (pred, addr')
     ) preds
   phi <- gets $ (Map.! phiId) . getPhiEnv
-  let (APhi phiId t oldOperands) = phi
-  let newPhi = APhi phiId t $ oldOperands ++ newOperands
+  let oldOperands = getPhiOperands phi
+  let newPhi = phi { getPhiOperands = oldOperands ++ newOperands }
   modify $ \s -> s { getPhiEnv = Map.insert phiId newPhi (getPhiEnv s) }
 
 sealBlock :: Label -> GenM ()

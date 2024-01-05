@@ -38,12 +38,11 @@ data GenState = GenState {
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
-  getPhiEnv :: Map PhiID Address,
+  getPhiEnv :: Map PhiID Phi,
   getVarType :: Map String CType,
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
   getInternalVarIdentCount :: Integer
-  -- TODO
 }
 
 
@@ -194,24 +193,25 @@ showClass (name, t) = "%" ++ name ++ " = type " ++ show t
 
 data Address =
   AImmediate EVal |
-  ARegister Integer CType |
-  APhi PhiID CType [(Label, Address)]
--- TODO
+  ARegister Integer CType
 instance Show Address where
   show (AImmediate val) = show val
   show (ARegister n _) = "%r" ++ show n
-  show (APhi _ t vals) = error "Phi should not be used in this context"
-  -- TODO
 
 getAddrType :: Address -> CType
 getAddrType (AImmediate val) = getEvalType val
 getAddrType (ARegister _ t) = t
-getAddrType (APhi _ t _) = t
 
 
 showAddrType :: Address -> String
 showAddrType = show . getAddrType
--- TODO
+
+data Phi = Phi {
+  getPhiId :: PhiID,
+  getPhiType :: CType,
+  getPhiOperands :: [(Label, Address)]
+} deriving (Show)
+
 
 data EVal =
   EVUndef CType |
