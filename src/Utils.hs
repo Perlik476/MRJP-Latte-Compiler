@@ -38,7 +38,7 @@ data GenState = GenState {
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
-  getPhiEnv :: Map PhiID Phi,
+  getPhiEnv :: Map PhiID Label,
   getVarType :: Map String CType,
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
@@ -119,17 +119,22 @@ data FunType = FunType {
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,
   getBlockInstrs :: [Instr],
+  getBlockPhis :: Map PhiID Phi,
   getBlockTerminator :: Maybe Instr,
   getBlockPredecessors :: [Label],
   getPhis :: Map Integer Address
 }
 instance Show BasicBlock where
-  show (BasicBlock label instrs (Just terminator) preds _) =
-    label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) (instrs ++ [terminator]))
-  show (BasicBlock label instrs Nothing preds _) =
-    label ++ ":  ; ERROR preds: " ++ Data.List.intercalate ", " preds ++ "\n" ++ unlines (map (("  " ++) . show) instrs)
-nothingBlock :: BasicBlock
-nothingBlock = BasicBlock "" [] Nothing [] Map.empty
+  show (BasicBlock label instrs phis (Just terminator) preds _) =
+    label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
+    ++ "\n ; phis: len = " ++ show (length phis) ++ "\n"
+    ++ unlines (map (("  " ++) . show) $ Map.elems phis)
+    ++ "\n ; instrs:\n"
+    ++ unlines (map (("  " ++) . show) instrs)
+    ++ "  " ++ show terminator
+  show (BasicBlock {}) = error "BasicBlock without terminator"
+newBlock :: Label -> BasicBlock
+newBlock label = BasicBlock label [] Map.empty Nothing [] Map.empty
 
 type Label = String
 
@@ -143,8 +148,6 @@ data Instr =
   IVRet |
   IJmp Label |
   IBr Address Label Label |
-  IPhi' Address PhiID |
-  IPhi Address [(Label, Address)] |
   IString Address Integer Integer |
   IBitcast Address Address |
   IStore Address Address |
@@ -163,8 +166,6 @@ instance Show Instr where
   show IVRet = "ret void"
   show (IJmp label) = "br label %" ++ label
   show (IBr addr label1 label2) = "br i1 " ++ show addr ++ ", label %" ++ label1 ++ ", label %" ++ label2
-  show (IPhi' addr phiId) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ show phiId
-  show (IPhi addr vals) = show addr ++ " = phi " ++ showAddrType addr ++ " " ++ Data.List.intercalate ", " (map (\(label, addr) -> "[" ++ show addr ++ ", %" ++ label ++ "]") vals)
   show (IString addr ident len) = show addr ++ " = bitcast [" ++ show len ++ " x i8]* " ++ showStrName ident ++ " to i8*"
   show (IBitcast addr1 addr2) = show addr1 ++ " = bitcast " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to " ++ showAddrType addr1
   show (IStore addr1 addr2) = "store " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ showAddrType addr2 ++ " " ++ show addr2
@@ -207,11 +208,13 @@ showAddrType :: Address -> String
 showAddrType = show . getAddrType
 
 data Phi = Phi {
+  getPhiAddr :: Address,
   getPhiId :: PhiID,
   getPhiType :: CType,
   getPhiOperands :: [(Label, Address)]
-} deriving (Show)
-
+}
+instance Show Phi where
+  show (Phi addr id t vals) = show addr ++ " = phi " ++ show t ++ " " ++ Data.List.intercalate ", " (map (\(label, addr) -> "[" ++ show addr ++ ", %" ++ label ++ "]") vals)
 
 data EVal =
   EVUndef CType |

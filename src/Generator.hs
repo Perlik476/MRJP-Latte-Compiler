@@ -69,12 +69,6 @@ compile ast =
     return $ unlines lines
 
 
-isPhiInstr :: Instr -> Bool
-isPhiInstr (IPhi' _ _) = True
-isPhiInstr (IPhi _ _) = True
-isPhiInstr _ = False
-
-
 
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
@@ -83,8 +77,7 @@ genProgram (PProgram topDefs) = do
   mapM_ addFunToFEnv topDefs
   mapM_ genTopDef topDefs
   funs <- gets getFunctions
-  funs' <- mapM translatePhis funs
-  modify $ \s -> s { getFunctions = funs' }
+  modify $ \s -> s { getFunctions = funs }
 
 
 addStdLib :: GenM ()
@@ -142,31 +135,6 @@ addFunToFEnv (PFunDef t ident args block) = do
     getCurrentFunLabels = []
   }
 addFunToFEnv _ = pure ()
-
-translatePhis :: FunBlock -> GenM FunBlock
-translatePhis fun = do
-  blocks <- mapM translatePhis' $ getFunBlocks fun
-  return $ fun { getFunBlocks = blocks }
-
-translatePhis' :: BasicBlock -> GenM BasicBlock
-translatePhis' blocks = do
-  let instrs = getBlockInstrs blocks
-  instrs' <- translatePhis'' instrs
-  return $ blocks { getBlockInstrs = instrs' }
-
-translatePhis'' :: [Instr] -> GenM [Instr]
-translatePhis'' instrs = do
-  let phiInstrs = filter isPhiInstr instrs
-  let instrs' = filter (not . isPhiInstr) instrs
-  phiInstrs' <- mapM (\instr -> case instr of
-    IPhi' reg phiId -> do
-      phi <- gets $ (Map.! phiId) . getPhiEnv
-      let operands = getPhiOperands phi
-      return $ IPhi reg operands
-    _ -> return instr
-    ) phiInstrs
-  -- TODO remove trivial phis
-  return $ phiInstrs' ++ instrs'
 
 genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
@@ -634,11 +602,11 @@ genBoolExpr b expr = do
   sealBlock labelEnd
   setCurrentLabel labelEnd
 
-  (addr, phiId) <- freshPhi labelEnd CBool
-  let phi = Phi phiId CBool [(labelTrue, AImmediate $ EVBool b), (labelFalse, AImmediate $ EVBool $ not b)]
-  modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
-
-  return addr
+  phi <- freshPhi labelEnd CBool
+  let phi' = phi { getPhiOperands = [(labelTrue, AImmediate $ EVBool b), (labelFalse, AImmediate $ EVBool $ not b)] }
+  labelEndBlock <- gets $ (Map.! labelEnd) . getBasicBlockEnv
+  updateBlockPhi labelEnd (getPhiId phi) phi'
+  return $ getPhiAddr phi
 
 
 genBinOp :: ArithOp -> Expr -> Expr -> GenM Address
@@ -732,21 +700,28 @@ freshLabel = do
   modify $ \s -> s { getLabelCount = getLabelCount s + 1 }
   label <- gets $ idToLabel . getLabelCount
   modify $ \s -> s {
-    getBasicBlockEnv = Map.insert label (BasicBlock label [] Nothing [] Map.empty) (getBasicBlockEnv s),
+    getBasicBlockEnv = Map.insert label (newBlock label) (getBasicBlockEnv s),
     getCurrentFunLabels = label : getCurrentFunLabels s
   }
   return label
 
-freshPhi :: Label -> CType -> GenM (Address, PhiID)
+freshPhi :: Label -> CType -> GenM Phi
 freshPhi label t = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   modify $ \s -> s { getPhiCount = getPhiCount s + 1 }
   phiId <- gets getPhiCount
-  let phi = Phi phiId t []
-  modify $ \s -> s { getPhiEnv = Map.insert phiId phi (getPhiEnv s) }
-  newReg <- freshReg (getPhiType phi)
-  addInstr label $ IPhi' newReg phiId
-  return (newReg, phiId)
+  newReg <- freshReg t
+  let phi = Phi newReg phiId t []
+  modify $ \s -> s { getPhiEnv = Map.insert phiId label (getPhiEnv s) }
+  updateBlockPhi label phiId phi
+  return phi
+
+updateBlockPhi :: Label -> PhiID -> Phi -> GenM ()
+updateBlockPhi label phiId phi = do
+  block <- gets $ (Map.! label) . getBasicBlockEnv
+  modify $ \s -> s { 
+    getBasicBlockEnv = Map.insert label (block { getBlockPhis = Map.insert phiId phi (getBlockPhis block) }) (getBasicBlockEnv s) 
+  }
 
 freshInternalVarIdent :: Ident -> GenM Ident
 freshInternalVarIdent ident = do
@@ -803,11 +778,11 @@ readVarRec ident label = do
   addr <- if label `notElem` sealedBlocks then do
         liftIO $ putStrLn $ "Block " ++ label ++ " not sealed"
         t <- gets $ (Map.! ident) . getVarType
-        (addr', phiId) <- freshPhi label t
+        phi <- freshPhi label t
         modify $ \s -> s {
-          getIncompletePhis = Map.insert label (Map.insert ident phiId (Map.findWithDefault Map.empty label (getIncompletePhis s))) (getIncompletePhis s)
+          getIncompletePhis = Map.insert label (Map.insert ident (getPhiId phi) (Map.findWithDefault Map.empty label (getIncompletePhis s))) (getIncompletePhis s)
         }
-        return addr'
+        return $ getPhiAddr phi
       else do
         b <- hasOnePred label
         if b then do
@@ -822,11 +797,11 @@ readVarRec ident label = do
         else do
           liftIO $ putStrLn $ "Block " ++ label ++ " sealed and has more than one predecessor"
           t <- gets $ (Map.! ident) . getVarType
-          (addr', phiId) <- freshPhi label t
-          liftIO $ putStrLn $ "Created phi " ++ show phiId ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show addr'
-          writeVar ident label addr'
-          addPhiOperands ident phiId label
-          return addr'
+          phi <- freshPhi label t
+          liftIO $ putStrLn $ "Created phi " ++ show (getPhiId phi) ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show (getPhiAddr phi)
+          writeVar ident label (getPhiAddr phi)
+          addPhiOperands ident (getPhiId phi) label
+          return $ getPhiAddr phi
   writeVar ident label addr
   return addr
 
@@ -839,10 +814,10 @@ addPhiOperands ident phiId label = do
     addr' <- readVar ident pred
     return (pred, addr')
     ) preds
-  phi <- gets $ (Map.! phiId) . getPhiEnv
+  let phi = getBlockPhis block Map.! phiId
   let oldOperands = getPhiOperands phi
   let newPhi = phi { getPhiOperands = oldOperands ++ newOperands }
-  modify $ \s -> s { getPhiEnv = Map.insert phiId newPhi (getPhiEnv s) }
+  updateBlockPhi label phiId newPhi
 
 sealBlock :: Label -> GenM ()
 sealBlock label = do

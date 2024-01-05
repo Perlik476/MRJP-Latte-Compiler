@@ -46,5 +46,7 @@ for file in tqdm(files):
             errs += 1
     
 print(f"Errors: {errs} out of {len(files)} files")
-
-print("All files processed successfully")
+max_errors = 74
+if errs > max_errors:
+    print(f"Too many errors, max: {max_errors}")
+    exit(1)
