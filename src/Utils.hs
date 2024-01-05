@@ -38,11 +38,14 @@ data GenState = GenState {
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
-  getPhiEnv :: Map PhiID Label,
+  getPhiToLabel :: Map PhiID Label,
+  getAddrToPhi :: Map Address PhiID,
   getVarType :: Map String CType,
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
-  getInternalVarIdentCount :: Integer
+  getInternalVarIdentCount :: Integer,
+  getAddrUses :: Map Address [(Label, Integer)],
+  getAddrPhiUses :: Map Address [(Label, PhiID)]
 }
 
 
@@ -56,16 +59,99 @@ getCurrentBasicBlock = do
 getLabel :: GenM Label
 getLabel = gets getCurrentLabel
 
+getPhi :: PhiID -> GenM Phi
+getPhi phiId = do
+  label <- gets $ (Map.! phiId) . getPhiToLabel
+  block <- gets $ (Map.! label) . getBasicBlockEnv
+  return $ (Map.! phiId) $ getBlockPhis block
+
 getInstrs :: GenM [Instr]
-getInstrs = getCurrentBasicBlock >>= return . getBlockInstrs
+getInstrs = getCurrentBasicBlock >>= return . Map.elems . getBlockInstrs
 
 addInstr :: Label -> Instr -> GenM ()
 addInstr label instr = do
+  liftIO $ putStrLn $ "Adding instruction " ++ show instr ++ " to block " ++ label
   blockEnv <- gets getBasicBlockEnv
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
-  modify $ \s -> s { getBasicBlockEnv = Map.insert label (block { getBlockInstrs = instrs ++ [instr] }) blockEnv }
+  let instrsCount = getBlockInstrsCount block
+  addInstrAddrUses label instr
+  modify $ \s -> s { 
+    getBasicBlockEnv = Map.insert label (block { 
+      getBlockInstrs = Map.insert instrsCount instr instrs,
+      getBlockInstrsCount = instrsCount + 1
+    }) blockEnv
+  }
   liftIO $ putStrLn $ "Added instruction " ++ show instr ++ " to block " ++ label
+
+addInstrAddrUses :: Label -> Instr -> GenM ()
+addInstrAddrUses label (IComment _) = return ()
+addInstrAddrUses label (IBinOp addr addr1 _ addr2) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+  addAddrUse label addr
+addInstrAddrUses label (IRelOp addr addr1 _ addr2) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+  addAddrUse label addr
+addInstrAddrUses label (ICall addr _ args) = do
+  addAddrUse label addr
+  mapM_ (addAddrUse label) args
+addInstrAddrUses label (IVCall _ args) = mapM_ (addAddrUse label) args
+addInstrAddrUses label (IRet addr) = addAddrUse label addr
+addInstrAddrUses label IVRet = return ()
+addInstrAddrUses label (IJmp _) = return ()
+addInstrAddrUses label (IBr addr _ _) = addAddrUse label addr
+addInstrAddrUses label (IString addr _ _) = addAddrUse label addr
+addInstrAddrUses label (IBitcast addr1 addr2) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+addInstrAddrUses label (IStore addr1 addr2) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+addInstrAddrUses label (ILoad addr1 addr2) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+addInstrAddrUses label (IGetElementPtr addr1 addr2 args) = do
+  addAddrUse label addr1
+  addAddrUse label addr2
+  mapM_ (addAddrUse label) args
+
+addAddrUse :: Label -> Address -> GenM ()
+addAddrUse label addr = do
+  uses <- gets $ Map.findWithDefault [] addr . getAddrUses
+  modify $ \s -> s { 
+    getAddrUses = Map.insert addr ((label, getBlockInstrsCount $ (Map.! label) $ getBasicBlockEnv s) : uses) (getAddrUses s) 
+  }
+
+replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr
+replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) = 
+  IBinOp addr (replaceAddrByAddr oldAddr newAddr addr1) op (replaceAddrByAddr oldAddr newAddr addr2)
+replaceAddrByAddrInInstr oldAddr newAddr (IRelOp addr addr1 op addr2) =
+  IRelOp addr (replaceAddrByAddr oldAddr newAddr addr1) op (replaceAddrByAddr oldAddr newAddr addr2)
+replaceAddrByAddrInInstr oldAddr newAddr (ICall addr name args) =
+  ICall addr name (map (replaceAddrByAddr oldAddr newAddr) args)
+replaceAddrByAddrInInstr oldAddr newAddr (IVCall name args) =
+  IVCall name (map (replaceAddrByAddr oldAddr newAddr) args)
+replaceAddrByAddrInInstr oldAddr newAddr (IRet addr) =
+  IRet (replaceAddrByAddr oldAddr newAddr addr)
+replaceAddrByAddrInInstr oldAddr newAddr (IJmp label) = IJmp label
+replaceAddrByAddrInInstr oldAddr newAddr (IBr addr label1 label2) =
+  IBr (replaceAddrByAddr oldAddr newAddr addr) label1 label2
+replaceAddrByAddrInInstr oldAddr newAddr (IString addr ident len) =
+  IString (replaceAddrByAddr oldAddr newAddr addr) ident len
+replaceAddrByAddrInInstr oldAddr newAddr (IBitcast addr1 addr2) =
+  IBitcast addr1 (replaceAddrByAddr oldAddr newAddr addr2)
+replaceAddrByAddrInInstr oldAddr newAddr (IStore addr1 addr2) =
+  IStore (replaceAddrByAddr oldAddr newAddr addr1) (replaceAddrByAddr oldAddr newAddr addr2)
+replaceAddrByAddrInInstr oldAddr newAddr (ILoad addr1 addr2) =
+  ILoad addr1 (replaceAddrByAddr oldAddr newAddr addr2)
+replaceAddrByAddrInInstr oldAddr newAddr (IGetElementPtr addr1 addr2 args) =
+  IGetElementPtr addr1 (replaceAddrByAddr oldAddr newAddr addr2) (map (replaceAddrByAddr oldAddr newAddr) args)
+
+replaceAddrByAddr :: Address -> Address -> Address -> Address
+replaceAddrByAddr oldAddr newAddr addr = if addr == oldAddr then newAddr else addr
+
 
 getTerminator :: GenM (Maybe Instr)
 getTerminator = getCurrentBasicBlock >>= return . getBlockTerminator
@@ -118,23 +204,22 @@ data FunType = FunType {
 
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,
-  getBlockInstrs :: [Instr],
+  getBlockInstrs :: Map Integer Instr,
+  getBlockInstrsCount :: Integer,
   getBlockPhis :: Map PhiID Phi,
   getBlockTerminator :: Maybe Instr,
   getBlockPredecessors :: [Label],
   getPhis :: Map Integer Address
 }
 instance Show BasicBlock where
-  show (BasicBlock label instrs phis (Just terminator) preds _) =
+  show (BasicBlock label instrs _ phis (Just terminator) preds _) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
-    ++ "\n ; phis: len = " ++ show (length phis) ++ "\n"
-    ++ unlines (map (("  " ++) . show) $ Map.elems phis)
-    ++ "\n ; instrs:\n"
-    ++ unlines (map (("  " ++) . show) instrs)
+    ++ unlines (map (("  " ++) . show) $ Map.elems phis) ++ "\n"
+    ++ unlines (map (("  " ++) . show) $ Map.elems instrs)
     ++ "  " ++ show terminator
   show (BasicBlock {}) = error "BasicBlock without terminator"
 newBlock :: Label -> BasicBlock
-newBlock label = BasicBlock label [] Map.empty Nothing [] Map.empty
+newBlock label = BasicBlock label Map.empty 0 Map.empty Nothing [] Map.empty
 
 type Label = String
 
@@ -195,6 +280,7 @@ showClass (name, t) = "%" ++ name ++ " = type " ++ show t
 data Address =
   AImmediate EVal |
   ARegister Integer CType
+  deriving (Eq, Ord)
 instance Show Address where
   show (AImmediate val) = show val
   show (ARegister n _) = "%r" ++ show n
@@ -222,6 +308,7 @@ data EVal =
   EVInt Integer |
   EVBool Bool |
   EVNull CType
+  deriving (Eq, Ord)
 instance Show EVal where
   show (EVUndef t) = "undef"
   show EVVoid = ""

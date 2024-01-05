@@ -22,6 +22,8 @@ type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
 
+-- TODO przypisanie do array.length?
+
 getParseErrPosition :: String -> Pos
 getParseErrPosition s = case words s of
   ("syntax":"error":"at":"line":l_comma:"column":c:"before":_) ->

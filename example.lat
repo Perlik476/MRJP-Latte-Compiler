@@ -1,9 +1,10 @@
 int main() {
-  int x = 0;
-  if (x == 0) {
-    x++;
-  } else {
-    x--;
+  int x = 10;
+  int y = 1;
+  y = y - 1;
+  while (x > 0) {
+    x = y;
   }
-  return x;
+  printInt(x);
+  return 0;
 }
