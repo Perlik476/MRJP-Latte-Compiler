@@ -84,7 +84,7 @@ addInstr label instr = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
   let instrsCount = getBlockInstrsCount block
-  addInstrAddrUses label instr
+  addInstrAddrUses label instrsCount instr
   modify $ \s -> s { 
     getBasicBlockEnv = Map.insert label (block { 
       getBlockInstrs = Map.insert instrsCount instr instrs,
@@ -93,44 +93,44 @@ addInstr label instr = do
   }
   liftIO $ putStrLn $ "Added instruction " ++ show instr ++ " to block " ++ label
 
-addInstrAddrUses :: Label -> Instr -> GenM ()
-addInstrAddrUses label (IComment _) = return ()
-addInstrAddrUses label (IBinOp addr addr1 _ addr2) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-  addAddrUse label addr
-addInstrAddrUses label (IRelOp addr addr1 _ addr2) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-  addAddrUse label addr
-addInstrAddrUses label (ICall addr _ args) = do
-  addAddrUse label addr
-  mapM_ (addAddrUse label) args
-addInstrAddrUses label (IVCall _ args) = mapM_ (addAddrUse label) args
-addInstrAddrUses label (IRet addr) = addAddrUse label addr
-addInstrAddrUses label IVRet = return ()
-addInstrAddrUses label (IJmp _) = return ()
-addInstrAddrUses label (IBr addr _ _) = addAddrUse label addr
-addInstrAddrUses label (IString addr _ _) = addAddrUse label addr
-addInstrAddrUses label (IBitcast addr1 addr2) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-addInstrAddrUses label (IStore addr1 addr2) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-addInstrAddrUses label (ILoad addr1 addr2) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-addInstrAddrUses label (IGetElementPtr addr1 addr2 args) = do
-  addAddrUse label addr1
-  addAddrUse label addr2
-  mapM_ (addAddrUse label) args
+addInstrAddrUses :: Label -> Integer -> Instr -> GenM ()
+addInstrAddrUses label ind (IComment _) = return ()
+addInstrAddrUses label ind (IBinOp addr addr1 _ addr2) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+  addAddrUse label ind addr
+addInstrAddrUses label ind (IRelOp addr addr1 _ addr2) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+  addAddrUse label ind addr
+addInstrAddrUses label ind (ICall addr _ args) = do
+  addAddrUse label ind addr
+  mapM_ (addAddrUse label ind) args
+addInstrAddrUses label ind (IVCall _ args) = mapM_ (addAddrUse label ind) args
+addInstrAddrUses label ind (IRet addr) = addAddrUse label ind addr
+addInstrAddrUses label ind IVRet = return ()
+addInstrAddrUses label ind (IJmp _) = return ()
+addInstrAddrUses label ind (IBr addr _ _) = addAddrUse label ind addr
+addInstrAddrUses label ind (IString addr _ _) = addAddrUse label ind addr
+addInstrAddrUses label ind (IBitcast addr1 addr2) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+addInstrAddrUses label ind (IStore addr1 addr2) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+addInstrAddrUses label ind (ILoad addr1 addr2) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+addInstrAddrUses label ind (IGetElementPtr addr1 addr2 args) = do
+  addAddrUse label ind addr1
+  addAddrUse label ind addr2
+  mapM_ (addAddrUse label ind) args
 
-addAddrUse :: Label -> Address -> GenM ()
-addAddrUse label addr = do
+addAddrUse :: Label -> Integer -> Address -> GenM ()
+addAddrUse label ind addr = do
   uses <- gets $ Map.findWithDefault [] addr . getAddrUses
   modify $ \s -> s { 
-    getAddrUses = Map.insert addr ((label, getBlockInstrsCount $ (Map.! label) $ getBasicBlockEnv s) : uses) (getAddrUses s) 
+    getAddrUses = Map.insert addr ((label, ind) : uses) (getAddrUses s) 
   }
 
 replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr

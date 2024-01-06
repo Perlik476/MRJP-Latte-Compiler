@@ -873,6 +873,8 @@ replacePhiByAddr phi addr = do
       let instr = instrs Map.! ind
       liftIO $ putStrLn $ "Replacing instr " ++ show instr
       let instr' = replaceAddrByAddrInInstr (getPhiAddr phi) addr instr
+      -- TODO
+      addInstrAddrUses label' ind instr'
       liftIO $ putStrLn $ "By instr " ++ show instr'
       modify $ \s -> s {
         getBasicBlockEnv = Map.insert label' (block' { getBlockInstrs = Map.insert ind instr' instrs }) (getBasicBlockEnv s)
