@@ -65,6 +65,15 @@ getPhi phiId = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   return $ (Map.! phiId) $ getBlockPhis block
 
+tryGetPhi :: PhiID -> GenM (Maybe Phi)
+tryGetPhi phiId = do
+  phiToLabel <- gets getPhiToLabel
+  case Map.lookup phiId phiToLabel of
+    Just label -> do
+      block <- gets $ (Map.! label) . getBasicBlockEnv
+      return $ Map.lookup phiId $ getBlockPhis block
+    _ -> return Nothing
+
 getInstrs :: GenM [Instr]
 getInstrs = getCurrentBasicBlock >>= return . Map.elems . getBlockInstrs
 

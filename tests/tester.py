@@ -51,7 +51,7 @@ for file in tqdm(files):
             errs += 1
     
 print(f"Errors: {errs} out of {len(files)} files")
-max_errors = 74
+max_errors = 73
 if errs > max_errors:
     print(f"Too many errors, max: {max_errors}")
     exit(1)
