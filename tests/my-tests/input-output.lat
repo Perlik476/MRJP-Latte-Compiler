@@ -1,0 +1,21 @@
+int main() {
+  int a = readInt();
+  string b = readString();
+  printString("ala ma kota");
+  string c = readString();
+  int d = readInt();
+  printInt(42);
+  string e = readString();
+  int f = readInt();
+  int g = readInt();
+  string h = readString();
+  printInt(a);
+  printString(b);
+  printString(c);
+  printInt(d);
+  printString(e);
+  printInt(f);
+  printInt(g);
+  printString(h);
+  return 0;
+}

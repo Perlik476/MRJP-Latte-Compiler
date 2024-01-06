@@ -18,6 +18,7 @@ declare i32 @_printString(i8*)
 declare i8* @_readString()
 declare i32 @_compareStrings(i8*, i8*)
 declare i8* @_concatStrings(i8*, i8*)
+declare i32 @_readInt()
 
 
 define void @fun.printInt(i32 %x) {
@@ -27,11 +28,8 @@ define void @fun.printInt(i32 %x) {
 }
 
 define i32 @fun.readInt() {
-  %res = alloca i32
-  %r1 = getelementptr [4 x i8], [4 x i8]* @d, i32 0, i32 0
-  call i32 (i8*, ...) @scanf(i8* %r1, i32* %res)
-  %r2 = load i32, i32* %res
-  ret i32 %r2
+  %r1 = call i32 @_readInt()
+  ret i32 %r1
 }
 
 define void @fun.printString(i8* %str) {

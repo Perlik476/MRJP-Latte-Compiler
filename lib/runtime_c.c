@@ -54,3 +54,9 @@ char* _concatStrings(char* str1, char* str2) {
     strcat(result, str2);
     return result;
 }
+
+int _readInt() {
+    int result;
+    scanf("%d ", &result); // TODO
+    return result;
+}
