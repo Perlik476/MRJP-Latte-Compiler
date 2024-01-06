@@ -22,8 +22,8 @@ import AST
 import Utils
 
 
-compile :: Program -> IO String
-compile ast =
+compile :: Options -> Program -> IO String
+compile options ast =
   let initState = GenState {
     getCurrentLabel = "",
     getCurrentFunLabels = [],
@@ -45,7 +45,8 @@ compile ast =
     getStringPoolCount = 0,
     getInternalVarIdentCount = 0,
     getAddrUses = Map.empty,
-    getAddrPhiUses = Map.empty
+    getAddrPhiUses = Map.empty,
+    getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
     let funs = Map.elems $ getFunctions $ snd result
@@ -190,7 +191,7 @@ genStmt' (SDecl t ident expr) = do
   addr <- genExpr expr
   addVarAddr ident addr
   addVarType ident (getAddrType addr)
-  liftIO $ putStrLn $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
+  printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
   return ()
 genStmt' (SAss expr1 expr2) = do
   addr1 <- genLhs expr1
@@ -201,16 +202,16 @@ genStmt' (SAss expr1 expr2) = do
       addVarAddr ident addr2
     ARegister _ t1 -> do
       let t2 = getAddrType addr2
-      liftIO $ putStrLn $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t1
-      liftIO $ putStrLn $ "addr2 in SAss is " ++ show addr2 ++ " of type " ++ show t2
+      printDebug $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t1
+      printDebug $ "addr2 in SAss is " ++ show addr2 ++ " of type " ++ show t2
       if t1 == CPtr t2 then do -- TODO check if t1 and t2 are compatible (structs/classes)
-        liftIO $ putStrLn $ "emitting store " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
+        printDebug $ "emitting store " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
         emitInstr $ IStore addr2 addr1
       else do
         unless (t1 == t2) $ error "Types must match in assignment"
         let ident = getVarName expr1
         addVarAddr ident addr2
-      liftIO $ putStrLn $ "Assignment: " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
+      printDebug $ "Assignment: " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
   return ()
 genStmt' (SIncr expr) = genStmt' (SAss expr (EOp expr OPlus (ELitInt 1)))
 genStmt' (SDecr expr) = genStmt' (SAss expr (EOp expr OMinus (ELitInt 1)))
@@ -302,7 +303,7 @@ emitTerminator = addTerminator
 emitBasicBlock :: GenM ()
 emitBasicBlock = do
   label <- getLabel
-  liftIO $ putStrLn $ "Trying to emit block " ++ label
+  printDebug $ "Trying to emit block " ++ label
   instrs <- getInstrs
   term <- getTerminator
   if label == "" then
@@ -313,20 +314,20 @@ emitBasicBlock = do
     funName <- gets getCurrentFunName
     entryLabel <- gets $ getFunTypeEntryLabel . (Map.! funName) . getFEnv
     if label == entryLabel then do
-      liftIO $ putStrLn "Entry block"
+      printDebug "Entry block"
       emitBasicBlock'
     else if null preds then do
-      liftIO $ putStrLn "No predecessors"
+      printDebug "No predecessors"
       skipEmitBasicBlock'
     else case term of
       Nothing -> do
-        liftIO $ putStrLn "No terminator"
+        printDebug "No terminator"
         funRetType <- gets $ getFunTypeRet . (Map.! funName) . getFEnv
         if funRetType == CVoid then do
-          liftIO $ putStrLn "Void function"
+          printDebug "Void function"
           emitRet $ AImmediate EVVoid
         else do
-          liftIO $ putStrLn "Non-void function"
+          printDebug "Non-void function"
           emitRet $ AImmediate $ EVUndef funRetType
       _ -> emitBasicBlock'
 
@@ -335,17 +336,17 @@ emitBasicBlock' = do
   label <- getLabel
   instrs <- getInstrs
   block <- getCurrentBasicBlock
-  liftIO $ putStrLn $ "Emitting block " ++ label
-  liftIO $ putStrLn $ "Block " ++ label ++ " has phis " ++ show (getBlockPhis block)
-  liftIO $ putStrLn $ "Block " ++ label ++ " has instructions " ++ show instrs
+  printDebug $ "Emitting block " ++ label
+  printDebug $ "Block " ++ label ++ " has phis " ++ show (getBlockPhis block)
+  printDebug $ "Block " ++ label ++ " has instructions " ++ show instrs
   modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
 
 skipEmitBasicBlock' :: GenM ()
 skipEmitBasicBlock' = do
   label <- getLabel
   instrs <- getInstrs
-  liftIO $ putStrLn $ "Skipping block " ++ label
-  liftIO $ putStrLn $ "No predecessors in block " ++ label ++ " with instructions " ++ show instrs
+  printDebug $ "Skipping block " ++ label
+  printDebug $ "No predecessors in block " ++ label ++ " with instructions " ++ show instrs
   modify $ \s -> s {
     getBasicBlockEnv = Map.delete label (getBasicBlockEnv s),
     getCurrentLabel = "",
@@ -489,7 +490,7 @@ genExpr' (EArrayNew t expr) = do
   addr'' <- genAllocate ct addr'
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do
-  liftIO $ putStrLn "genExpr EArrayElem"
+  printDebug "genExpr EArrayElem"
   addr1 <- genExpr expr1
   addr2 <- genExpr expr2
   t <- getStructPtrFromClassPtr $ getAddrType addr1
@@ -509,7 +510,7 @@ genExpr' (EArrayElem expr1 expr2) = do
 genExpr' (EClassAttr expr ident) = do
   addr <- genExpr expr
   t <- getStructPtrFromClassPtr $ getAddrType addr
-  liftIO $ putStrLn "genExpr EClassAttr"
+  printDebug "genExpr EClassAttr"
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = CPtr $ fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
@@ -651,8 +652,7 @@ genLhs' (EArrayElem expr1 expr2) = do
   addr2 <- genExpr expr2
   addr1' <- genDereferencePtrIfDoublePtr addr1
   t <- getStructPtrFromClassPtr $ getAddrType addr1'
-  liftIO $ putStrLn "genLhs EArrayElem"
-  liftIO $ print t
+  printDebug $ "genLhs EArrayElem" ++ show t
   let (CPtr (CStruct _ fields)) = t
   let t' = fields Map.! "attr.data"
   addr <- freshReg t'
@@ -667,7 +667,7 @@ genLhs' (EClassAttr expr ident) = do
   addr <- genLhs expr
   addr' <- genDereferencePtrIfDoublePtr addr
   t <- getStructPtrFromClassPtr $ getAddrType addr'
-  liftIO $ putStrLn $ "genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
+  printDebug $ "genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
@@ -711,7 +711,7 @@ freshPhi label t = do
 updateBlockPhi :: Label -> PhiID -> Phi -> GenM ()
 updateBlockPhi label phiId phi = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
-  liftIO $ putStrLn $ "Updating block " ++ label ++ " with phi " ++ show phiId ++ " with address " ++ show (getPhiAddr phi)
+  printDebug $ "Updating block " ++ label ++ " with phi " ++ show phiId ++ " with address " ++ show (getPhiAddr phi)
   modify $ \s -> s { 
     getBasicBlockEnv = Map.insert label (block { getBlockPhis = Map.insert phiId phi (getBlockPhis block) }) (getBasicBlockEnv s) 
   }
@@ -751,24 +751,24 @@ hasOnePred label = do
 writeVar :: Ident -> Label -> Address -> GenM ()
 writeVar ident label addr = do
   venv <- gets getVEnv
-  liftIO $ putStrLn $ "Writing " ++ ident ++ " to " ++ label ++ " with address " ++ show addr
-  liftIO $ putStrLn $ "VEnv before is " ++ show venv
+  printDebug $ "Writing " ++ ident ++ " to " ++ label ++ " with address " ++ show addr
+  printDebug $ "VEnv before is " ++ show venv
   case Map.lookup ident venv of
     Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
     Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
-  liftIO $ putStrLn $ "VEnv after is " ++ show venv
+  printDebug $ "VEnv after is " ++ show venv
 
 
 readVar :: Ident -> Label -> GenM Address
 readVar ident label = do
-  liftIO $ putStrLn $ "Reading " ++ ident ++ " from " ++ label
+  printDebug $ "Reading " ++ ident ++ " from " ++ label
   venv <- gets getVEnv
   case Map.lookup ident venv of
     Just m -> do
       addr' <- case Map.lookup label m of
         Just addr -> return addr
         Nothing -> readVarRec ident label
-      liftIO $ putStrLn $ "Read " ++ ident ++ " from " ++ label ++ " has type " ++ showAddrType addr' ++ " and address " ++ show addr'
+      printDebug $ "Read " ++ ident ++ " from " ++ label ++ " has type " ++ showAddrType addr' ++ " and address " ++ show addr'
       return addr'
     Nothing ->
       error $ "Variable " ++ ident ++ " not found in environment."
@@ -776,9 +776,9 @@ readVar ident label = do
 readVarRec :: Ident -> Label -> GenM Address
 readVarRec ident label = do
   sealedBlocks <- gets getSealedBlocks
-  liftIO $ putStrLn $ "Reading (rec) " ++ ident ++ " from " ++ label
+  printDebug $ "Reading (rec) " ++ ident ++ " from " ++ label
   addr <- if label `notElem` sealedBlocks then do
-        liftIO $ putStrLn $ "Block " ++ label ++ " not sealed"
+        printDebug $ "Block " ++ label ++ " not sealed"
         t <- gets $ (Map.! ident) . getVarType
         phi <- freshPhi label t
         modify $ \s -> s {
@@ -788,23 +788,23 @@ readVarRec ident label = do
       else do
         b <- hasOnePred label
         if b then do
-          liftIO $ putStrLn $ "Block " ++ label ++ " sealed and has one predecessor"
+          printDebug $ "Block " ++ label ++ " sealed and has one predecessor"
           blockEnv <- gets getBasicBlockEnv
           case Map.lookup label blockEnv of
             Nothing -> error $ "Block " ++ label ++ " not found in environment."
             _ -> return ()
           block <- gets $ (Map.! label) . getBasicBlockEnv
-          liftIO $ putStrLn $ "Next reading " ++ ident ++ " from " ++ label ++ " with address " ++ show (getBlockInstrs block)
+          printDebug $ "Next reading " ++ ident ++ " from " ++ label ++ " with address " ++ show (getBlockInstrs block)
           readVar ident (head $ getBlockPredecessors block)
         else do
-          liftIO $ putStrLn $ "Block " ++ label ++ " sealed and has more than one predecessor"
+          printDebug $ "Block " ++ label ++ " sealed and has more than one predecessor"
           t <- gets $ (Map.! ident) . getVarType
           phi <- freshPhi label t
-          liftIO $ putStrLn $ "Created phi " ++ show (getPhiId phi) ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show (getPhiAddr phi)
+          printDebug $ "Created phi " ++ show (getPhiId phi) ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show (getPhiAddr phi)
           writeVar ident label (getPhiAddr phi)
           addr' <- addPhiOperands ident (getPhiId phi) label
           venv <- gets getVEnv
-          liftIO $ putStrLn $ "VEnv is " ++ show venv
+          printDebug $ "VEnv is " ++ show venv
           return addr'
   writeVar ident label addr
   return addr
@@ -827,111 +827,115 @@ addPhiOperands ident phiId label = do
 
 tryRemoveTrivialPhi :: Phi -> GenM Address
 tryRemoveTrivialPhi phi = do
-  let operandsWithoutSelf = filter (\(_, addr) -> addr /= getPhiAddr phi) $ getPhiOperands phi
-  let uniqueOperandsWithoutSelf = Data.List.nubBy (\(_, addr1) (_, addr2) -> addr1 == addr2) operandsWithoutSelf
-  if length uniqueOperandsWithoutSelf == 1 then do
-    liftIO $ putStrLn $ "removing trivial phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " and operands " ++ show (getPhiOperands phi) ++ " and unique operands " ++ show uniqueOperandsWithoutSelf
-    let addr = snd $ head uniqueOperandsWithoutSelf
-    phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
-    let phiUses' = filter (\(_, phiId) -> phiId /= getPhiId phi) phiUses
-    modify $ \s -> s {
-      getAddrPhiUses = Map.insert (getPhiAddr phi) phiUses' (getAddrPhiUses s)
-    }
-    phiBlockLabel <- gets $ (Map.! getPhiId phi) . getPhiToLabel
-    phiBlock <- gets $ (Map.! phiBlockLabel) . getBasicBlockEnv
-    replacePhiByAddr phi addr
-    mapM_ (\(_, phiId) -> do
-        liftIO $ putStrLn $ "Processing phi " ++ show phiId
-        mPhi <- tryGetPhi phiId
-        case mPhi of
-          Nothing -> return ()
-          Just phi' -> do
-            tryRemoveTrivialPhi phi'
-            return ()
-      ) phiUses'
-    liftIO $ putStrLn $ "removed trivial phi " ++ show (getPhiId phi) ++ ", returning addr " ++ show addr
-    return addr
-  else
+  optRemoveTrivialPhis <- gets (optRemoveTrivialPhis . getOptions)
+  if not optRemoveTrivialPhis then
     return $ getPhiAddr phi
+  else do
+    let operandsWithoutSelf = filter (\(_, addr) -> addr /= getPhiAddr phi) $ getPhiOperands phi
+    let uniqueOperandsWithoutSelf = Data.List.nubBy (\(_, addr1) (_, addr2) -> addr1 == addr2) operandsWithoutSelf
+    if length uniqueOperandsWithoutSelf == 1 then do
+      printDebug $ "removing trivial phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " and operands " ++ show (getPhiOperands phi) ++ " and unique operands " ++ show uniqueOperandsWithoutSelf
+      let addr = snd $ head uniqueOperandsWithoutSelf
+      phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
+      let phiUses' = filter (\(_, phiId) -> phiId /= getPhiId phi) phiUses
+      modify $ \s -> s {
+        getAddrPhiUses = Map.insert (getPhiAddr phi) phiUses' (getAddrPhiUses s)
+      }
+      phiBlockLabel <- gets $ (Map.! getPhiId phi) . getPhiToLabel
+      phiBlock <- gets $ (Map.! phiBlockLabel) . getBasicBlockEnv
+      replacePhiByAddr phi addr
+      mapM_ (\(_, phiId) -> do
+          printDebug $ "Processing phi " ++ show phiId
+          mPhi <- tryGetPhi phiId
+          case mPhi of
+            Nothing -> return ()
+            Just phi' -> do
+              tryRemoveTrivialPhi phi'
+              return ()
+        ) phiUses'
+      printDebug $ "removed trivial phi " ++ show (getPhiId phi) ++ ", returning addr " ++ show addr
+      return addr
+    else
+      return $ getPhiAddr phi
 
 replacePhiByAddr :: Phi -> Address -> GenM ()
 replacePhiByAddr phi addr = do
-  liftIO $ putStrLn $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr
+  printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr
   venv <- gets getVEnv
-  liftIO $ putStrLn $ "VEnv is " ++ show venv
+  printDebug $ "VEnv is " ++ show venv
   uses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrUses
   let phiId = getPhiId phi
   label <- gets $ (Map.! phiId) . getPhiToLabel
   block <- gets $ (Map.! label) . getBasicBlockEnv
-  liftIO $ putStrLn $ "Phi block " ++ label ++ " has instrs " ++ show (getBlockInstrs block)
-  liftIO $ putStrLn $ "Phi addr " ++ show (getPhiAddr phi) ++ " has uses " ++ show uses
+  printDebug $ "Phi block " ++ label ++ " has instrs " ++ show (getBlockInstrs block)
+  printDebug $ "Phi addr " ++ show (getPhiAddr phi) ++ " has uses " ++ show uses
   mapM_ (\(label', ind) -> do
-      liftIO $ putStrLn $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at index " ++ show ind
+      printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at index " ++ show ind
       block' <- gets $ (Map.! label') . getBasicBlockEnv
       let instrs = getBlockInstrs block'
-      liftIO $ putStrLn $ "Block " ++ label' ++ " has instrs " ++ show instrs
+      printDebug $ "Block " ++ label' ++ " has instrs " ++ show instrs
       let instr = instrs Map.! ind
-      liftIO $ putStrLn $ "Replacing instr " ++ show instr
+      printDebug $ "Replacing instr " ++ show instr
       let instr' = replaceAddrByAddrInInstr (getPhiAddr phi) addr instr
       -- TODO
       addInstrAddrUses label' ind instr'
-      liftIO $ putStrLn $ "By instr " ++ show instr'
+      printDebug $ "By instr " ++ show instr'
       modify $ \s -> s {
         getBasicBlockEnv = Map.insert label' (block' { getBlockInstrs = Map.insert ind instr' instrs }) (getBasicBlockEnv s)
       }
       block'' <- gets $ (Map.! label') . getBasicBlockEnv
       let instrs'' = getBlockInstrs block''
-      liftIO $ putStrLn $ "Block " ++ label' ++ " now has instrs " ++ show instrs''
+      printDebug $ "Block " ++ label' ++ " now has instrs " ++ show instrs''
     ) uses
   phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
-  liftIO $ putStrLn $ "Phi addr " ++ show (getPhiAddr phi) ++ " has phi uses " ++ show phiUses
+  printDebug $ "Phi addr " ++ show (getPhiAddr phi) ++ " has phi uses " ++ show phiUses
   mapM_ (\(label', phiId') -> do
-      liftIO $ putStrLn $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at phi " ++ show phiId'
+      printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at phi " ++ show phiId'
       block <- gets $ (Map.! label') . getBasicBlockEnv
-      liftIO $ putStrLn $ "Block " ++ label' ++ " has phis " ++ show (getBlockPhis block)
+      printDebug $ "Block " ++ label' ++ " has phis " ++ show (getBlockPhis block)
       let phis = getBlockPhis block
       case Map.lookup phiId' phis of
-        Nothing -> liftIO $ putStrLn $ "Phi " ++ show phiId' ++ " not found in block " ++ label'
+        Nothing -> printDebug $ "Phi " ++ show phiId' ++ " not found in block " ++ label'
         Just phi' -> do
-          liftIO $ putStrLn $ "Phi " ++ show phiId' ++ " had operands " ++ show (getPhiOperands phi')
+          printDebug $ "Phi " ++ show phiId' ++ " had operands " ++ show (getPhiOperands phi')
           newOperands <- mapM (\(label'', addr'') -> do
-                liftIO $ putStrLn $ "addr'' is " ++ show addr'' ++ " and phi addr is " ++ show (getPhiAddr phi)
+                printDebug $ "addr'' is " ++ show addr'' ++ " and phi addr is " ++ show (getPhiAddr phi)
                 if addr'' == getPhiAddr phi then do
-                  liftIO $ putStrLn "addr'' == phi addr"
+                  printDebug "addr'' == phi addr"
                   return (label'', addr)
                 else
                   return (label'', addr'')
               ) (getPhiOperands phi')
           let phi'' = phi' { getPhiOperands = newOperands }
-          liftIO $ putStrLn $ "Updated phi " ++ show phiId' ++ " has operands " ++ show (getPhiOperands phi'')
+          printDebug $ "Updated phi " ++ show phiId' ++ " has operands " ++ show (getPhiOperands phi'')
           updateBlockPhi label' phiId' phi''
           phi''' <- getPhi phiId'
-          liftIO $ putStrLn $ "Phi " ++ show phiId' ++ " now has operands " ++ show (getPhiOperands phi''')
+          printDebug $ "Phi " ++ show phiId' ++ " now has operands " ++ show (getPhiOperands phi''')
         ) $ filter (\(_, phiId') -> phiId' /= phiId) phiUses
   block' <- gets $ (Map.! label) . getBasicBlockEnv
   let phis = getBlockPhis block'
   let phis' = Map.delete phiId phis
-  liftIO $ putStrLn $ "Phi block " ++ label ++ " before has phis " ++ show (getBlockPhis block')
+  printDebug $ "Phi block " ++ label ++ " before has phis " ++ show (getBlockPhis block')
   modify $ \s -> s { 
     getBasicBlockEnv = Map.insert label (block' { getBlockPhis = phis' }) (getBasicBlockEnv s),
     getPhiToLabel = Map.delete phiId (getPhiToLabel s),
     getIncompletePhis = Map.map (Map.filter (/= getPhiId phi)) (getIncompletePhis s)
   }
   block'' <- gets $ (Map.! label) . getBasicBlockEnv
-  liftIO $ putStrLn $ "Phi block " ++ label ++ " after has phis " ++ show (getBlockPhis block'')
+  printDebug $ "Phi block " ++ label ++ " after has phis " ++ show (getBlockPhis block'')
   -- change address used in venv
   venv <- gets getVEnv
-  liftIO $ putStrLn $ "VEnv before is " ++ show venv
+  printDebug $ "VEnv before is " ++ show venv
   let venv' = Map.map (Map.map (\addr' -> if addr' == getPhiAddr phi then addr else addr')) venv
-  liftIO $ putStrLn $ "VEnv after is " ++ show venv'
+  printDebug $ "VEnv after is " ++ show venv'
   modify $ \s -> s { getVEnv = venv' }
 
 sealBlock :: Label -> GenM ()
 sealBlock label = do
   preds <- getBlockPredecessors <$> gets ((Map.! label) . getBasicBlockEnv)
-  liftIO $ putStrLn $ "Sealing block " ++ label ++ " with preds " ++ show preds
+  printDebug $ "Sealing block " ++ label ++ " with preds " ++ show preds
   incompletePhis <- gets $ Map.findWithDefault Map.empty label . getIncompletePhis
-  liftIO $ putStrLn $ "Incomplete phis are " ++ show incompletePhis
+  printDebug $ "Incomplete phis are " ++ show incompletePhis
   mapM_ (\(var, phiId) -> do
       addPhiOperands var phiId label
     ) $ Map.toList incompletePhis

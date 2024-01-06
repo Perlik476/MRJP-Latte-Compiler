@@ -27,13 +27,15 @@ import TreeTransformer (transformTree)
 import Generator (compile)
 import System.Process
 
+import Utils (Options(..))
+
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
 
-runFile v p f = putStrLn f >> readFile f >>= run v p
+runFile options p f = putStrLn f >> readFile f >>= run options p
 
-run v p s =
+run options p s =
   case p ts of
     Left err -> do
       hPutStrLn stderr "ERROR"
@@ -46,9 +48,7 @@ run v p s =
       if success then do
         hPutStrLn stderr "OK"
         let ast = transformTree tree
-        liftIO $ print ast
-        llvm_file_content <- compile ast
-        liftIO $ putStrLn llvm_file_content
+        llvm_file_content <- compile options ast
         writeFile "out.ll" llvm_file_content
         callCommand "clang -S -emit-llvm lib/runtime_c.c -o lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime_c.ll"
@@ -64,19 +64,29 @@ run v p s =
 usage :: IO ()
 usage = do
   putStrLn $ unlines
-    [ "usage: Call with one of the following argument combinations:"
-    , "  --help          Display this help message."
-    , "  (no arguments)  Parse stdin verbosely."
-    , "  (files)         Parse content of files verbosely."
-    , "  -s (files)      Silent mode. Parse content of files silently."
+    [ "usage: Call with one of the following argument combinations:", 
+      "  --help                           Display this help message.",
+      " (files)                           Compile files",
+      " --verbose (files)                 Compile files and print compiler messages",
+      " --remove-trivial-phis=0|1 (files) Compile files and remove trivial phis (default: 1)"
     ]
+
+processArgs :: [String] -> Options
+processArgs args = foldl processArg (Options False True) args
+  where
+    processArg :: Options -> String -> Options
+    processArg options "--verbose" = options { optVerbose = True }
+    processArg options "--remove-trivial-phis=0" = options { optRemoveTrivialPhis = False }
+    processArg options "--remove-trivial-phis=1" = options { optRemoveTrivialPhis = True }
+    processArg options _ = options
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
-    ["--help"] -> usage
-    []         -> getContents >>= run 2 pProgram
-    "-s":fs    -> mapM_ (runFile 0 pProgram) fs
-    fs         -> mapM_ (runFile 2 pProgram) fs
-
+    [] -> usage
+    "--help" : _ -> usage
+    _ -> do
+      let options = processArgs args
+      let files = filter (\x -> x /= "--verbose" && x /= "--remove-trivial-phis=0" && x /= "--remove-trivial-phis=1") args
+      mapM_ (runFile options pProgram) files

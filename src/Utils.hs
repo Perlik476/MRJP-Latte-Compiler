@@ -22,6 +22,11 @@ import qualified Numeric
 
 import AST
 
+data Options = Options { 
+  optVerbose :: Bool,
+  optRemoveTrivialPhis :: Bool
+} deriving (Show)
+
 type GenM = StateT GenState IO
 
 data GenState = GenState {
@@ -45,9 +50,9 @@ data GenState = GenState {
   getStringPoolCount :: Integer,
   getInternalVarIdentCount :: Integer,
   getAddrUses :: Map Address [(Label, Integer)],
-  getAddrPhiUses :: Map Address [(Label, PhiID)]
+  getAddrPhiUses :: Map Address [(Label, PhiID)],
+  getOptions :: Options
 }
-
 
 type PhiID = Integer
 
@@ -79,7 +84,7 @@ getInstrs = getCurrentBasicBlock >>= return . Map.elems . getBlockInstrs
 
 addInstr :: Label -> Instr -> GenM ()
 addInstr label instr = do
-  liftIO $ putStrLn $ "Adding instruction " ++ show instr ++ " to block " ++ label
+  printDebug $ "Adding instruction " ++ show instr ++ " to block " ++ label
   blockEnv <- gets getBasicBlockEnv
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
@@ -91,7 +96,7 @@ addInstr label instr = do
       getBlockInstrsCount = instrsCount + 1
     }) blockEnv
   }
-  liftIO $ putStrLn $ "Added instruction " ++ show instr ++ " to block " ++ label
+  printDebug $ "Added instruction " ++ show instr ++ " to block " ++ label
 
 addInstrAddrUses :: Label -> Integer -> Instr -> GenM ()
 addInstrAddrUses label ind (IComment _) = return ()
@@ -367,4 +372,9 @@ getTypeSize CBool = 1
 getTypeSize CVoid = 0
 getTypeSize CString = 8
 getTypeSize (CPtr _) = 8
-getTypeSize (CStruct _ fields) = sum $ map getTypeSize $ Map.elems fields  -- TODO
+getTypeSize (CStruct _ fields) = sum $ map getTypeSize $ Map.elems fields
+
+printDebug :: String -> GenM ()
+printDebug str = do
+  debug <- gets $ optVerbose . getOptions
+  when debug $ liftIO $ putStrLn str
