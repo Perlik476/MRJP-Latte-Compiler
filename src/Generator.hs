@@ -762,9 +762,12 @@ hasOnePred label = do
 writeVar :: Ident -> Label -> Address -> GenM ()
 writeVar ident label addr = do
   venv <- gets getVEnv
+  liftIO $ putStrLn $ "Writing " ++ ident ++ " to " ++ label ++ " with address " ++ show addr
+  liftIO $ putStrLn $ "VEnv before is " ++ show venv
   case Map.lookup ident venv of
     Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
     Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
+  liftIO $ putStrLn $ "VEnv after is " ++ show venv
 
 
 readVar :: Ident -> Label -> GenM Address
@@ -810,7 +813,10 @@ readVarRec ident label = do
           phi <- freshPhi label t
           liftIO $ putStrLn $ "Created phi " ++ show (getPhiId phi) ++ " for " ++ ident ++ " in " ++ label ++ " with address " ++ show (getPhiAddr phi)
           writeVar ident label (getPhiAddr phi)
-          addPhiOperands ident (getPhiId phi) label
+          addr' <- addPhiOperands ident (getPhiId phi) label
+          venv <- gets getVEnv
+          liftIO $ putStrLn $ "VEnv is " ++ show venv
+          return addr'
   writeVar ident label addr
   return addr
 
@@ -914,6 +920,12 @@ replacePhiByAddr phi addr = do
   }
   block'' <- gets $ (Map.! label) . getBasicBlockEnv
   liftIO $ putStrLn $ "Phi block " ++ label ++ " now has phis " ++ show (getBlockPhis block'')
+  -- change address used in venv
+  venv <- gets getVEnv
+  liftIO $ putStrLn $ "VEnv before is " ++ show venv
+  let venv' = Map.map (Map.map (\addr' -> if addr' == getPhiAddr phi then addr else addr')) venv
+  liftIO $ putStrLn $ "VEnv after is " ++ show venv'
+  modify $ \s -> s { getVEnv = venv' }
 
 sealBlock :: Label -> GenM ()
 sealBlock label = do
