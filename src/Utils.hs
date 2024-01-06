@@ -24,7 +24,8 @@ import AST
 
 data Options = Options { 
   optVerbose :: Bool,
-  optRemoveTrivialPhis :: Bool
+  optRemoveTrivialPhis :: Bool,
+  optComments :: Bool
 } deriving (Show)
 
 type GenM = StateT GenState IO
@@ -347,7 +348,6 @@ data CType =
   CPtr CType |
   CClass Ident |
   CStruct [String] (Map String CType)
--- TODO
   deriving (Eq, Ord, Read)
 instance Show CType where
   show CInt = "i32"

@@ -130,7 +130,7 @@ addFunToFEnv (PFunDef t ident args block) = do
     return (addr, t')
     ) args
   t' <- case t of
-        TArray _ -> CPtr <$> toCompType t  -- TODO
+        TArray _ -> CPtr <$> toCompType t
         TClass ident' -> return $ CPtr $ CClass ident'
         _ -> toCompType t
   modify $ \s -> s {
@@ -152,9 +152,6 @@ genTopDef (PFunDef t ident args block) = do
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
   let args' = getFunTypeArgs funType
-  -- let t' = case t of
-  --       TArray _ -> CPtr $ toCompType t  -- TODO
-  --       _ -> toCompType t
   let t' = getFunTypeRet funType
   modify $ \s -> s {
     getCurrentFunLabels = [],
@@ -162,9 +159,7 @@ genTopDef (PFunDef t ident args block) = do
       Map.insert ident (FunBlock ident t' args' funBasicBlocks) (getFunctions s)
   }
   return ()
-genTopDef (PClassDef ident (ClassDef classItems)) = do
-  -- TODO
-  return ()
+genTopDef (PClassDef ident (ClassDef classItems)) = pure ()
 
 showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
@@ -176,8 +171,10 @@ genBlock (SBlock stmts) = mapM_ genStmt stmts
 
 genStmt :: Stmt -> GenM ()
 genStmt s = do
-  emitInstr $ IComment $ show s
+  addComments <- gets $ optComments . getOptions
+  when addComments $ emitInstr $ IComment $ show s
   genStmt' s
+  when addComments $ emitInstr $ IComment $ show s ++ " done"
 
 genStmt' :: Stmt -> GenM ()
 genStmt' SEmpty = pure ()
@@ -388,15 +385,15 @@ emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
 emitIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
   currentLabel <- getLabel
   interLabel <- freshLabel
+  emitIfThenElseBlocks expr1 interLabel elseLabel
   sealBlock interLabel
-  emitIfThenElseBlocks expr1 interLabel elseLabel -- TODO seal?
   setCurrentLabel interLabel
   emitIfThenElseBlocks expr2 thenLabel elseLabel
 emitIfThenElseBlocks (EOr expr1 expr2) thenLabel elseLabel = do
   currentLabel <- getLabel
   interLabel <- freshLabel
-  sealBlock interLabel
   emitIfThenElseBlocks expr1 thenLabel interLabel
+  sealBlock interLabel
   setCurrentLabel interLabel
   emitIfThenElseBlocks expr2 thenLabel elseLabel
 emitIfThenElseBlocks ELitFalse thenLabel elseLabel = emitJump elseLabel >> return ()
@@ -433,9 +430,10 @@ newStringConst str = do
 
 genExpr :: Expr -> GenM Address
 genExpr expr = do
-  emitInstr $ IComment $ "genExpr " ++ show expr
+  addComments <- gets $ optComments . getOptions
+  when addComments $ emitInstr $ IComment $ "genExpr " ++ show expr
   addr <- genExpr' expr
-  emitInstr $ IComment $ "genExpr " ++ show expr ++ " done"
+  when addComments $ emitInstr $ IComment $ "genExpr " ++ show expr ++ " done"
   return addr
 
 genExpr' :: Expr -> GenM Address
@@ -517,16 +515,14 @@ genExpr' (EClassAttr expr ident) = do
   addr' <- freshReg t'
   emitInstr $ IGetElementPtr addr' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
   let (CPtr t'') = t'
-  -- TODO!!!
   addr'' <- freshReg t''
   emitInstr $ ILoad addr'' addr'
   return addr''
-  -- return addr'
 genExpr' (EClassNew ident) = do
   cenv <- gets getCEnv
   let classType@(CStruct fieldNames fields) = cenv Map.! ident
   let t = CPtr $ CClass ident
-  genStruct t fieldNames $ Map.empty
+  genStruct t fieldNames Map.empty
 
 
 getStructPtrFromClassPtr :: CType -> GenM CType
@@ -555,7 +551,6 @@ genAllocate t sizeAddr = do
   -- assuming t is a pointer type
   addr <- freshReg (CPtr CChar)
   emitInstr $ ICall addr "calloc" [AImmediate $ EVInt 1, sizeAddr]
-  -- TODO
   addr' <- freshReg t
   emitInstr $ IBitcast addr' addr
   return addr'
@@ -638,9 +633,10 @@ genRelOp op e1 e2 = do
 
 genLhs :: Expr -> GenM Address
 genLhs expr = do
-  emitInstr $ IComment $ "genLhs " ++ show expr
+  addComments <- gets $ optComments . getOptions
+  when addComments $ emitInstr $ IComment $ "genLhs " ++ show expr
   addr <- genLhs' expr
-  emitInstr $ IComment $ "genLhs " ++ show expr ++ " done"
+  when addComments $ emitInstr $ IComment $ "genLhs " ++ show expr ++ " done"
   return addr
 
 genLhs' :: Expr -> GenM Address
@@ -658,9 +654,9 @@ genLhs' (EArrayElem expr1 expr2) = do
   addr <- freshReg t'
   emitInstr $ IGetElementPtr addr addr1' [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
   let (CPtr t'') = t'
-  addr' <- freshReg t'  -- TODO ?
+  addr' <- freshReg t'
   emitInstr $ ILoad addr' addr
-  addr'' <- freshReg t'  -- TODO ?
+  addr'' <- freshReg t'
   emitInstr $ IGetElementPtr addr'' addr' [addr2]
   return addr''
 genLhs' (EClassAttr expr ident) = do
