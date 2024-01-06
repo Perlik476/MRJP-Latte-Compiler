@@ -1,0 +1,83 @@
+class Graph {
+  int[] vertices;
+  Array[] edges;
+}
+
+class Array {
+  boolean[] arr;
+}
+
+int distance_dfs(Graph g, int source, int destination, boolean[] visited) {
+  if (source == destination)
+    return 0;
+
+  visited[source] = true;
+
+  int i = 0;
+  int distance = -1;
+  while (i < g.vertices.length) {
+    if (g.edges[source].arr[i] && !visited[i]) {
+      int v_distance = distance_dfs(g, i, destination, visited);
+      if (v_distance != -1) {
+        if (distance == -1 || v_distance + 1 < distance)
+          distance = v_distance + 1;
+      }
+    }
+    i++;
+  }
+
+  return distance;
+}
+
+int main() {
+  printString("Enter number of vertices: ");
+  int vertices = readInt();
+  printString("Enter number of edges: ");
+  int edges = readInt();
+
+  Graph g = new Graph;
+  g.vertices = new int[vertices];
+  g.edges = new Array[vertices];
+
+  int i = 0;
+  while (i < vertices) {
+    g.edges[i] = new Array;
+    g.edges[i].arr = new boolean[vertices];
+    i++;
+  }
+
+  i = 0;
+  while (i < edges) {
+    printString("Enter edge: ");
+    int v1 = readInt();
+    int v2 = readInt();
+    g.edges[v1].arr[v2] = true;
+    i++;
+  }
+
+  i = 0;
+  while (i < vertices) {
+    int j = 0;
+    printString("Vertex ");
+    printInt(i);
+    printString("is connected to: ");
+    while (j < vertices) {
+      if (g.edges[i].arr[j])
+        printInt(j);
+      j++;
+    }
+    i++;
+  }
+
+  printString("Enter source vertex: ");
+  int source = readInt();
+  printString("Enter destination vertex: ");
+  int destination = readInt();
+
+  boolean[] visited = new boolean[vertices];
+  int distance = distance_dfs(g, source, destination, visited);
+  printString("Distance: ");
+  printInt(distance);
+
+  return 0;
+}

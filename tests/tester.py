@@ -9,10 +9,11 @@ latte_dirs = [
     "tests/lattests/extensions/arrays1",
     "tests/lattests/extensions/struct",
     "tests/mrjp-tests-good/good",
+    "tests/my-tests"
 ]
 
+
 errs = 0
-all = 0
 files = [f"{d}/{f}" for d in latte_dirs for f in os.listdir(d) if f.endswith(".lat")]
 files = sorted(files)
 for file in tqdm(files):

@@ -104,8 +104,8 @@ addClassToCEnv (PClassDef ident (ClassDef classItems)) = do
   classFields' <- mapM (\classItem -> case classItem of
     ClassAttrDef t ident' -> do
       t' <- case t of
-            TArray _ -> CPtr <$> toCompTypeClass t
-            TClass {} -> CPtr <$> toCompTypeClass t
+            TArray _ -> CPtr <$> toCompType t
+            TClass ident' -> return $ CPtr $ CClass ident'
             _ -> toCompType t
       return (ident', t')
     ) classFields
@@ -408,17 +408,6 @@ emitIfThenElseBlocks expr thenLabel elseLabel = do
 getVarName :: Expr -> String
 getVarName (EVar ident) = ident
 getVarName expr = error $ "Not a variable " ++ show expr
-
-toCompTypeClass :: Type -> GenM CType
-toCompTypeClass TInt = pure CInt
-toCompTypeClass TBool = pure CBool
-toCompTypeClass TVoid = pure CVoid
-toCompTypeClass TStr = pure CString
-toCompTypeClass (TArray t) = do
-  ct <- toCompTypeClass t
-  return $ CStruct ["attr.length", "attr.data"] $ Map.fromList [("attr.length", CInt), ("attr.data", CPtr ct)]
-toCompTypeClass (TClass ident) = pure (CClass ident)
--- TODO
 
 toCompType :: Type -> GenM CType
 toCompType TInt = pure CInt
