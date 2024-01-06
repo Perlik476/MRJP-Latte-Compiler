@@ -53,6 +53,12 @@ define i1 @fun.internal.compareStrings(i8* %str1, i8* %str2) {
   ret i1 %r2
 }
 
+define i1 @fun.internal.compareStringsNeq(i8* %str1, i8* %str2) {
+  %r1 = call i32 @_compareStrings(i8* %str1, i8* %str2)
+  %r2 = icmp ne i32 %r1, 1
+  ret i1 %r2
+}
+
 define void @fun.error() {
   %r0 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.error, i64 0, i64 0))
   call void @exit(i32 134)

@@ -61,6 +61,7 @@ compile options ast =
           "declare void @fun.error()",
           "declare i8* @fun.internal.concatStrings(i8*, i8*)",
           "declare i1 @fun.internal.compareStrings(i8*, i8*)",
+          "declare i1 @fun.internal.compareStringsNeq(i8*, i8*)",
           ""
           ] ++
           map showClass (Map.toList cenv) ++
@@ -431,9 +432,9 @@ newStringConst str = do
 genExpr :: Expr -> GenM Address
 genExpr expr = do
   addComments <- gets $ optComments . getOptions
-  when addComments $ emitInstr $ IComment $ "genExpr " ++ show expr
+  when addComments $ emitInstr $ IComment $ "Generating genExpr " ++ show expr
   addr <- genExpr' expr
-  when addComments $ emitInstr $ IComment $ "genExpr " ++ show expr ++ " done"
+  when addComments $ emitInstr $ IComment $ "Generating genExpr " ++ show expr ++ " done"
   return addr
 
 genExpr' :: Expr -> GenM Address
@@ -488,7 +489,6 @@ genExpr' (EArrayNew t expr) = do
   addr'' <- genAllocate ct addr'
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do
-  printDebug "genExpr EArrayElem"
   addr1 <- genExpr expr1
   addr2 <- genExpr expr2
   t <- getStructPtrFromClassPtr $ getAddrType addr1
@@ -508,7 +508,6 @@ genExpr' (EArrayElem expr1 expr2) = do
 genExpr' (EClassAttr expr ident) = do
   addr <- genExpr expr
   t <- getStructPtrFromClassPtr $ getAddrType addr
-  printDebug "genExpr EClassAttr"
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = CPtr $ fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
@@ -623,10 +622,7 @@ genRelOp op e1 e2 = do
     CString -> do
       case op of
         OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1, addr2]
-        ONE -> do
-          addr' <- freshReg CBool
-          emitInstr $ ICall addr' "fun.internal.compareStrings" [addr1, addr2]
-          emitInstr $ IBinOp addr addr' OMinus (AImmediate $ EVInt 1) -- TODO
+        ONE -> emitInstr $ ICall addr "fun.internal.compareStringsNeq" [addr1, addr2]
         _ -> error "Not implemented"
     _ -> emitInstr $ IRelOp addr addr1 op addr2
   return addr
@@ -634,9 +630,9 @@ genRelOp op e1 e2 = do
 genLhs :: Expr -> GenM Address
 genLhs expr = do
   addComments <- gets $ optComments . getOptions
-  when addComments $ emitInstr $ IComment $ "genLhs " ++ show expr
+  when addComments $ emitInstr $ IComment $ "Generating genLhs " ++ show expr
   addr <- genLhs' expr
-  when addComments $ emitInstr $ IComment $ "genLhs " ++ show expr ++ " done"
+  when addComments $ emitInstr $ IComment $ "Generating genLhs " ++ show expr ++ " done"
   return addr
 
 genLhs' :: Expr -> GenM Address
@@ -648,7 +644,7 @@ genLhs' (EArrayElem expr1 expr2) = do
   addr2 <- genExpr expr2
   addr1' <- genDereferencePtrIfDoublePtr addr1
   t <- getStructPtrFromClassPtr $ getAddrType addr1'
-  printDebug $ "genLhs EArrayElem" ++ show t
+  printDebug $ "Generating genLhs EArrayElem" ++ show t
   let (CPtr (CStruct _ fields)) = t
   let t' = fields Map.! "attr.data"
   addr <- freshReg t'
@@ -663,7 +659,7 @@ genLhs' (EClassAttr expr ident) = do
   addr <- genLhs expr
   addr' <- genDereferencePtrIfDoublePtr addr
   t <- getStructPtrFromClassPtr $ getAddrType addr'
-  printDebug $ "genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
+  printDebug $ "Generating genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
   let (CPtr (CStruct fieldNames fields)) = t
   let t' = fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
@@ -743,6 +739,9 @@ hasOnePred :: Label -> GenM Bool
 hasOnePred label = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   return $ length (getBlockPredecessors block) == 1
+
+-- The following code is based on the algorithm described in
+-- https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf
 
 writeVar :: Ident -> Label -> Address -> GenM ()
 writeVar ident label addr = do
@@ -830,7 +829,7 @@ tryRemoveTrivialPhi phi = do
     let operandsWithoutSelf = filter (\(_, addr) -> addr /= getPhiAddr phi) $ getPhiOperands phi
     let uniqueOperandsWithoutSelf = Data.List.nubBy (\(_, addr1) (_, addr2) -> addr1 == addr2) operandsWithoutSelf
     if length uniqueOperandsWithoutSelf == 1 then do
-      printDebug $ "removing trivial phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " and operands " ++ show (getPhiOperands phi) ++ " and unique operands " ++ show uniqueOperandsWithoutSelf
+      printDebug $ "Removing trivial phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " and operands " ++ show (getPhiOperands phi) ++ " and unique operands " ++ show uniqueOperandsWithoutSelf
       let addr = snd $ head uniqueOperandsWithoutSelf
       phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
       let phiUses' = filter (\(_, phiId) -> phiId /= getPhiId phi) phiUses
@@ -849,7 +848,7 @@ tryRemoveTrivialPhi phi = do
               tryRemoveTrivialPhi phi'
               return ()
         ) phiUses'
-      printDebug $ "removed trivial phi " ++ show (getPhiId phi) ++ ", returning addr " ++ show addr
+      printDebug $ "Removed trivial phi " ++ show (getPhiId phi) ++ ", returning addr " ++ show addr
       return addr
     else
       return $ getPhiAddr phi
