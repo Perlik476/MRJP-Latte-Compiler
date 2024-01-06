@@ -25,11 +25,11 @@ import Utils
 compile :: Options -> Program -> IO String
 compile options ast =
   let initState = GenState {
-    getCurrentLabel = "",
+    getCurrentLabel = "None",
     getCurrentFunLabels = [],
-    getCurrentFunName = "",
+    getCurrentFunName = "NoneFun",
     getLabelCount = 0,
-    getBasicBlockEnv = Map.empty,
+    getBasicBlockEnv = Map.fromList [("None", newBlock "None")],
     getFunctions = Map.empty,
     getVEnv = Map.empty,
     getRegCount = 0,
@@ -304,7 +304,7 @@ emitBasicBlock = do
   printDebug $ "Trying to emit block " ++ label
   instrs <- getInstrs
   term <- getTerminator
-  if label == "" then
+  if label == "None" then
     return ()
   else do
     block <- getCurrentBasicBlock
@@ -337,7 +337,7 @@ emitBasicBlock' = do
   printDebug $ "Emitting block " ++ label
   printDebug $ "Block " ++ label ++ " has phis " ++ show (getBlockPhis block)
   printDebug $ "Block " ++ label ++ " has instructions " ++ show instrs
-  modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "" }
+  modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "None" }
 
 skipEmitBasicBlock' :: GenM ()
 skipEmitBasicBlock' = do
@@ -347,9 +347,25 @@ skipEmitBasicBlock' = do
   printDebug $ "No predecessors in block " ++ label ++ " with instructions " ++ show instrs
   modify $ \s -> s {
     getBasicBlockEnv = Map.delete label (getBasicBlockEnv s),
-    getCurrentLabel = "",
+    getCurrentLabel = "None",
     getCurrentFunLabels = Data.List.delete label (getCurrentFunLabels s)
   }
+  blocks <- gets getBasicBlockEnv
+  printDebug $ "Blocks " ++ show (Map.keys blocks)
+  let blocks'' = filter (\block -> label `elem` getBlockPredecessors block) $ Map.elems blocks
+  printDebug "OK1"
+  mapM_ (\block -> do
+      printDebug $ "Processing block " ++ getBlockLabel block ++ " with predecessors " ++ show (getBlockPredecessors block)
+      let preds = getBlockPredecessors block
+      let preds' = Data.List.delete label preds
+      printDebug $ "Now predecessors are " ++ show preds'
+      let phis = getBlockPhis block
+      let phis' = Map.map (\phi -> phi { getPhiOperands = filter (\(label', _) -> label' /= label) (getPhiOperands phi) }) phis
+      printDebug $ "Now phis are " ++ show phis'
+      modify $ \s -> s { getBasicBlockEnv = Map.insert (getBlockLabel block) (block { getBlockPhis = phis', getBlockPredecessors = preds' }) (getBasicBlockEnv s) }
+    ) blocks''
+  printDebug "OK end"
+
 
 emitJump :: Label -> GenM ()
 emitJump label = do
@@ -360,7 +376,7 @@ emitJump label = do
 emitJumpIfNoTerminator :: Label -> GenM ()
 emitJumpIfNoTerminator label = do
   currentLabel <- getLabel
-  if currentLabel == "" then
+  if currentLabel == "None" then
     return ()
   else
     emitJump label

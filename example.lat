@@ -1,8 +1,13 @@
 int main() {
-  string s = "abc";
-  if (s != "abc")
-    printString("s is not abc");
-  else
-    printString("s is abc");
-  return 0;
+  int x = 3;
+  while (true) {
+    if (x > 3) {
+      return 0;
+    }
+    else {
+      return 1;
+    }
+    x++;
+  }
+  return x;
 }
