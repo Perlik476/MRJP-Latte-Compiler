@@ -24,8 +24,9 @@ import AST
 
 data Options = Options { 
   optVerbose :: Bool,
+  optComments :: Bool,
   optRemoveTrivialPhis :: Bool,
-  optComments :: Bool
+  optMergeBlocks :: Bool
 } deriving (Show)
 
 type GenM = StateT GenState IO
@@ -189,7 +190,7 @@ data BasicBlock = BasicBlock {
 instance Show BasicBlock where
   show (BasicBlock label instrs _ phis (Just terminator) preds _) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
-    ++ unlines (map (("  " ++) . show) $ Map.elems phis) ++ "\n"
+    ++ unlines (map (("  " ++) . show) $ Map.elems phis)
     ++ unlines (map (("  " ++) . show) $ Data.List.reverse instrs)
     ++ "  " ++ show terminator
   show (BasicBlock {}) = error "BasicBlock without terminator"

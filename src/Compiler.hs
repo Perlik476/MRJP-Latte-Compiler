@@ -73,18 +73,26 @@ usage = do
       "  --help                           Display this help message.",
       " (files)                           Compile files",
       " --verbose (files)                 Compile files and print compiler messages",
-      " --remove-trivial-phis=0|1 (files) Compile files and remove trivial phis (default: 1)",
-      " --comments (files)                Compile files with comments illustrating the compilation process"
+      " --comments (files)                Compile files with comments illustrating the compilation process",
+      " --remove-trivial-phis=0|1 (files) Compile files with removing trivial phis (default: 1)",
+      " --merge-blocks=0|1 (files)        Compile files with merging blocks (default: 1)"
     ]
 
 processArgs :: [String] -> Options
-processArgs = foldl processArg (Options False True False)
+processArgs = foldl processArg (Options { 
+  optVerbose = False,
+  optComments = False,
+  optRemoveTrivialPhis = True,
+  optMergeBlocks = True
+})
   where
     processArg :: Options -> String -> Options
     processArg options "--verbose" = options { optVerbose = True }
     processArg options "--remove-trivial-phis=0" = options { optRemoveTrivialPhis = False }
     processArg options "--remove-trivial-phis=1" = options { optRemoveTrivialPhis = True }
     processArg options "--comments" = options { optComments = True }
+    processArg options "--merge-blocks=0" = options { optMergeBlocks = False }
+    processArg options "--merge-blocks=1" = options { optMergeBlocks = True }
     processArg options _ = options
 
 main :: IO ()
@@ -95,5 +103,5 @@ main = do
     "--help" : _ -> usage
     _ -> do
       let options = processArgs args
-      let files = filter (\x -> x /= "--verbose" && x /= "--remove-trivial-phis=0" && x /= "--remove-trivial-phis=1" && x /= "--comments") args
+      let files = filter (\x -> head x /= '-') args
       mapM_ (runFile options pProgram) files

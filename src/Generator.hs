@@ -78,6 +78,7 @@ genProgram (PProgram topDefs) = do
   mapM_ addClassToCEnv topDefs
   mapM_ addFunToFEnv topDefs
   mapM_ genTopDef topDefs
+  postprocessFuns
   funs <- gets getFunctions
   modify $ \s -> s { getFunctions = funs }
 
@@ -314,11 +315,6 @@ emitBasicBlock = do
     else if null preds then do
       printDebug "No predecessors"
       skipEmitBasicBlock
-    -- TODO
-    -- else if length preds == 1 then do
-    --   printDebug "One predecessor"
-    --   let pred = head preds
-    --   mergeBlockWithPred label pred
     else case term of
       Nothing -> do
         printDebug "No terminator"
@@ -366,7 +362,6 @@ skipEmitBasicBlock = do
       modify $ \s -> s { getBasicBlockEnv = Map.insert (getBlockLabel block) (block { getBlockPhis = phis', getBlockPredecessors = preds' }) (getBasicBlockEnv s) }
       mapM_ tryRemoveTrivialPhi (Map.elems phis')
     ) blocks''
-
 
 emitJump :: Label -> GenM ()
 emitJump label = do
@@ -977,3 +972,114 @@ sealBlock label = do
       addPhiOperands var phiId label
     ) $ Map.toList incompletePhis
   modify $ \s -> s { getSealedBlocks = label : getSealedBlocks s }
+
+
+postprocessFuns :: GenM ()
+postprocessFuns = do
+  funs <- gets getFunctions
+  mapM_ postprocessFun (Map.elems funs)
+
+postprocessFun :: FunBlock -> GenM ()
+postprocessFun fun = do
+  let funBlocks = getFunBlocks fun
+  let labels = map getBlockLabel funBlocks
+  mapM_ (tryMergeBlockWithPred (getFunName fun)) labels
+
+
+tryMergeBlockWithPred :: String -> Label -> GenM ()
+tryMergeBlockWithPred funName label = do
+  fun <- gets $ (Map.! funName) . getFunctions
+  blockEnv <- gets getBasicBlockEnv
+  case Map.lookup label blockEnv of
+    Nothing -> return ()
+    Just block -> do
+      let label = getBlockLabel block
+      let preds = getBlockPredecessors block
+      when (length preds == 1) $ do
+        let pred = head preds
+        printDebug $ "Trying to merge block " ++ label ++ " with predecessor " ++ pred
+        printDebug $ "Block env " ++ show (Map.keys blockEnv)
+        blockPred <- gets $ (Map.! pred) . getBasicBlockEnv
+        let term = getBlockTerminator blockPred
+        case term of
+          Just (IJmp label') -> do
+            printDebug $ "Found jump to " ++ label' ++ ", want " ++ label
+            when (label' == label) $ do
+              mergeBlockWithPred fun block pred
+          _ -> return ()
+
+mergeBlockWithPred :: FunBlock -> BasicBlock -> Label -> GenM ()
+mergeBlockWithPred fun block pred = do
+  optionMergeBlocks <- gets $ optMergeBlocks . getOptions
+  if not optionMergeBlocks then
+    return ()
+  else do
+    let label = getBlockLabel block
+    printDebug $ "Merging block " ++ label ++ " with predecessor " ++ pred
+    blockPred <- gets $ (Map.! pred) . getBasicBlockEnv
+    let phis = getBlockPhis block
+    let phisPred = getBlockPhis blockPred
+    let phis' = Map.union phis phisPred
+    printDebug $ "Block " ++ label ++ " has phis " ++ show phis
+    printDebug $ "Block " ++ pred ++ " has phis " ++ show phisPred
+    printDebug $ "Merged block " ++ label ++ " has phis " ++ show phis'
+    let preds = getBlockPredecessors block
+    let preds' = Data.List.delete pred preds
+    let instrs = getBlockInstrs block
+    let instrsPred = getBlockInstrs blockPred
+    let instrs' = instrs ++ instrsPred
+    let term = getBlockTerminator block
+    let block' = block {
+      getBlockPhis = phis',
+      getBlockPredecessors = preds',
+      getBlockInstrs = instrs',
+      getBlockTerminator = term
+    }
+    phiToLabel <- gets getPhiToLabel
+    let phiToLabel' = Map.fromList $ map (\(phi, label') -> (phi, if label' == pred then label else label')) (Map.toList phiToLabel)
+    modify $ \s -> s {
+      getBasicBlockEnv = Map.insert label block' (getBasicBlockEnv s),
+      getFunctions = Map.insert (getFunName fun) (fun { 
+        getFunBlocks = map (\block'' -> if getBlockLabel block'' == label then block' else block'') $ 
+          filter (\block'' -> getBlockLabel block'' /= pred)(getFunBlocks fun)
+      }) (getFunctions s),
+      getPhiToLabel = phiToLabel'
+    }
+    blockEnv <- gets getBasicBlockEnv
+    allPhis <- foldM (\acc block -> do
+        let phis = getBlockPhis block
+        return $ acc ++ Map.elems phis
+      ) [] (Map.elems blockEnv)
+    let phis'' = map (\phi -> phi { 
+      getPhiOperands = map (\(label', addr) -> (if label' == pred then label else label', addr)) (getPhiOperands phi) 
+    }) allPhis
+    mapM_ (\block'' -> do
+        let label = getBlockLabel block''
+        let phis = getBlockPhis block''
+        let phis' = Map.fromList $ map (\phi -> (getPhiId phi, phi)) phis''
+        modify $ \s -> s {
+          getBasicBlockEnv = Map.insert label (block'' { getBlockPhis = phis' }) (getBasicBlockEnv s)
+        }
+      ) blockEnv
+    fun' <- gets $ (Map.! getFunName fun) . getFunctions
+    let blocks = getFunBlocks fun'
+    printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks
+    let blocks' = map (\block' -> block' {
+      getBlockPredecessors = map (\pred' -> if pred' == pred then label else pred') (getBlockPredecessors block'),
+      getBlockTerminator = case getBlockTerminator block' of
+        Just (IJmp label') -> Just (IJmp (if label' == pred then label else label'))
+        Just (IBr addr label1 label2) -> Just (IBr addr (if label1 == pred then label else label1) (if label2 == pred then label else label2))
+        _ -> getBlockTerminator block'
+    }) blocks
+    printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks'
+    modify $ \s -> s {
+      getBasicBlockEnv = Map.fromList $ map (\block' -> (getBlockLabel block', block')) blocks',
+      getFunctions = Map.insert (getFunName fun) (fun { getFunBlocks = blocks' }) (getFunctions s)
+    }
+    fun' <- gets $ (Map.! getFunName fun) . getFunctions
+    printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show (map getBlockLabel $ getFunBlocks fun')
+    modify $ \s -> s {
+      getBasicBlockEnv = Map.delete pred (getBasicBlockEnv s)
+    }
+    printDebug $ "Merged block " ++ label ++ " with predecessor " ++ pred
+    mapM_ tryRemoveTrivialPhi phis''
