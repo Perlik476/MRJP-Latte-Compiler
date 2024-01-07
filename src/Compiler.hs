@@ -33,9 +33,9 @@ type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
 
-runFile options p f = putStrLn f >> readFile f >>= run options p
+runFile options p f = putStrLn f >> readFile f >>= run options p f
 
-run options p s =
+run options p f s =
   case p ts of
     Left err -> do
       hPutStrLn stderr "ERROR"
@@ -49,17 +49,22 @@ run options p s =
         hPutStrLn stderr "OK"
         let ast = transformTree tree
         llvm_file_content <- compile options ast
-        writeFile "out.ll" llvm_file_content
+        let fll = removeExtension f ++ "ll"
+        let fbc = removeExtension f ++ "bc"
+        writeFile fll llvm_file_content
         callCommand "clang -S -emit-llvm lib/runtime_c.c -o lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime.ll"
-        callCommand "llvm-as out.ll"
-        callCommand "llvm-link out.bc lib/runtime.bc lib/runtime_c.bc -o out.bc"
+        callCommand $ "llvm-as " ++ fll
+        callCommand $ "llvm-link " ++ fbc ++ " lib/runtime.bc lib/runtime_c.bc -o " ++ fbc
         exitSuccess
       else do
         exitFailure
   where
   ts = myLexer s
+
+removeExtension :: String -> String
+removeExtension = reverse . dropWhile (/= '.') . reverse
 
 usage :: IO ()
 usage = do

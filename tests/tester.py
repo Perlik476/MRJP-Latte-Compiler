@@ -22,19 +22,19 @@ for file in tqdm(files):
         print(f"Error compiling {file}")
         errs += 1
         continue
-    
+
+    os.chmod(file.replace(".lat", ".bc"), 0o777)
     if os.path.exists(file.replace(".lat", ".input")):
         with open(file.replace(".lat", ".input"), "r") as f:
-            result = subprocess.run(["./out.bc"], stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run([file.replace(".lat", ".bc")], stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        result = subprocess.run(["./out.bc"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run([file.replace(".lat", ".bc")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     if os.path.exists(file.replace(".lat", ".exit_code")):
         with open(file.replace(".lat", ".exit_code"), "r") as f:
             exit_code_expected = int(f.read())
         if result.returncode != exit_code_expected:
-            print(f"Error processing {file}")
-            print(f"Expected exit code: {exit_code_expected}, got: {result.returncode}")
+            print(f"Error processing {file}, expected exit code: {exit_code_expected}, got: {result.returncode}")
             errs += 1
             continue
     elif result.returncode != 0:
@@ -50,6 +50,9 @@ for file in tqdm(files):
             diff = subprocess.run(["diff", "-u", file.replace(".lat", ".output"), "-"], input=output.encode("utf-8"), stdout=subprocess.PIPE)
             print(diff.stdout.decode("utf-8"))
             errs += 1
+
+    os.remove(file.replace(".lat", ".ll"))
+    os.remove(file.replace(".lat", ".bc"))
     
 print(f"Errors: {errs} out of {len(files)} files")
 max_errors = 73
