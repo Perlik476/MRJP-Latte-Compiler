@@ -313,7 +313,12 @@ emitBasicBlock = do
       emitBasicBlock'
     else if null preds then do
       printDebug "No predecessors"
-      skipEmitBasicBlock'
+      skipEmitBasicBlock
+    -- TODO
+    -- else if length preds == 1 then do
+    --   printDebug "One predecessor"
+    --   let pred = head preds
+    --   mergeBlockWithPred label pred
     else case term of
       Nothing -> do
         printDebug "No terminator"
@@ -336,8 +341,8 @@ emitBasicBlock' = do
   printDebug $ "Block " ++ label ++ " has instructions " ++ show instrs
   modify $ \s -> s { getBasicBlockEnv = Map.insert label block (getBasicBlockEnv s), getCurrentLabel = "None" }
 
-skipEmitBasicBlock' :: GenM ()
-skipEmitBasicBlock' = do
+skipEmitBasicBlock :: GenM ()
+skipEmitBasicBlock = do
   label <- getLabel
   instrs <- getInstrs
   printDebug $ "Skipping block " ++ label
@@ -350,7 +355,6 @@ skipEmitBasicBlock' = do
   blocks <- gets getBasicBlockEnv
   printDebug $ "Blocks " ++ show (Map.keys blocks)
   let blocks'' = filter (\block -> label `elem` getBlockPredecessors block) $ Map.elems blocks
-  printDebug "OK1"
   mapM_ (\block -> do
       printDebug $ "Processing block " ++ getBlockLabel block ++ " with predecessors " ++ show (getBlockPredecessors block)
       let preds = getBlockPredecessors block
@@ -360,8 +364,8 @@ skipEmitBasicBlock' = do
       let phis' = Map.map (\phi -> phi { getPhiOperands = filter (\(label', _) -> label' /= label) (getPhiOperands phi) }) phis
       printDebug $ "Now phis are " ++ show phis'
       modify $ \s -> s { getBasicBlockEnv = Map.insert (getBlockLabel block) (block { getBlockPhis = phis', getBlockPredecessors = preds' }) (getBasicBlockEnv s) }
+      mapM_ tryRemoveTrivialPhi (Map.elems phis')
     ) blocks''
-  printDebug "OK end"
 
 
 emitJump :: Label -> GenM ()
@@ -497,9 +501,8 @@ genExpr' (EArrayNew t expr) = do
   ct' <- toCompType t'
   let (CStruct _ fields) = ct'
   let ct = fields Map.! "attr.data"
-  addr' <- freshReg CInt
-  emitInstr $ IBinOp addr' addr OTimes (AImmediate $ EVInt $ getTypeSize ct)
-  addr'' <- genAllocate ct addr'
+  addrSize <- genTypeSize ct
+  addr'' <- genAllocate ct addrSize addr
   genStruct (CPtr ct') ["attr.length", "attr.data"] $ Map.fromList [("attr.length", addr), ("attr.data", addr'')]
 genExpr' (EArrayElem expr1 expr2) = do
   addr1 <- genExpr expr1
@@ -537,6 +540,15 @@ genExpr' (EClassNew ident) = do
   genStruct t fieldNames Map.empty
 
 
+genTypeSize :: CType -> GenM Address
+genTypeSize t = do
+  addr <- freshReg (CPtr t)
+  emitInstr $ IGetElementPtr addr (AImmediate $ EVNull $ CPtr t) [AImmediate $ EVInt 1]
+  addr' <- freshReg CInt
+  emitInstr $ IPtrToInt addr' addr
+  return addr'
+
+
 getStructPtrFromClassPtr :: CType -> GenM CType
 getStructPtrFromClassPtr (CPtr (CClass ident)) = do
   cenv <- gets getCEnv
@@ -558,11 +570,11 @@ genDereferencePtr addr = do
   emitInstr $ ILoad addr' addr
   return addr'
 
-genAllocate :: CType -> Address -> GenM Address
-genAllocate t sizeAddr = do
+genAllocate :: CType -> Address -> Address -> GenM Address
+genAllocate t sizeAddr countAddr = do
   -- assuming t is a pointer type
   addr <- freshReg (CPtr CChar)
-  emitInstr $ ICall addr "calloc" [AImmediate $ EVInt 1, sizeAddr]
+  emitInstr $ ICall addr "calloc" [countAddr, sizeAddr]
   addr' <- freshReg t
   emitInstr $ IBitcast addr' addr
   return addr'
@@ -570,7 +582,9 @@ genAllocate t sizeAddr = do
 genStruct :: CType -> [String] -> Map String Address -> GenM Address
 genStruct t fieldNames fields = do
   -- assuming t is a pointer type
-  addr <- genAllocate t (AImmediate $ EVInt $ getTypeSize t)
+  let (CPtr t') = t
+  addrSize <- genTypeSize t'
+  addr <- genAllocate t addrSize (AImmediate $ EVInt 1)
   mapM_ (\(name, n) -> do
     case Map.lookup name fields of
       Just addr' -> do

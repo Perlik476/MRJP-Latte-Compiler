@@ -121,6 +121,8 @@ replaceAddrByAddrInInstr oldAddr newAddr (ILoad addr1 addr2) =
   ILoad addr1 (replaceAddrByAddr oldAddr newAddr addr2)
 replaceAddrByAddrInInstr oldAddr newAddr (IGetElementPtr addr1 addr2 args) =
   IGetElementPtr addr1 (replaceAddrByAddr oldAddr newAddr addr2) (map (replaceAddrByAddr oldAddr newAddr) args)
+replaceAddrByAddrInInstr oldAddr newAddr (IPtrToInt addr1 addr2) =
+  IPtrToInt addr1 (replaceAddrByAddr oldAddr newAddr addr2)
 
 replaceAddrByAddr :: Address -> Address -> Address -> Address
 replaceAddrByAddr oldAddr newAddr addr = if addr == oldAddr then newAddr else addr
@@ -210,7 +212,8 @@ data Instr =
   IBitcast Address Address |
   IStore Address Address |
   ILoad Address Address |
-  IGetElementPtr Address Address [Address]
+  IGetElementPtr Address Address [Address] |
+  IPtrToInt Address Address
 instance Show Instr where
   show (IComment str) = "; " ++ str
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
@@ -233,6 +236,7 @@ instance Show Instr where
     Data.List.intercalate ", " (map (\arg -> showAddrType arg ++ " " ++ show arg) args)
     where dereferencedType (CPtr t) = t
           dereferencedType t = error $ "Cannot dereference type " ++ show t
+  show (IPtrToInt addr1 addr2) = show addr1 ++ " = ptrtoint " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to i32"  -- TODO
 
 showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
@@ -323,14 +327,6 @@ classToStruct (CClass ident) = do
   case Map.lookup ident cenv of
     Just t -> return t
     Nothing -> error $ "Class " ++ show ident ++ " not found"
-
-getTypeSize :: CType -> Integer
-getTypeSize CInt = 4
-getTypeSize CBool = 1
-getTypeSize CVoid = 0
-getTypeSize CString = 8
-getTypeSize (CPtr _) = 8
-getTypeSize (CStruct _ fields) = sum $ map getTypeSize $ Map.elems fields
 
 printDebug :: String -> GenM ()
 printDebug str = do
