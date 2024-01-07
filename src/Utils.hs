@@ -50,8 +50,6 @@ data GenState = GenState {
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
   getInternalVarIdentCount :: Integer,
-  getAddrUses :: Map Address [(Label, Integer)],
-  getAddrPhiUses :: Map Address [(Label, PhiID)],
   getOptions :: Options
 }
 
@@ -81,7 +79,7 @@ tryGetPhi phiId = do
     _ -> return Nothing
 
 getInstrs :: GenM [Instr]
-getInstrs = getCurrentBasicBlock >>= return . Map.elems . getBlockInstrs
+getInstrs = getCurrentBasicBlock >>= return . getBlockInstrs
 
 addInstr :: Label -> Instr -> GenM ()
 addInstr label instr = do
@@ -90,54 +88,13 @@ addInstr label instr = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
   let instrsCount = getBlockInstrsCount block
-  addInstrAddrUses label instrsCount instr
   modify $ \s -> s { 
     getBasicBlockEnv = Map.insert label (block { 
-      getBlockInstrs = Map.insert instrsCount instr instrs,
+      getBlockInstrs = instr : instrs,
       getBlockInstrsCount = instrsCount + 1
     }) blockEnv
   }
   printDebug $ "Added instruction " ++ show instr ++ " to block " ++ label
-
-addInstrAddrUses :: Label -> Integer -> Instr -> GenM ()
-addInstrAddrUses label ind (IComment _) = return ()
-addInstrAddrUses label ind (IBinOp addr addr1 _ addr2) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-  addAddrUse label ind addr
-addInstrAddrUses label ind (IRelOp addr addr1 _ addr2) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-  addAddrUse label ind addr
-addInstrAddrUses label ind (ICall addr _ args) = do
-  addAddrUse label ind addr
-  mapM_ (addAddrUse label ind) args
-addInstrAddrUses label ind (IVCall _ args) = mapM_ (addAddrUse label ind) args
-addInstrAddrUses label ind (IRet addr) = addAddrUse label ind addr
-addInstrAddrUses label ind IVRet = return ()
-addInstrAddrUses label ind (IJmp _) = return ()
-addInstrAddrUses label ind (IBr addr _ _) = addAddrUse label ind addr
-addInstrAddrUses label ind (IString addr _ _) = addAddrUse label ind addr
-addInstrAddrUses label ind (IBitcast addr1 addr2) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-addInstrAddrUses label ind (IStore addr1 addr2) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-addInstrAddrUses label ind (ILoad addr1 addr2) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-addInstrAddrUses label ind (IGetElementPtr addr1 addr2 args) = do
-  addAddrUse label ind addr1
-  addAddrUse label ind addr2
-  mapM_ (addAddrUse label ind) args
-
-addAddrUse :: Label -> Integer -> Address -> GenM ()
-addAddrUse label ind addr = do
-  uses <- gets $ Map.findWithDefault [] addr . getAddrUses
-  modify $ \s -> s { 
-    getAddrUses = Map.insert addr ((label, ind) : uses) (getAddrUses s) 
-  }
 
 replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr
 replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) = 
@@ -219,7 +176,7 @@ data FunType = FunType {
 
 data BasicBlock = BasicBlock {
   getBlockLabel :: String,
-  getBlockInstrs :: Map Integer Instr,
+  getBlockInstrs :: [Instr],
   getBlockInstrsCount :: Integer,
   getBlockPhis :: Map PhiID Phi,
   getBlockTerminator :: Maybe Instr,
@@ -230,11 +187,11 @@ instance Show BasicBlock where
   show (BasicBlock label instrs _ phis (Just terminator) preds _) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
     ++ unlines (map (("  " ++) . show) $ Map.elems phis) ++ "\n"
-    ++ unlines (map (("  " ++) . show) $ Map.elems instrs)
+    ++ unlines (map (("  " ++) . show) $ Data.List.reverse instrs)
     ++ "  " ++ show terminator
   show (BasicBlock {}) = error "BasicBlock without terminator"
 newBlock :: Label -> BasicBlock
-newBlock label = BasicBlock label Map.empty 0 Map.empty Nothing [] Map.empty
+newBlock label = BasicBlock label [] 0 Map.empty Nothing [] Map.empty
 
 type Label = String
 

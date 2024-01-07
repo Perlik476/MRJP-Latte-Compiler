@@ -44,8 +44,6 @@ compile options ast =
     getStringPool = Map.empty,
     getStringPoolCount = 0,
     getInternalVarIdentCount = 0,
-    getAddrUses = Map.empty,
-    getAddrPhiUses = Map.empty,
     getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
@@ -66,7 +64,7 @@ compile options ast =
           ] ++
           map showClass (Map.toList cenv) ++
           [""] ++
-          map showStrPool (Map.toList stringPool) ++ 
+          map showStrPool (Map.toList stringPool) ++
           [""] ++
           map show funs ++
           ["define i32 @main() {", "  %r = call i32 @fun.main()", "  ret i32 %r", "}"]
@@ -720,15 +718,9 @@ updateBlockPhi :: Label -> PhiID -> Phi -> GenM ()
 updateBlockPhi label phiId phi = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   printDebug $ "Updating block " ++ label ++ " with phi " ++ show phiId ++ " with address " ++ show (getPhiAddr phi)
-  modify $ \s -> s { 
-    getBasicBlockEnv = Map.insert label (block { getBlockPhis = Map.insert phiId phi (getBlockPhis block) }) (getBasicBlockEnv s) 
+  modify $ \s -> s {
+    getBasicBlockEnv = Map.insert label (block { getBlockPhis = Map.insert phiId phi (getBlockPhis block) }) (getBasicBlockEnv s)
   }
-  let uses = getPhiOperands phi
-  mapM_ (\(label', addr) -> do
-      modify $ \s -> s { 
-        getAddrPhiUses = Map.insertWith (++) addr [(label, phiId)] (getAddrPhiUses s)
-      }
-    ) uses
 
 freshInternalVarIdent :: Ident -> GenM Ident
 freshInternalVarIdent ident = do
@@ -847,15 +839,24 @@ tryRemoveTrivialPhi phi = do
     if length uniqueOperandsWithoutSelf == 1 then do
       printDebug $ "Removing trivial phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " and operands " ++ show (getPhiOperands phi) ++ " and unique operands " ++ show uniqueOperandsWithoutSelf
       let addr = snd $ head uniqueOperandsWithoutSelf
-      phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
-      let phiUses' = filter (\(_, phiId) -> phiId /= getPhiId phi) phiUses
-      modify $ \s -> s {
-        getAddrPhiUses = Map.insert (getPhiAddr phi) phiUses' (getAddrPhiUses s)
-      }
+      blockEnv <- gets getBasicBlockEnv
+      allPhis <- foldM (\acc block -> do
+          let phis = getBlockPhis block
+          return $ acc ++ Map.elems phis
+        ) [] (Map.elems blockEnv)
+      phiUses <- foldM (\acc phi' -> do
+          let phiId = getPhiId phi'
+          let operands = getPhiOperands phi'
+          let phis = filter (\(_, addr') -> addr' == getPhiAddr phi) operands
+          mapM (\(_, addr') -> do
+              let phiId' = getPhiId phi'
+              return phiId'
+            ) phis
+        ) [] allPhis
       phiBlockLabel <- gets $ (Map.! getPhiId phi) . getPhiToLabel
       phiBlock <- gets $ (Map.! phiBlockLabel) . getBasicBlockEnv
       replacePhiByAddr phi addr
-      mapM_ (\(_, phiId) -> do
+      mapM_ (\phiId -> do
           printDebug $ "Processing phi " ++ show phiId
           mPhi <- tryGetPhi phiId
           case mPhi of
@@ -863,7 +864,7 @@ tryRemoveTrivialPhi phi = do
             Just phi' -> do
               tryRemoveTrivialPhi phi'
               return ()
-        ) phiUses'
+        ) phiUses
       printDebug $ "Removed trivial phi " ++ show (getPhiId phi) ++ ", returning addr " ++ show addr
       return addr
     else
@@ -874,33 +875,45 @@ replacePhiByAddr phi addr = do
   printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr
   venv <- gets getVEnv
   printDebug $ "VEnv is " ++ show venv
-  uses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrUses
+  blockEnv <- gets getBasicBlockEnv
   let phiId = getPhiId phi
   label <- gets $ (Map.! phiId) . getPhiToLabel
   block <- gets $ (Map.! label) . getBasicBlockEnv
   printDebug $ "Phi block " ++ label ++ " has instrs " ++ show (getBlockInstrs block)
-  printDebug $ "Phi addr " ++ show (getPhiAddr phi) ++ " has uses " ++ show uses
-  mapM_ (\(label', ind) -> do
-      printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at index " ++ show ind
-      block' <- gets $ (Map.! label') . getBasicBlockEnv
+  mapM_ (\block' -> do
+      let label' = getBlockLabel block'
+      printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label'
       let instrs = getBlockInstrs block'
       printDebug $ "Block " ++ label' ++ " has instrs " ++ show instrs
-      let instr = instrs Map.! ind
-      printDebug $ "Replacing instr " ++ show instr
-      let instr' = replaceAddrByAddrInInstr (getPhiAddr phi) addr instr
-      -- TODO
-      addInstrAddrUses label' ind instr'
-      printDebug $ "By instr " ++ show instr'
+      instrs' <- mapM (\instr' -> do
+          printDebug $ "Replacing instr " ++ show instr'
+          let instr'' = replaceAddrByAddrInInstr (getPhiAddr phi) addr instr'
+          printDebug $ "By instr " ++ show instr''
+          return instr''
+        ) instrs
       modify $ \s -> s {
-        getBasicBlockEnv = Map.insert label' (block' { getBlockInstrs = Map.insert ind instr' instrs }) (getBasicBlockEnv s)
+        getBasicBlockEnv = Map.insert label' (block' { getBlockInstrs = instrs' }) (getBasicBlockEnv s)
       }
       block'' <- gets $ (Map.! label') . getBasicBlockEnv
       let instrs'' = getBlockInstrs block''
       printDebug $ "Block " ++ label' ++ " now has instrs " ++ show instrs''
-    ) uses
-  phiUses <- gets $ Map.findWithDefault [] (getPhiAddr phi) . getAddrPhiUses
+    ) blockEnv
+  allPhis <- foldM (\acc block -> do
+      let phis = getBlockPhis block
+      return $ acc ++ Map.elems phis
+    ) [] (Map.elems blockEnv)
+  phiUses <- foldM (\acc phi' -> do
+      let phiId = getPhiId phi'
+      let operands = getPhiOperands phi'
+      let phis = filter (\(_, addr') -> addr' == getPhiAddr phi) operands
+      mapM (\(_, addr') -> do
+          let phiId' = getPhiId phi'
+          return phiId'
+        ) phis
+    ) [] allPhis
   printDebug $ "Phi addr " ++ show (getPhiAddr phi) ++ " has phi uses " ++ show phiUses
-  mapM_ (\(label', phiId') -> do
+  mapM_ (\phiId' -> do
+      label' <- gets $ (Map.! phiId') . getPhiToLabel
       printDebug $ "Replacing phi " ++ show (getPhiId phi) ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr ++ " in block " ++ label' ++ " at phi " ++ show phiId'
       block <- gets $ (Map.! label') . getBasicBlockEnv
       printDebug $ "Block " ++ label' ++ " has phis " ++ show (getBlockPhis block)
@@ -922,12 +935,12 @@ replacePhiByAddr phi addr = do
           updateBlockPhi label' phiId' phi''
           phi''' <- getPhi phiId'
           printDebug $ "Phi " ++ show phiId' ++ " now has operands " ++ show (getPhiOperands phi''')
-        ) $ filter (\(_, phiId') -> phiId' /= phiId) phiUses
+        ) $ filter (/= phiId) phiUses
   block' <- gets $ (Map.! label) . getBasicBlockEnv
   let phis = getBlockPhis block'
   let phis' = Map.delete phiId phis
   printDebug $ "Phi block " ++ label ++ " before has phis " ++ show (getBlockPhis block')
-  modify $ \s -> s { 
+  modify $ \s -> s {
     getBasicBlockEnv = Map.insert label (block' { getBlockPhis = phis' }) (getBasicBlockEnv s),
     getPhiToLabel = Map.delete phiId (getPhiToLabel s),
     getIncompletePhis = Map.map (Map.filter (/= getPhiId phi)) (getIncompletePhis s)
