@@ -97,6 +97,7 @@ addInstr label instr = do
   printDebug $ "Added instruction " ++ show instr ++ " to block " ++ label
 
 replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr
+replaceAddrByAddrInInstr oldAddr newAddr (IComment str) = IComment str
 replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) = 
   IBinOp addr (replaceAddrByAddr oldAddr newAddr addr1) op (replaceAddrByAddr oldAddr newAddr addr2)
 replaceAddrByAddrInInstr oldAddr newAddr (IRelOp addr addr1 op addr2) =

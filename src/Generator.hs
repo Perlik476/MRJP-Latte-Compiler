@@ -286,7 +286,6 @@ genStmt' (SFor t ident expr stmt) = do
     )
 
 
-
 emitInstr :: Instr -> GenM ()
 emitInstr instr = do
   label <- getLabel
