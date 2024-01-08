@@ -260,7 +260,7 @@ transformExpr (Abs.EAnd _ expr1 expr2) = do
   return $ case (tExpr1, tExpr2) of
     (AST.ELitTrue, _) -> tExpr2
     (_, AST.ELitTrue) -> tExpr1
-    (_, AST.ELitFalse) -> AST.EAnd tExpr1 tExpr2 -- TODO check if correct semantics
+    (_, AST.ELitFalse) -> AST.EAnd tExpr1 tExpr2
     (AST.ELitFalse, _) -> AST.ELitFalse
     _ -> AST.EAnd tExpr1 tExpr2
 transformExpr (Abs.EOr _ expr1 expr2) = do
@@ -268,9 +268,9 @@ transformExpr (Abs.EOr _ expr1 expr2) = do
   tExpr2 <- transformExpr expr2
   return $ case (tExpr1, tExpr2) of
     (AST.ELitTrue, _) -> AST.ELitTrue
-    (_, AST.ELitTrue) -> AST.ELitTrue
+    (_, AST.ELitTrue) -> AST.EOr tExpr1 tExpr2
     (AST.ELitFalse, _) -> tExpr2
-    (_, AST.ELitFalse) -> AST.EOr tExpr1 tExpr2
+    (_, AST.ELitFalse) -> tExpr1
     _ -> AST.EOr tExpr1 tExpr2
 
 toASTBool :: Bool -> AST.Expr
@@ -301,8 +301,7 @@ transformIIdent (Abs.IIdent _ (Abs.Ident ident)) = do
   case Map.lookup ident env of
     Just newIdent -> return newIdent
     Nothing -> do
-      -- error $ "Variable " ++ ident ++ " not found in environment." ++ "Env: " ++ show env
-      return ident
+      error $ "Variable " ++ ident ++ " not found in environment." ++ "Env: " ++ show env
   
 transformIIdent' :: String -> Abs.IIdent -> TM AST.Ident
 transformIIdent' s (Abs.IIdent _ (Abs.Ident ident)) = return $ s ++ "." ++ ident

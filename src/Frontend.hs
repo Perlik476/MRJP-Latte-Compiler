@@ -399,6 +399,7 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   local envClass (mapM_ (checkClassElem ident) elems)
   return Nothing
 checkTopDef (PClassDefExt _ ident extendsIdent (ClassDef pos' elems)) = do
+  -- TODO
   throwError $ ErrClassesNotImplemented (hasPosition ident)
   -- when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
   -- cenv <- asks getCenv

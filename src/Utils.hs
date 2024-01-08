@@ -166,19 +166,19 @@ idToLabel n = "L" ++ show n
 data FunBlock = FunBlock {
   getFunName :: String,
   getFunRetType :: CType,
-  getFunArgs :: [(Address, CType)], -- TODO ctype chyba niepotrzebny
+  getFunArgs :: [Address],
   getFunBlocks :: [BasicBlock]
 }
 instance Show FunBlock where
   show (FunBlock name t args blocks) =
     "define " ++ show t ++ " @" ++ name ++ "(" ++
-    Data.List.intercalate ", " (map (\(addr, t) -> show t ++ " " ++ show addr) args) ++
+    Data.List.intercalate ", " (map (\addr -> show (getAddrType addr) ++ " " ++ show addr) args) ++
     ") {\n" ++ unlines (map show blocks) ++ "}\n"
 
 data FunType = FunType {
   getFunTypeEntryLabel :: Label,
   getFunTypeRet :: CType,
-  getFunTypeArgs :: [(Address, CType)]
+  getFunTypeArgs :: [Address]
 } deriving (Show)
 
 data BasicBlock = BasicBlock {
@@ -240,7 +240,7 @@ instance Show Instr where
     Data.List.intercalate ", " (map (\arg -> showAddrType arg ++ " " ++ show arg) args)
     where dereferencedType (CPtr t) = t
           dereferencedType t = error $ "Cannot dereference type " ++ show t
-  show (IPtrToInt addr1 addr2) = show addr1 ++ " = ptrtoint " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to i32"  -- TODO
+  show (IPtrToInt addr1 addr2) = show addr1 ++ " = ptrtoint " ++ showAddrType addr2 ++ " " ++ show addr2 ++ " to i32"
 
 showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
@@ -310,7 +310,7 @@ data CType =
   CBool |
   CVoid |
   CChar |
-  CString | -- TODO
+  CString |
   CPtr CType |
   CClass Ident |
   CStruct [String] (Map String CType)

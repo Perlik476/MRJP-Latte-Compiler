@@ -87,9 +87,9 @@ addStdLib :: GenM ()
 addStdLib = do
   fenv <- gets getFEnv
   let fenv' = Map.union fenv $ Map.fromList [
-        ("fun.printInt", FunType "fun.printInt" CVoid [(ARegister 0 CInt, CInt)]),
+        ("fun.printInt", FunType "fun.printInt" CVoid [(ARegister 0 CInt)]),
         ("fun.readInt", FunType "fun.readInt" CInt []),
-        ("fun.printString", FunType "fun.printString" CVoid [(ARegister 0 CString, CString)]),
+        ("fun.printString", FunType "fun.printString" CVoid [(ARegister 0 CString)]),
         ("fun.readString", FunType "fun.readString" CString []),
         ("fun.error", FunType "fun.error" CVoid [])
         ]
@@ -127,7 +127,7 @@ addFunToFEnv (PFunDef t ident args block) = do
     addr <- freshReg t'
     addVarAddr ident' addr
     addVarType ident' t'
-    return (addr, t')
+    return addr
     ) args
   t' <- case t of
         TArray _ -> CPtr <$> toCompType t
@@ -201,7 +201,7 @@ genStmt' (SAss expr1 expr2) = do
       let t2 = getAddrType addr2
       printDebug $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t1
       printDebug $ "addr2 in SAss is " ++ show addr2 ++ " of type " ++ show t2
-      if t1 == CPtr t2 then do -- TODO check if t1 and t2 are compatible (structs/classes)
+      if t1 == CPtr t2 then do
         printDebug $ "emitting store " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
         emitInstr $ IStore addr2 addr1
       else do
