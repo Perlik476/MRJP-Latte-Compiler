@@ -77,8 +77,8 @@ usage = do
       " --verbose (file)                           Compile file and print compiler messages",
       " --comments (file)                          Compile file with comments illustrating the compilation process",
       " --remove-trivial-phis=0|1 (file)           Compile file with removing trivial phis (default: 1)",
-      " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)",
-      " --remove-trivial-blocks=0|1 (file)         Compile file with removing trivial blocks when possible (default: 1)"
+      " --remove-trivial-blocks=0|1 (file)         Compile file with removing trivial blocks (default: 1)",
+      " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)"
     ]
 
 processArgs :: [String] -> Options
