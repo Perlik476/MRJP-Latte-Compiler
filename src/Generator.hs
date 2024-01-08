@@ -1023,15 +1023,14 @@ mergeBlockWithPred fun block pred = do
     printDebug $ "Block " ++ label ++ " has phis " ++ show phis
     printDebug $ "Block " ++ pred ++ " has phis " ++ show phisPred
     printDebug $ "Merged block " ++ label ++ " has phis " ++ show phis'
-    let preds = getBlockPredecessors block
-    let preds' = Data.List.delete pred preds
+    let preds = getBlockPredecessors blockPred
     let instrs = getBlockInstrs block
     let instrsPred = getBlockInstrs blockPred
     let instrs' = instrs ++ instrsPred
     let term = getBlockTerminator block
     let block' = block {
       getBlockPhis = phis',
-      getBlockPredecessors = preds',
+      getBlockPredecessors = preds,
       getBlockInstrs = instrs',
       getBlockTerminator = term
     }
