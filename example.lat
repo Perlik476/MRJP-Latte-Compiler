@@ -10,11 +10,22 @@ void f(A a) {
   a.x = 1;
 }
 
+A g(B b) {
+  return b;
+}
+
 int main() {
   A a = new A;
   B b = new B;
-  A a2 = new B;
+  A a2 = new B;  // TODO to ma w tym momencie typ B
+  A ba = b;
   f(a2);
-  printInt(a2.x);
+  A ab = g(b);
+  if (ab == b) {
+    printInt(1);
+  }
+  else {
+    printInt(0);
+  }
   return 0;
 }

@@ -27,13 +27,15 @@ options = [
     "--remove-trivial-blocks=1"
 ]
 
-options_list = [
-    [
-        f"--remove-trivial-phis={remove_trivial_phis}",
-        f"--merge-blocks={merge_blocks}",
-        f"--remove-trivial-blocks={remove_trivial_blocks}"
-    ] for remove_trivial_phis in [0, 1] for merge_blocks in [0, 1] for remove_trivial_blocks in [0, 1]
-]
+# options_list = [
+#     [
+#         f"--remove-trivial-phis={remove_trivial_phis}",
+#         f"--merge-blocks={merge_blocks}",
+#         f"--remove-trivial-blocks={remove_trivial_blocks}"
+#     ] for remove_trivial_phis in [0, 1] for merge_blocks in [0, 1] for remove_trivial_blocks in [0, 1]
+# ]
+
+options_list = [options]
 
 for options in options_list:
     print("Options: " + " ".join(options))

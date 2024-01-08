@@ -244,7 +244,15 @@ genStmt' (SIncr expr) = genStmt' (SAss expr (EOp expr OPlus (ELitInt 1)))
 genStmt' (SDecr expr) = genStmt' (SAss expr (EOp expr OMinus (ELitInt 1)))
 genStmt' (SRet expr) = do
   addr <- genExpr expr
-  emitRet addr
+  fenv <- gets getFEnv
+  currentFunName <- gets getCurrentFunName
+  let funRetType = getFunTypeRet $ fenv Map.! currentFunName
+  addr' <- if funRetType == getAddrType addr then return addr
+    else do
+      addr' <- freshReg funRetType
+      emitInstr $ IBitcast addr' addr
+      return addr'
+  emitRet addr'
   return ()
 genStmt' SVRet = do
   emitVRet
@@ -680,14 +688,19 @@ genRelOp :: RelOp -> Expr -> Expr -> GenM Address
 genRelOp op e1 e2 = do
   addr1 <- genExpr e1
   addr2 <- genExpr e2
+  addr1' <- if getAddrType addr1 == getAddrType addr2 then return addr1
+    else do
+      addr1' <- freshReg (getAddrType addr2)
+      emitInstr $ IBitcast addr1' addr1
+      return addr1'
   addr <- freshReg CBool
   case getAddrType addr1 of
     CString -> do
       case op of
-        OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1, addr2]
-        ONE -> emitInstr $ ICall addr "fun.internal.compareStringsNeq" [addr1, addr2]
+        OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1', addr2]
+        ONE -> emitInstr $ ICall addr "fun.internal.compareStringsNeq" [addr1', addr2]
         _ -> error "Not implemented"
-    _ -> emitInstr $ IRelOp addr addr1 op addr2
+    _ -> emitInstr $ IRelOp addr addr1' op addr2
   return addr
 
 genLhs :: Expr -> GenM Address
