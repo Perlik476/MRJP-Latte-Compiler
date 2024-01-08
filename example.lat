@@ -2,12 +2,18 @@ class A {
   int x;
   string s;
 
-  int m() {
-    return 0;
+  int m(int y) {
+    self.x = y;
+    return y;
+  }
+
+  int n() {
+    return self.x + 1;
   }
 }
 int main() {
   A a = new A;
-  printInt(a.m());
+  printInt(a.m(2137));
+  printInt(a.n());
   return 0;
 }

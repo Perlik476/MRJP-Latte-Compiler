@@ -313,8 +313,7 @@ transformIIdent (Abs.IIdent _ (Abs.Ident ident)) = do
   env <- gets getEnv
   case Map.lookup ident env of
     Just newIdent -> return newIdent
-    Nothing -> do
-      error $ "Variable " ++ ident ++ " not found in environment." ++ "Env: " ++ show env
+    Nothing -> return ident -- TODO
   
 transformIIdent' :: String -> Abs.IIdent -> TM AST.Ident
 transformIIdent' s (Abs.IIdent _ (Abs.Ident ident)) = return $ s ++ "." ++ ident

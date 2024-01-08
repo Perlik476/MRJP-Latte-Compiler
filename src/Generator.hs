@@ -195,7 +195,7 @@ processClassMethod classIdent (ClassMethodDef t methodIdent args block) = do
   let methodIdent' = classIdent ++ "." ++ methodIdent
   printDebug $ "Method " ++ methodIdent'
   let args' = PArg (TClass classIdent) "self" : args
-  addFunToFEnv (PFunDef t methodIdent' args block)
+  addFunToFEnv (PFunDef t methodIdent' args' block)
   fenv <- gets getFEnv
   printDebug $ "Fenv " ++ show fenv
   fun <- gets $ (Map.! methodIdent') . getFEnv
@@ -662,6 +662,7 @@ genExpr' (EMethodCall expr ident exprs) = do
   let methods = getClassMethods cls
   let method = methods Map.! ident
   let index = getMethodVTableIndex method
+  printDebug $ "methodVTable: " ++ show (getClassMethods cls)
   -- access vtable
   vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ classIdent ++ ".vtable.type")
   emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 0]
