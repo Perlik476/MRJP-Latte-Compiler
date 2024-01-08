@@ -16,12 +16,25 @@ latte_dirs_bad = [
     "tests/mrjp-tests/bad"
 ]
 
+# options = [
+#     "--remove-trivial-phis=0",
+#     "--merge-blocks=0",
+#     "--remove-trivial-blocks=0"
+# ]
+options = [
+    "--remove-trivial-phis=1",
+    "--merge-blocks=1",
+    "--remove-trivial-blocks=1"
+]
+
 
 errs = 0
 files = [f"{d}/{f}" for d in latte_dirs for f in os.listdir(d) if f.endswith(".lat")]
 files = sorted(files)
-for file in tqdm(files):
-    result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+iter = tqdm(files)
+for file in iter:
+    iter.set_description(file)
+    result = subprocess.run([test_latte, file] + options, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
         print(f"Error compiling {file}")
         print(result.stderr.decode("utf-8"))
@@ -65,12 +78,14 @@ if errs > max_errors:
     print(f"Too many errors, max: {max_errors}")
     exit(1)
 
-    
+
 errs = 0
 files = [f"{d}/{f}" for d in latte_dirs_bad for f in os.listdir(d) if f.endswith(".lat")]
 files = sorted(files)
-for file in tqdm(files):
-    result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+iter = tqdm(files)
+for file in iter:
+    iter.set_description(file)
+    result = subprocess.run([test_latte, file] + options, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if result.returncode == 0:
         print(f"File {file} compiled successfully, expected error")
         errs += 1

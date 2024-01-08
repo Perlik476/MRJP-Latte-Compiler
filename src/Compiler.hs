@@ -70,12 +70,13 @@ usage :: IO ()
 usage = do
   putStrLn $ unlines
     [ "usage: Call with one of the following argument combinations:", 
-      "  --help                           Display this help message.",
-      " (files)                           Compile files",
-      " --verbose (files)                 Compile files and print compiler messages",
-      " --comments (files)                Compile files with comments illustrating the compilation process",
-      " --remove-trivial-phis=0|1 (files) Compile files with removing trivial phis (default: 1)",
-      " --merge-blocks=0|1 (files)        Compile files with merging blocks (default: 1)"
+      "  --help                                    Display this help message.",
+      " (files)                                    Compile files",
+      " --verbose (files)                          Compile files and print compiler messages",
+      " --comments (files)                         Compile files with comments illustrating the compilation process",
+      " --remove-trivial-phis=0|1 (files)          Compile files with removing trivial phis (default: 1)",
+      " --merge-blocks=0|1 (files)                 Compile files with merging blocks when possible (default: 1)",
+      " --remove-trivial-blocks=0|1 (files)        Compile files with removing trivial blocks when possible (default: 1)"
     ]
 
 processArgs :: [String] -> Options
@@ -83,7 +84,8 @@ processArgs = foldl processArg (Options {
   optVerbose = False,
   optComments = False,
   optRemoveTrivialPhis = True,
-  optMergeBlocks = True
+  optMergeBlocks = True,
+  optRemoveTrivialBlocks = True
 })
   where
     processArg :: Options -> String -> Options
@@ -93,6 +95,8 @@ processArgs = foldl processArg (Options {
     processArg options "--comments" = options { optComments = True }
     processArg options "--merge-blocks=0" = options { optMergeBlocks = False }
     processArg options "--merge-blocks=1" = options { optMergeBlocks = True }
+    processArg options "--remove-trivial-blocks=0" = options { optRemoveTrivialBlocks = False }
+    processArg options "--remove-trivial-blocks=1" = options { optRemoveTrivialBlocks = True }
     processArg options _ = options
 
 main :: IO ()

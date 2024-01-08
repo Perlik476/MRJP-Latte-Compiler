@@ -760,7 +760,7 @@ checkExpr (ECastNull pos t) = do
     TArray {} -> return (t, False)
     _ -> throwError $ ErrCannotCastNullTo pos t
 checkExpr (EArrayNew pos t expr) = do
-  checkCorrectType t
+  checkCorrectType (TArray pos t)
   checkValType t
   (t', _) <- checkExpr expr
   unless (sameType t' (TInt pos)) $ throwError $ ErrWrongType pos (TInt $ hasPosition t') t'

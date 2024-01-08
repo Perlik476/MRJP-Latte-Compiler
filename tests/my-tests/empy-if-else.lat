@@ -7,5 +7,5 @@ int f(boolean b) {
 }
 
 int main() {
-  return f(true);
+  return f(true) - 3;
 }

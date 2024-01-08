@@ -26,7 +26,8 @@ data Options = Options {
   optVerbose :: Bool,
   optComments :: Bool,
   optRemoveTrivialPhis :: Bool,
-  optMergeBlocks :: Bool
+  optMergeBlocks :: Bool,
+  optRemoveTrivialBlocks :: Bool
 } deriving (Show)
 
 type GenM = StateT GenState IO
@@ -97,6 +98,7 @@ addInstr label instr = do
   }
   printDebug $ "Added instruction " ++ show instr ++ " to block " ++ label
 
+
 replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr
 replaceAddrByAddrInInstr oldAddr newAddr (IComment str) = IComment str
 replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) = 
@@ -109,6 +111,7 @@ replaceAddrByAddrInInstr oldAddr newAddr (IVCall name args) =
   IVCall name (map (replaceAddrByAddr oldAddr newAddr) args)
 replaceAddrByAddrInInstr oldAddr newAddr (IRet addr) =
   IRet (replaceAddrByAddr oldAddr newAddr addr)
+replaceAddrByAddrInInstr oldAddr newAddr IVRet = IVRet
 replaceAddrByAddrInInstr oldAddr newAddr (IJmp label) = IJmp label
 replaceAddrByAddrInInstr oldAddr newAddr (IBr addr label1 label2) =
   IBr (replaceAddrByAddr oldAddr newAddr addr) label1 label2
