@@ -386,7 +386,7 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemTypes = classElemsToTypes elems
   mapM_ checkCorrectType elemTypes
   let funElems = filter isMethod elems
-  when (not $ null funElems) $ throwError $ ErrClassesNotImplemented (hasPosition ident)  -- TODO
+  unless (null funElems) $ throwError $ ErrClassesNotImplemented (hasPosition ident)  -- TODO
   checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
   let varElems = filter isAttr elems

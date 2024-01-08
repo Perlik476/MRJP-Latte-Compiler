@@ -11,6 +11,10 @@ latte_dirs = [
     "tests/mrjp-tests-good/good",
     "tests/my-tests"
 ]
+latte_dirs_bad = [
+    "tests/lattests/bad",
+    "tests/mrjp-tests/bad"
+]
 
 
 errs = 0
@@ -60,3 +64,20 @@ max_errors = 73
 if errs > max_errors:
     print(f"Too many errors, max: {max_errors}")
     exit(1)
+
+    
+errs = 0
+files = [f"{d}/{f}" for d in latte_dirs_bad for f in os.listdir(d) if f.endswith(".lat")]
+files = sorted(files)
+for file in tqdm(files):
+    result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if result.returncode == 0:
+        print(f"File {file} compiled successfully, expected error")
+        errs += 1
+        try:
+            os.remove(file.replace(".lat", ".ll"))
+            os.remove(file.replace(".lat", ".bc"))
+        except:
+            pass
+
+print(f"Errors: {errs} out of {len(files)} files")

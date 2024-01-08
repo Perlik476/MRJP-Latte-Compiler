@@ -899,8 +899,18 @@ replacePhiByAddr phi addr = do
           printDebug $ "By instr " ++ show instr''
           return instr''
         ) instrs
+      let term = getBlockTerminator block'
+      term' <- case term of
+        Nothing -> return Nothing
+        Just term'' -> do
+          printDebug $ "Replacing term " ++ show term''
+          let term''' = replaceAddrByAddrInInstr (getPhiAddr phi) addr term''
+          printDebug $ "By term " ++ show term'''
+          return $ Just term'''
       modify $ \s -> s {
-        getBasicBlockEnv = Map.insert label' (block' { getBlockInstrs = instrs' }) (getBasicBlockEnv s)
+        getBasicBlockEnv = Map.insert label' (block' { 
+          getBlockInstrs = instrs', getBlockTerminator = term'
+        }) (getBasicBlockEnv s)
       }
       block'' <- gets $ (Map.! label') . getBasicBlockEnv
       let instrs'' = getBlockInstrs block''
@@ -955,7 +965,6 @@ replacePhiByAddr phi addr = do
   }
   block'' <- gets $ (Map.! label) . getBasicBlockEnv
   printDebug $ "Phi block " ++ label ++ " after has phis " ++ show (getBlockPhis block'')
-  -- change address used in venv
   venv <- gets getVEnv
   printDebug $ "VEnv before is " ++ show venv
   let venv' = Map.map (Map.map (\addr' -> if addr' == getPhiAddr phi then addr else addr')) venv
