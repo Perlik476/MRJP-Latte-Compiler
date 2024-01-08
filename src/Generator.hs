@@ -87,9 +87,9 @@ addStdLib :: GenM ()
 addStdLib = do
   fenv <- gets getFEnv
   let fenv' = Map.union fenv $ Map.fromList [
-        ("fun.printInt", FunType "fun.printInt" CVoid [(ARegister 0 CInt)]),
+        ("fun.printInt", FunType "fun.printInt" CVoid [ARegister 0 CInt]),
         ("fun.readInt", FunType "fun.readInt" CInt []),
-        ("fun.printString", FunType "fun.printString" CVoid [(ARegister 0 CString)]),
+        ("fun.printString", FunType "fun.printString" CVoid [ARegister 0 CString]),
         ("fun.readString", FunType "fun.readString" CString []),
         ("fun.error", FunType "fun.error" CVoid [])
         ]
@@ -982,6 +982,8 @@ sealBlock label = do
     ) $ Map.toList incompletePhis
   modify $ \s -> s { getSealedBlocks = label : getSealedBlocks s }
 
+
+-- Postprocessing
 
 postprocessFuns :: GenM ()
 postprocessFuns = do
