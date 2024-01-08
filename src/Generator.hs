@@ -1024,22 +1024,38 @@ tryMergeBlockWithPred funName label = do
 
 mergeBlockWithPred :: FunBlock -> BasicBlock -> Label -> GenM ()
 mergeBlockWithPred fun block pred = do
+  -- assuming block has only one predecessor
   let label = getBlockLabel block
   printDebug $ "Merging block " ++ label ++ " with predecessor " ++ pred
   blockPred <- gets $ (Map.! pred) . getBasicBlockEnv
   let phis = getBlockPhis block
+  phis' <- foldM (\acc phi -> do
+      let phiId = getPhiId phi
+      let operands = getPhiOperands phi
+      let labels = map fst operands
+      if pred `elem` labels then do
+        let operand = head $ filter (\(label', _) -> label' == pred) operands
+        let addr = snd operand
+        printDebug $ "Replacing phi " ++ show phiId ++ " with addr " ++ show (getPhiAddr phi) ++ " by addr " ++ show addr
+        replacePhiByAddr phi addr
+        return acc
+      else
+        return $ acc ++ [(phiId, phi)]
+    ) [] (Map.elems phis)
+  blockUpdated <- gets $ (Map.! label) . getBasicBlockEnv
+  printDebug $ "Block updated " ++ show blockUpdated
   let phisPred = getBlockPhis blockPred
-  let phis' = Map.union phis phisPred
+  let mergedPhis = Map.union (Map.fromList phis') phisPred
   printDebug $ "Block " ++ label ++ " has phis " ++ show phis
   printDebug $ "Block " ++ pred ++ " has phis " ++ show phisPred
-  printDebug $ "Merged block " ++ label ++ " has phis " ++ show phis'
+  printDebug $ "Merged block " ++ label ++ " has phis " ++ show mergedPhis
   let preds = getBlockPredecessors blockPred
-  let instrs = getBlockInstrs block
+  let instrs = getBlockInstrs blockUpdated
   let instrsPred = getBlockInstrs blockPred
   let instrs' = instrs ++ instrsPred
-  let term = getBlockTerminator block
-  let block' = block {
-    getBlockPhis = phis',
+  let term = getBlockTerminator blockUpdated
+  let block' = blockUpdated {
+    getBlockPhis = mergedPhis,
     getBlockPredecessors = preds,
     getBlockInstrs = instrs',
     getBlockTerminator = term
@@ -1055,8 +1071,8 @@ mergeBlockWithPred fun block pred = do
     getPhiToLabel = phiToLabel'
   }
   blockEnv <- gets getBasicBlockEnv
-  allPhis <- foldM (\acc block -> do
-      let phis = getBlockPhis block
+  allPhis <- foldM (\acc block'' -> do
+      let phis = getBlockPhis block''
       return $ acc ++ Map.elems phis
     ) [] (Map.elems blockEnv)
   let phis'' = map (\phi -> phi {
@@ -1064,14 +1080,17 @@ mergeBlockWithPred fun block pred = do
   }) allPhis
   mapM_ (\block'' -> do
       let label = getBlockLabel block''
-      let phis = getBlockPhis block''
-      let phis' = Map.fromList $ map (\phi -> (getPhiId phi, phi)) phis''
+      let phis''' = getBlockPhis block''
+      let phis'''' = filter (\phi -> getPhiId phi `elem` map getPhiId (Map.elems phis''')) phis''
       modify $ \s -> s {
-        getBasicBlockEnv = Map.insert label (block'' { getBlockPhis = phis' }) (getBasicBlockEnv s)
+        getBasicBlockEnv = Map.insert label (block'' { 
+          getBlockPhis = Map.fromList $ map (\phi -> (getPhiId phi, phi)) phis''''
+        }) (getBasicBlockEnv s)
       }
     ) blockEnv
   fun' <- gets $ (Map.! getFunName fun) . getFunctions
-  let blocks = getFunBlocks fun'
+  let blocksLabels = map getBlockLabel $ getFunBlocks fun'
+  blocks <- mapM (\label' -> gets $ (Map.! label') . getBasicBlockEnv) blocksLabels
   printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks
   let blocks' = map (\block' -> block' {
     getBlockPredecessors = map (\pred' -> if pred' == pred then label else pred') (getBlockPredecessors block'),
@@ -1091,7 +1110,12 @@ mergeBlockWithPred fun block pred = do
     getBasicBlockEnv = Map.delete pred (getBasicBlockEnv s)
   }
   printDebug $ "Merged block " ++ label ++ " with predecessor " ++ pred
-  mapM_ tryRemoveTrivialPhi phis''
+  blockEnv' <- gets getBasicBlockEnv
+  allPhis' <- foldM (\acc block'' -> do
+      let phis = getBlockPhis block''
+      return $ acc ++ Map.elems phis
+    ) [] (Map.elems blockEnv')
+  mapM_ tryRemoveTrivialPhi allPhis'
 
 
 tryRemoveTrivialBlock :: String -> Label -> GenM ()
