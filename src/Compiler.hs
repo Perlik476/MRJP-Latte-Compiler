@@ -33,7 +33,7 @@ type Err        = Either String
 type ParseFun a = [Token] -> Err a
 type Verbosity  = Int
 
-runFile options p f = putStrLn f >> readFile f >>= run options p f
+runFile options p f = readFile f >>= run options p f
 
 run options p f s =
   case p ts of
@@ -51,12 +51,14 @@ run options p f s =
         llvm_file_content <- compile options ast
         let fll = removeExtension f ++ "ll"
         let fbc = removeExtension f ++ "bc"
+        let fll' = "\"" ++ fll ++ "\""
+        let fbc' = "\"" ++ fbc ++ "\""
         writeFile fll llvm_file_content
         callCommand "clang -S -emit-llvm lib/runtime_c.c -o lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime_c.ll"
         callCommand "llvm-as lib/runtime.ll"
-        callCommand $ "llvm-as " ++ fll
-        callCommand $ "llvm-link " ++ fbc ++ " lib/runtime.bc lib/runtime_c.bc -o " ++ fbc
+        callCommand $ "llvm-as " ++ fll'
+        callCommand $ "llvm-link " ++ fbc' ++ " lib/runtime.bc lib/runtime_c.bc -o " ++ fbc'
         exitSuccess
       else do
         exitFailure
@@ -71,12 +73,12 @@ usage = do
   putStrLn $ unlines
     [ "usage: Call with one of the following argument combinations:", 
       "  --help                                    Display this help message.",
-      " (files)                                    Compile files",
-      " --verbose (files)                          Compile files and print compiler messages",
-      " --comments (files)                         Compile files with comments illustrating the compilation process",
-      " --remove-trivial-phis=0|1 (files)          Compile files with removing trivial phis (default: 1)",
-      " --merge-blocks=0|1 (files)                 Compile files with merging blocks when possible (default: 1)",
-      " --remove-trivial-blocks=0|1 (files)        Compile files with removing trivial blocks when possible (default: 1)"
+      " (file)                                     Compile file",
+      " --verbose (file)                           Compile file and print compiler messages",
+      " --comments (file)                          Compile file with comments illustrating the compilation process",
+      " --remove-trivial-phis=0|1 (file)           Compile file with removing trivial phis (default: 1)",
+      " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)",
+      " --remove-trivial-blocks=0|1 (file)         Compile file with removing trivial blocks when possible (default: 1)"
     ]
 
 processArgs :: [String] -> Options
@@ -108,4 +110,8 @@ main = do
     _ -> do
       let options = processArgs args
       let files = filter (\x -> head x /= '-') args
-      mapM_ (runFile options pProgram) files
+      case files of
+        [] -> usage
+        _ -> do
+          let file = head files
+          runFile options pProgram file
