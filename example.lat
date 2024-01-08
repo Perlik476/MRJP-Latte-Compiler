@@ -1,31 +1,13 @@
 class A {
   int x;
-}
+  string s;
 
-class B extends A {
-  int y;
+  int m() {
+    return 0;
+  }
 }
-
-void f(A a) {
-  a.x = 1;
-}
-
-A g(B b) {
-  return b;
-}
-
 int main() {
   A a = new A;
-  B b = new B;
-  A a2 = new B;  // TODO to ma w tym momencie typ B
-  A ba = b;
-  f(a2);
-  A ab = g(b);
-  if (ab == b) {
-    printInt(1);
-  }
-  else {
-    printInt(0);
-  }
+  printInt(a.m());
   return 0;
 }

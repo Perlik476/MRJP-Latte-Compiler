@@ -74,7 +74,18 @@ transformClassElem (Abs.ClassAttrDef _ t classItems) = do
   idents <- mapM transformClassItem classItems
   t' <- transformType t
   return $ map (AST.ClassAttrDef t') idents
-transformClassElem (Abs.ClassMethodDef _ t ident args block) = error "Class methods not supported"
+transformClassElem (Abs.ClassMethodDef _ t ident args block) = do
+  mapM_ (\(Abs.PArg _ t (Abs.IIdent _ (Abs.Ident ident))) -> do
+    newIdent <- getNewName ident
+    modify (\s -> s { getEnv = Map.insert ident newIdent (getEnv s) })) args
+  tBlock <- transformBlock block
+  let tBlock' = case t of 
+        Abs.TVoid _ -> addVRetToBlockIfNecessary tBlock
+        _ -> tBlock
+  ct <- transformType t
+  identMethod <- transformIIdentClassMethod ident  -- TODO
+  tArgs <- mapM transformArg args
+  return [AST.ClassMethodDef ct identMethod tArgs tBlock']
 
 transformClassItem :: Abs.ClassItem -> TM AST.Ident
 transformClassItem (Abs.ClassItem _ ident) = transformIIdentClassAttr ident

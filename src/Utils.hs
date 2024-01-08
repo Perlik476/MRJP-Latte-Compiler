@@ -22,7 +22,7 @@ import qualified Numeric
 
 import AST
 
-data Options = Options { 
+data Options = Options {
   optVerbose :: Bool,
   optComments :: Bool,
   optRemoveTrivialPhis :: Bool,
@@ -42,7 +42,7 @@ data GenState = GenState {
   getBasicBlockEnv :: Map Label BasicBlock,
   getFunctions :: Map String FunBlock,
   getFEnv :: Map Ident FunType,
-  getCEnv :: Map Ident CType,
+  getCEnv :: Map Ident Class,
   getSealedBlocks :: [String],
   getPhiCount :: Integer,
   getIncompletePhis :: Map Label (Map String PhiID),
@@ -90,8 +90,8 @@ addInstr label instr = do
   block <- gets $ (Map.! label) . getBasicBlockEnv
   let instrs = getBlockInstrs block
   let instrsCount = getBlockInstrsCount block
-  modify $ \s -> s { 
-    getBasicBlockEnv = Map.insert label (block { 
+  modify $ \s -> s {
+    getBasicBlockEnv = Map.insert label (block {
       getBlockInstrs = instr : instrs,
       getBlockInstrsCount = instrsCount + 1
     }) blockEnv
@@ -101,7 +101,7 @@ addInstr label instr = do
 
 replaceAddrByAddrInInstr :: Address -> Address -> Instr -> Instr
 replaceAddrByAddrInInstr oldAddr newAddr (IComment str) = IComment str
-replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) = 
+replaceAddrByAddrInInstr oldAddr newAddr (IBinOp addr addr1 op addr2) =
   IBinOp addr (replaceAddrByAddr oldAddr newAddr addr1) op (replaceAddrByAddr oldAddr newAddr addr2)
 replaceAddrByAddrInInstr oldAddr newAddr (IRelOp addr addr1 op addr2) =
   IRelOp addr (replaceAddrByAddr oldAddr newAddr addr1) op (replaceAddrByAddr oldAddr newAddr addr2)
@@ -206,8 +206,8 @@ data Instr =
   IComment String |
   IBinOp Address Address ArithOp Address |
   IRelOp Address Address RelOp Address |
-  ICall Address String [Address] |
-  IVCall String [Address] |
+  ICall Address Address [Address] |
+  IVCall Address [Address] |
   IRet Address |
   IVRet |
   IJmp Label |
@@ -222,10 +222,10 @@ instance Show Instr where
   show (IComment str) = "; " ++ str
   show (IBinOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
   show (IRelOp addr addr1 op addr2) = show addr ++ " = " ++ show op ++ " " ++ showAddrType addr1 ++ " " ++ show addr1 ++ ", " ++ show addr2
-  show (ICall addr name args) =
-    show addr ++ " = call " ++ showAddrType addr ++ " @" ++ name ++ "(" ++ Data.List.intercalate ", " (
+  show (ICall addr addr' args) =
+    show addr ++ " = call " ++ showAddrType addr ++ " " ++ show addr' ++ "(" ++ Data.List.intercalate ", " (
       map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
-  show (IVCall name args) = "call void @" ++ name ++ "(" ++ Data.List.intercalate ", " (
+  show (IVCall addr args) = "call void " ++ show addr ++ "(" ++ Data.List.intercalate ", " (
       map (\arg -> showAddrType arg ++ " " ++ show arg) args) ++ ")"
   show (IRet addr) = "ret " ++ showAddrType addr ++ " " ++ show addr
   show IVRet = "ret void"
@@ -246,7 +246,7 @@ showStrName :: Integer -> String
 showStrName n = "@str." ++ show n
 
 showStrPool :: (String, Integer) -> String
-showStrPool (str, n) = 
+showStrPool (str, n) =
   showStrName n ++ " = private unnamed_addr constant [" ++ show (length str + 1) ++ " x i8] c\"" ++ concatMap encodeChar str ++ "\\00\""
 
 encodeChar :: Char -> String
@@ -254,21 +254,44 @@ encodeChar c = "\\" ++ Numeric.showHex (Data.Char.ord c) ""
 
 
 
-showClass :: (String, CType) -> String
-showClass (name, t) = "%" ++ name ++ " = type " ++ show t
+showClass :: Class -> String
+showClass cls = "%" ++ getClassName cls ++ " = type " ++ show (getClassType cls)
+
+
+showVTableType :: Class -> String
+showVTableType cls = 
+  "%" ++ 
+  getClassName cls ++ 
+  ".vtable.type = type {" ++ Data.List.intercalate ", " (map (show . getMethodType) $ Map.elems $ getClassMethods cls)
+  ++ "}"
+
+showVTable :: Class -> String
+showVTable cls = 
+  "@" ++ 
+  getClassName cls ++ 
+  ".vtable.data = global %" ++
+  getClassName cls ++ ".vtable.type { " ++
+  Data.List.intercalate ", " (map (\method -> 
+    show (getMethodType method) ++ " @" ++ getMethodClass method ++ "." ++ getMethodName method
+  ) $ Map.elems $ getClassMethods cls)
+  ++ " }"
 
 
 data Address =
   AImmediate EVal |
-  ARegister Integer CType
+  ARegister Integer CType |
+  AName String (Maybe CType)
   deriving (Eq, Ord)
 instance Show Address where
   show (AImmediate val) = show val
   show (ARegister n _) = "%r" ++ show n
+  show (AName name _) = "@" ++ name
 
 getAddrType :: Address -> CType
 getAddrType (AImmediate val) = getEvalType val
 getAddrType (ARegister _ t) = t
+getAddrType (AName _ (Just t)) = t
+getAddrType (AName _ Nothing) = error "Address without type"
 
 
 showAddrType :: Address -> String
@@ -313,7 +336,8 @@ data CType =
   CString |
   CPtr CType |
   CClass Ident |
-  CStruct [String] (Map String CType)
+  CStruct [String] (Map String CType) |
+  CFun CType [CType]
   deriving (Eq, Ord, Read)
 instance Show CType where
   show CInt = "i32"
@@ -324,15 +348,30 @@ instance Show CType where
   show (CPtr t) = show t ++ "*"
   show (CClass ident) = "%" ++ ident
   show (CStruct fieldNames fields) = "{" ++ Data.List.intercalate ", " (map (\name -> show (fields Map.! name)) fieldNames) ++ "}"
+  show (CFun ret args) = show ret ++ "(" ++ Data.List.intercalate ", " (map show args) ++ ")*"
 
 classToStruct :: CType -> GenM CType
 classToStruct (CClass ident) = do
   cenv <- gets getCEnv
   case Map.lookup ident cenv of
-    Just t -> return t
+    Just cls -> return (getClassType cls)
     Nothing -> error $ "Class " ++ show ident ++ " not found"
 
 printDebug :: String -> GenM ()
 printDebug str = do
   debug <- gets $ optVerbose . getOptions
   when debug $ liftIO $ putStrLn str
+
+data Class = Class {
+  getClassName :: Ident,
+  getClassType :: CType,
+  getClassMethods :: Map Ident Method,
+  getClassParent :: Maybe Ident
+} deriving (Show)
+
+data Method = Method {
+  getMethodName :: Ident,
+  getMethodClass :: Ident,
+  getMethodType :: CType,
+  getMethodVTableIndex :: Integer
+} deriving (Show)

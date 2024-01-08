@@ -62,7 +62,9 @@ compile options ast =
           "declare i1 @fun.internal.compareStringsNeq(i8*, i8*)",
           ""
           ] ++
-          map showClass (Map.toList cenv) ++
+          map showClass (Map.elems cenv) ++
+          map showVTableType (Map.elems cenv) ++
+          map showVTable (Map.elems cenv) ++
           [""] ++
           map showStrPool (Map.toList stringPool) ++
           [""] ++
@@ -78,35 +80,50 @@ genProgram (PProgram topDefs) = do
   let identToTopDef = Map.fromList $ map (\topDef -> (getTopDefIdent topDef, topDef)) topDefs
   mapM_ (addClassToCEnv identToTopDef) topDefs
   mapM_ addFunToFEnv topDefs
-  mapM_ genTopDef topDefs
+  let topDefs' = concatMap getAllClassMethodsToTopDefs topDefs ++ topDefs
+  mapM_ genTopDef topDefs'
   postprocessFuns
   funs <- gets getFunctions
   modify $ \s -> s { getFunctions = funs }
 
 
+getAllClassMethodsToTopDefs :: TopDef -> [TopDef]
+getAllClassMethodsToTopDefs (PClassDef ident (ClassDef classItems)) =
+  let classMethods = filter isClassMethod classItems
+      classMethodTopDefs = map (\(ClassMethodDef t ident' args block) -> PFunDef t (ident ++ "." ++ ident') args block) classMethods
+  in classMethodTopDefs
+getAllClassMethodsToTopDefs (PClassDefExt ident _ (ClassDef classItems)) =
+  getAllClassMethodsToTopDefs (PClassDef ident (ClassDef classItems))
+getAllClassMethodsToTopDefs _ = []
+
+
 addStdLib :: GenM ()
 addStdLib = do
   fenv <- gets getFEnv
-  let fenv' = Map.union fenv $ Map.fromList [
-        ("fun.printInt", FunType "fun.printInt" CVoid [ARegister 0 CInt]),
-        ("fun.readInt", FunType "fun.readInt" CInt []),
-        ("fun.printString", FunType "fun.printString" CVoid [ARegister 0 CString]),
-        ("fun.readString", FunType "fun.readString" CString []),
-        ("fun.error", FunType "fun.error" CVoid [])
-        ]
+  let fenv' = Map.union fenv getStdLib
   modify $ \s -> s { getFEnv = fenv' }
 
+
+getStdLib :: Map Ident FunType
+getStdLib = Map.fromList [
+  ("fun.printInt", FunType "fun.printInt" CVoid [ARegister 0 CInt]),
+  ("fun.readInt", FunType "fun.readInt" CInt []),
+  ("fun.printString", FunType "fun.printString" CVoid [ARegister 0 CString]),
+  ("fun.readString", FunType "fun.readString" CString []),
+  ("fun.error", FunType "fun.error" CVoid [])
+  ]
+
 addClassToCEnv :: Map Ident TopDef -> TopDef -> GenM ()
-addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems)) = do
+addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
   printDebug $ "Class " ++ ident
   cenv <- gets getCEnv
   if Map.member ident cenv then
     return ()
   else do
-    let classFields = filter (\classItem -> case classItem of
-          ClassAttrDef _ _ -> True
-          _ -> False
-          ) classItems
+    let classMethods = filter isClassMethod classItems
+    let classMethodNames = map (\(ClassMethodDef _ ident' _ _) -> ident') classMethods
+    classMethodTypes <- mapM (processClassMethod ident) classMethods
+    let classFields = filter isClassField classItems
     classFields' <- mapM (\classItem -> case classItem of
       ClassAttrDef t ident' -> do
         t' <- case t of
@@ -115,35 +132,86 @@ addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems)) = do
               _ -> toCompType t
         return (ident', t')
       ) classFields
-    let classType = CStruct (map fst classFields') $ Map.fromList classFields'
+    let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : classFields'
+    let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
+    let methods = foldl (\methods' ((methodIdent, methodType), index) ->
+            let method = Method {
+              getMethodName = methodIdent,
+              getMethodClass = ident,
+              getMethodVTableIndex = index,
+              getMethodType = methodType
+            } in
+            Map.insert methodIdent method methods'
+          ) Map.empty $ (classMethodNames `zip` classMethodTypes) `zip` [0..]
+    printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " and methods " ++ show methods
+    let cls = Class {
+      getClassName = ident,
+      getClassType = classType,
+      getClassMethods = methods,
+      getClassParent = Nothing
+    }
     printDebug $ "Class " ++ ident ++ " has type " ++ show classType
-    modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
+    modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
 addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) = do
   printDebug $ "Class " ++ ident ++ " extends " ++ ident'
   let topDefExtended = identToTopDef Map.! ident'
   addClassToCEnv identToTopDef topDefExtended
+  addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems))
+  cls <- gets $ (Map.! ident) . getCEnv
   classExtended <- gets $ (Map.! ident') . getCEnv
-  printDebug $ "Class " ++ ident' ++ " has type " ++ show classExtended
-  let classFields = filter (\classItem -> case classItem of
-        ClassAttrDef _ _ -> True
-        _ -> False
-        ) classItems
-  classFields' <- mapM (\classItem -> case classItem of
-    ClassAttrDef t ident'' -> do
-      t' <- case t of
-            TArray _ -> CPtr <$> toCompType t
-            TClass ident'' -> return $ CPtr $ CClass ident''
-            _ -> toCompType t
-      return (ident'', t')
-    ) classFields
-  classExtendedFields <- case classExtended of
+  classFields <- case getClassType cls of
     CStruct _ fields -> return $ Map.toList fields
     _ -> error "Class extending is not a struct"
-  let classFields'' = classExtendedFields ++ classFields'
+  classExtendedFields <- case getClassType classExtended of
+    CStruct _ fields -> return $ Map.toList fields
+    _ -> error "Class extending is not a struct"
+  let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : classExtendedFields ++ tail classFields
+  printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " with " ++ show classFields ++ " from self and " ++ show classExtendedFields ++ " from parent"
   let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
+  let classMethods = getClassMethods cls
+  let classExtendedMethods = getClassMethods classExtended
+  let methods = foldl (\methods' method ->
+          case Map.lookup (getMethodName method) classExtendedMethods of
+            Just method ->
+              let method' = method {
+                getMethodVTableIndex = getMethodVTableIndex method -- TODO
+              } in
+              Map.insert (getMethodName method) method' methods'
+            Nothing -> Map.insert (getMethodName method) method methods'
+        ) classExtendedMethods $ Map.elems classMethods
+  let cls' = Class {
+    getClassName = ident,
+    getClassType = classType,
+    getClassMethods = methods,
+    getClassParent = Just ident'
+  }
   printDebug $ "Class " ++ ident ++ " has type " ++ show classType
-  modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
+  modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
 addClassToCEnv _ _ = pure ()
+
+processClassMethod :: Ident -> ClassElem -> GenM CType
+processClassMethod classIdent (ClassMethodDef t methodIdent args block) = do
+  printDebug $ "Processing method " ++ methodIdent ++ " of class " ++ classIdent
+  let methodIdent' = classIdent ++ "." ++ methodIdent
+  printDebug $ "Method " ++ methodIdent'
+  let args' = PArg (TClass classIdent) "self" : args
+  addFunToFEnv (PFunDef t methodIdent' args block)
+  fenv <- gets getFEnv
+  printDebug $ "Fenv " ++ show fenv
+  fun <- gets $ (Map.! methodIdent') . getFEnv
+  let funRetType = getFunTypeRet fun
+  let funArgTypes = map getAddrType $ getFunTypeArgs fun
+  printDebug $ "Method " ++ methodIdent' ++ " has return type " ++ show funRetType ++ " and args " ++ show funArgTypes
+  return $ CFun funRetType funArgTypes
+processClassMethod _ _ = error "Not a class method"
+
+isClassField :: ClassElem -> Bool
+isClassField (ClassAttrDef _ _) = True
+isClassField _ = False
+
+isClassMethod :: ClassElem -> Bool
+isClassMethod = not . isClassField
+
 
 addFunToFEnv :: TopDef -> GenM ()
 addFunToFEnv (PFunDef t ident args block) = do
@@ -526,11 +594,11 @@ genExpr' (EFunctionCall ident exprs) = do
     ) (args `zip` argTypes)
   let retType = getFunTypeRet funType
   if retType == CVoid then do
-    emitInstr $ IVCall ident args'
+    emitInstr $ IVCall (AName ident Nothing) args'
     return $ AImmediate EVVoid
   else do
     addr <- freshReg retType
-    emitInstr $ ICall addr ident args'
+    emitInstr $ ICall addr (AName ident Nothing) args'
     return addr
 genExpr' (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
 genExpr' (ENot expr) = genBoolExpr False expr
@@ -579,9 +647,50 @@ genExpr' (EClassAttr expr ident) = do
   return addr''
 genExpr' (EClassNew ident) = do
   cenv <- gets getCEnv
-  let classType@(CStruct fieldNames fields) = cenv Map.! ident
+  let cls = cenv Map.! ident
+  let (CStruct fieldNames fields) = getClassType cls
   let t = CPtr $ CClass ident
+  vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ ident ++ ".vtable.type")
   genStruct t fieldNames Map.empty
+genExpr' (EMethodCall expr ident exprs) = do
+  argAddrs <- mapM genExpr exprs
+  addr <- genLhs expr
+  let argAddrs' = addr : argAddrs
+  let (CPtr (CClass classIdent)) = getAddrType addr
+  cenv <- gets getCEnv
+  let cls = cenv Map.! classIdent
+  let methods = getClassMethods cls
+  let method = methods Map.! ident
+  let index = getMethodVTableIndex method
+  -- access vtable
+  vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ classIdent ++ ".vtable.type")
+  emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 0]
+  vtableAddr' <- freshReg (CPtr $ CClass $ classIdent ++ ".vtable.type")
+  emitInstr $ ILoad vtableAddr' vtableAddr
+  -- access method
+  methodAddr <- freshReg (CPtr $ getMethodType method)
+  emitInstr $ IGetElementPtr methodAddr vtableAddr' [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger index]
+  methodAddr' <- freshReg (getMethodType method)
+  emitInstr $ ILoad methodAddr' methodAddr
+  let methodType = getMethodType method
+  let (CFun retType argTypes) = methodType
+  -- call method
+  argAddrs'' <- mapM (\(addr, argType) -> do
+    printDebug $ "argType is " ++ show argType ++ " and addr is " ++ show addr ++ " of type " ++ show (getAddrType addr)
+    if getAddrType addr == argType then return addr
+    else do
+      addr' <- freshReg argType
+      emitInstr $ IBitcast addr' addr
+      return addr'
+    ) (argAddrs' `zip` argTypes)
+  if retType == CVoid then do
+    emitInstr $ IVCall methodAddr' argAddrs''
+    return $ AImmediate EVVoid
+  else do
+    addr <- freshReg retType
+    emitInstr $ ICall addr methodAddr' argAddrs''
+    return addr
+
 
 
 genTypeSize :: CType -> GenM Address
@@ -596,7 +705,7 @@ genTypeSize t = do
 getStructPtrFromClassPtr :: CType -> GenM CType
 getStructPtrFromClassPtr (CPtr (CClass ident)) = do
   cenv <- gets getCEnv
-  return $ CPtr $ cenv Map.! ident
+  return $ CPtr $ getClassType $ cenv Map.! ident
 getStructPtrFromClassPtr t@(CPtr (CStruct _ _)) = pure t
 getStructPtrFromClassPtr t = error $ "Cannot get class from type " ++ show t
 
@@ -618,7 +727,7 @@ genAllocate :: CType -> Address -> Address -> GenM Address
 genAllocate t sizeAddr countAddr = do
   -- assuming t is a pointer type
   addr <- freshReg (CPtr CChar)
-  emitInstr $ ICall addr "calloc" [countAddr, sizeAddr]
+  emitInstr $ ICall addr (AName "calloc" Nothing) [countAddr, sizeAddr]
   addr' <- freshReg t
   emitInstr $ IBitcast addr' addr
   return addr'
@@ -630,16 +739,21 @@ genStruct t fieldNames fields = do
   addrSize <- genTypeSize t'
   addr <- genAllocate t addrSize (AImmediate $ EVInt 1)
   mapM_ (\(name, n) -> do
-    case Map.lookup name fields of
-      Just addr' -> do
-        let t' = getAddrType addr'
-        addr'' <- freshReg (CPtr t')
-        emitInstr $ IGetElementPtr addr'' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger n]
-        emitInstr $ IStore addr' addr''
-      Nothing -> return ()
+    if ".vtable.type" `Data.List.isSuffixOf` name then do
+      let className = take (length name - length ".vtable.type") name
+      vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ className ++ ".vtable.type")
+      emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 0]
+      emitInstr $ IStore (AName (className ++ ".vtable.data") (Just $ CPtr $ CClass name)) vtableAddr
+    else
+      case Map.lookup name fields of
+        Just addr' -> do
+          let t' = getAddrType addr'
+          addr'' <- freshReg (CPtr t')
+          emitInstr $ IGetElementPtr addr'' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger n]
+          emitInstr $ IStore addr' addr''
+        Nothing -> return ()
     ) (fieldNames `zip` [0..])
   return addr
-
 
 genBoolExpr :: Bool -> Expr -> GenM Address
 genBoolExpr b expr = do
@@ -679,7 +793,7 @@ genBinOp op e1 e2 = do
     CString -> do
       addr <- freshReg (getAddrType addr1)
       emitInstr $ ICall addr (case op of
-        OPlus -> "fun.internal.concatStrings"
+        OPlus -> (AName "fun.internal.concatStrings" Nothing)
         _ -> error "Not implemented"
         ) [addr1, addr2]
       return addr
@@ -697,8 +811,8 @@ genRelOp op e1 e2 = do
   case getAddrType addr1 of
     CString -> do
       case op of
-        OEQU -> emitInstr $ ICall addr "fun.internal.compareStrings" [addr1', addr2]
-        ONE -> emitInstr $ ICall addr "fun.internal.compareStringsNeq" [addr1', addr2]
+        OEQU -> emitInstr $ ICall addr (AName "fun.internal.compareStrings" Nothing) [addr1', addr2]
+        ONE -> emitInstr $ ICall addr (AName "fun.internal.compareStringsNeq" Nothing) [addr1', addr2]
         _ -> error "Not implemented"
     _ -> emitInstr $ IRelOp addr addr1' op addr2
   return addr
@@ -1139,7 +1253,7 @@ mergeBlockWithPred fun block pred = do
       let phis''' = getBlockPhis block''
       let phis'''' = filter (\phi -> getPhiId phi `elem` map getPhiId (Map.elems phis''')) phis''
       modify $ \s -> s {
-        getBasicBlockEnv = Map.insert label (block'' { 
+        getBasicBlockEnv = Map.insert label (block'' {
           getBlockPhis = Map.fromList $ map (\phi -> (getPhiId phi, phi)) phis''''
         }) (getBasicBlockEnv s)
       }
@@ -1222,7 +1336,7 @@ removeTrivialBlock fun block = do
   let predTerm = getBlockTerminator predBlock
   let predTerm' = case predTerm of
         Just (IJmp label') -> Just (IJmp succLabel)
-        Just (IBr addr label1 label2) -> 
+        Just (IBr addr label1 label2) ->
           let predTerm'' = IBr addr (if label1 == label then succLabel else label1) (if label2 == label then succLabel else label2) in
           let (IBr addr' label1' label2') = predTerm'' in
           if label1' == label2' then Just (IJmp label1') else Just predTerm''
@@ -1235,16 +1349,16 @@ removeTrivialBlock fun block = do
   let succBlock' = succBlock { getBlockPredecessors = succPreds'' }
 
   modify $ \s -> s {
-    getBasicBlockEnv = 
+    getBasicBlockEnv =
       Map.insert predLabel predBlock' $
       Map.insert succLabel succBlock' $
       Map.delete label (getBasicBlockEnv s),
     getFunctions = Map.insert (getFunName fun) (fun {
-      getFunBlocks = 
+      getFunBlocks =
         filter (\block' -> getBlockLabel block' /= label) $
-        map (\block' -> 
-          if getBlockLabel block' == predLabel then predBlock' 
-          else if getBlockLabel block' == succLabel then succBlock' 
+        map (\block' ->
+          if getBlockLabel block' == predLabel then predBlock'
+          else if getBlockLabel block' == succLabel then succBlock'
           else block'
         ) (getFunBlocks fun)
     }) (getFunctions s)
