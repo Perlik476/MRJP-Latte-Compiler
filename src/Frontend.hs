@@ -122,6 +122,7 @@ data Error =
   | ErrFunctionNotAlwaysReturning Pos String
   | ErrNegativeArrayIndex Pos Integer
   | ErrArrayMultipleDimensions Pos Type
+  | ErrClassesNotImplemented Pos
 
 instance Show Error where
   show (ErrUnknownVariable pos ident) = "Unknown variable " ++ ident ++ " at " ++ showPos pos
@@ -164,6 +165,7 @@ instance Show Error where
   show (ErrFunctionNotAlwaysReturning pos ident) = "Function " ++ ident ++ " defined at " ++ showPos pos ++ " doesn't return a value in all possible execution paths"
   show (ErrNegativeArrayIndex pos n) = "Negative array index at " ++ showPos pos ++ ": " ++ show n
   show (ErrArrayMultipleDimensions pos t) = "Array of multiple dimensions at " ++ showPos pos ++ ": " ++ showType t
+  show (ErrClassesNotImplemented pos) = "Classes not implemented at " ++ showPos pos  -- TODO
 
 getErrPosition :: Error -> Pos
 getErrPosition (ErrUnknownVariable pos _) = pos
@@ -206,6 +208,7 @@ getErrPosition (ErrExpectedSameType pos _ _) = pos
 getErrPosition (ErrFunctionNotAlwaysReturning pos _) = pos
 getErrPosition (ErrNegativeArrayIndex pos _) = pos
 getErrPosition (ErrArrayMultipleDimensions pos _) = pos
+getErrPosition (ErrClassesNotImplemented pos) = pos
 
 
 fromIdent :: IIdent -> String
@@ -383,6 +386,7 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   let elemTypes = classElemsToTypes elems
   mapM_ checkCorrectType elemTypes
   let funElems = filter isMethod elems
+  when (not $ null funElems) $ throwError $ ErrClassesNotImplemented (hasPosition ident)  -- TODO
   checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
   mapM_ checkFunRetType $ classElemsToTypes funElems
   let varElems = filter isAttr elems
@@ -394,30 +398,31 @@ checkTopDef (PClassDef _ ident (ClassDef _ elems)) = do
   }
   local envClass (mapM_ (checkClassElem ident) elems)
   return Nothing
-checkTopDef (PClassDefExt pos ident extendsIdent (ClassDef pos' elems)) = do
-  when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
-  cenv <- asks getCenv
-  case Data.Map.lookup (fromIdent extendsIdent) cenv of
-    Nothing -> throwError $ ErrUnknownClass (hasPosition extendsIdent) (fromIdent extendsIdent)
-    Just cls -> do
-      let elemIdents = classElemsToIdents elems
-      when ("self" `elem` map fromIdent elemIdents) $ throwError $ ErrSelfDeclaration $ hasPosition $ head (filter (\i -> "self" == fromIdent i) elemIdents)
-      let elemTypes = classElemsToTypes elems
-      mapM_ checkCorrectType elemTypes
-      let funElems = filter isMethod elems
-      checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
-      mapM_ checkFunRetType $ classElemsToTypes funElems
-      let varElems = filter isAttr elems
-      mapM_ checkValType $ classElemsToTypes varElems
-      checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
-      cvenv <- createCVenv ident
-      cfenv <- createCFenv ident
-      let envClass = \env -> env {
-        getVenv = cvenv,
-        getFenv = Data.Map.union (getFenv env) cfenv
-      }
-      local envClass (mapM_ (checkClassElem ident) elems)
-      return Nothing
+checkTopDef (PClassDefExt _ ident extendsIdent (ClassDef pos' elems)) = do
+  throwError $ ErrClassesNotImplemented (hasPosition ident)
+  -- when (fromIdent ident == "self") $ throwError $ ErrSelfDeclaration (hasPosition ident)
+  -- cenv <- asks getCenv
+  -- case Data.Map.lookup (fromIdent extendsIdent) cenv of
+  --   Nothing -> throwError $ ErrUnknownClass (hasPosition extendsIdent) (fromIdent extendsIdent)
+  --   Just cls -> do
+  --     let elemIdents = classElemsToIdents elems
+  --     when ("self" `elem` map fromIdent elemIdents) $ throwError $ ErrSelfDeclaration $ hasPosition $ head (filter (\i -> "self" == fromIdent i) elemIdents)
+  --     let elemTypes = classElemsToTypes elems
+  --     mapM_ checkCorrectType elemTypes
+  --     let funElems = filter isMethod elems
+  --     checkNoDuplicateIdents (classElemsToIdents funElems) ErrDuplicateClassMethod
+  --     mapM_ checkFunRetType $ classElemsToTypes funElems
+  --     let varElems = filter isAttr elems
+  --     mapM_ checkValType $ classElemsToTypes varElems
+  --     checkNoDuplicateIdents (classElemsToIdents varElems) ErrDuplicateClassAttribute
+  --     cvenv <- createCVenv ident
+  --     cfenv <- createCFenv ident
+  --     let envClass = \env -> env {
+  --       getVenv = cvenv,
+  --       getFenv = Data.Map.union (getFenv env) cfenv
+  --     }
+  --     local envClass (mapM_ (checkClassElem ident) elems)
+  --     return Nothing
 
 checkClassElem :: IIdent -> ClassElem -> FMonad
 checkClassElem _ (ClassAttrDef _ t ident) = return Nothing

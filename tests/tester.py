@@ -17,9 +17,10 @@ errs = 0
 files = [f"{d}/{f}" for d in latte_dirs for f in os.listdir(d) if f.endswith(".lat")]
 files = sorted(files)
 for file in tqdm(files):
-    result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run([test_latte, file], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     if result.returncode != 0:
         print(f"Error compiling {file}")
+        print(result.stderr.decode("utf-8"))
         errs += 1
         continue
 
