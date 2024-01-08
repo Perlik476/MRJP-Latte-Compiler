@@ -75,7 +75,8 @@ compile options ast =
 genProgram :: Program -> GenM ()
 genProgram (PProgram topDefs) = do
   addStdLib
-  mapM_ addClassToCEnv topDefs
+  let identToTopDef = Map.fromList $ map (\topDef -> (getTopDefIdent topDef, topDef)) topDefs
+  mapM_ (addClassToCEnv identToTopDef) topDefs
   mapM_ addFunToFEnv topDefs
   mapM_ genTopDef topDefs
   postprocessFuns
@@ -95,25 +96,54 @@ addStdLib = do
         ]
   modify $ \s -> s { getFEnv = fenv' }
 
-
-addClassToCEnv :: TopDef-> GenM ()
-addClassToCEnv (PClassDef ident (ClassDef classItems)) = do
+addClassToCEnv :: Map Ident TopDef -> TopDef -> GenM ()
+addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems)) = do
+  printDebug $ "Class " ++ ident
+  cenv <- gets getCEnv
+  if Map.member ident cenv then
+    return ()
+  else do
+    let classFields = filter (\classItem -> case classItem of
+          ClassAttrDef _ _ -> True
+          _ -> False
+          ) classItems
+    classFields' <- mapM (\classItem -> case classItem of
+      ClassAttrDef t ident' -> do
+        t' <- case t of
+              TArray _ -> CPtr <$> toCompType t
+              TClass ident' -> return $ CPtr $ CClass ident'
+              _ -> toCompType t
+        return (ident', t')
+      ) classFields
+    let classType = CStruct (map fst classFields') $ Map.fromList classFields'
+    printDebug $ "Class " ++ ident ++ " has type " ++ show classType
+    modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
+addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) = do
+  printDebug $ "Class " ++ ident ++ " extends " ++ ident'
+  let topDefExtended = identToTopDef Map.! ident'
+  addClassToCEnv identToTopDef topDefExtended
+  classExtended <- gets $ (Map.! ident') . getCEnv
+  printDebug $ "Class " ++ ident' ++ " has type " ++ show classExtended
   let classFields = filter (\classItem -> case classItem of
         ClassAttrDef _ _ -> True
         _ -> False
         ) classItems
   classFields' <- mapM (\classItem -> case classItem of
-    ClassAttrDef t ident' -> do
+    ClassAttrDef t ident'' -> do
       t' <- case t of
             TArray _ -> CPtr <$> toCompType t
-            TClass ident' -> return $ CPtr $ CClass ident'
+            TClass ident'' -> return $ CPtr $ CClass ident''
             _ -> toCompType t
-      return (ident', t')
+      return (ident'', t')
     ) classFields
-  let classType = CStruct (map fst classFields') $ Map.fromList classFields'
+  classExtendedFields <- case classExtended of
+    CStruct _ fields -> return $ Map.toList fields
+    _ -> error "Class extending is not a struct"
+  let classFields'' = classExtendedFields ++ classFields'
+  let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
+  printDebug $ "Class " ++ ident ++ " has type " ++ show classType
   modify $ \s -> s { getCEnv = Map.insert ident classType (getCEnv s) }
-addClassToCEnv (PClassDefExt {}) = error "Inheritence not implemented"
-addClassToCEnv _ = pure ()
+addClassToCEnv _ _ = pure ()
 
 addFunToFEnv :: TopDef -> GenM ()
 addFunToFEnv (PFunDef t ident args block) = do
@@ -159,7 +189,7 @@ genTopDef (PFunDef t ident args block) = do
       Map.insert ident (FunBlock ident t' args' funBasicBlocks) (getFunctions s)
   }
   return ()
-genTopDef (PClassDef ident (ClassDef classItems)) = pure ()
+genTopDef _ = pure () -- TODO
 
 showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
@@ -475,13 +505,24 @@ genExpr' (EVar ident) = do
 genExpr' (EFunctionCall ident exprs) = do
   args <- mapM genExpr exprs
   funType <- gets $ (Map.! ident) . getFEnv
+  let funArgs = getFunTypeArgs funType
+  printDebug $ "Function " ++ ident ++ " has args " ++ show (map (\addr -> (getAddrType addr, addr)) funArgs)
+  let argTypes = map getAddrType funArgs
+  args' <- mapM (\(addr, argType) -> do
+    printDebug $ "argType is " ++ show argType ++ " and addr is " ++ show addr ++ " of type " ++ show (getAddrType addr)
+    if getAddrType addr == argType then return addr
+    else do
+      addr' <- freshReg argType
+      emitInstr $ IBitcast addr' addr
+      return addr'
+    ) (args `zip` argTypes)
   let retType = getFunTypeRet funType
   if retType == CVoid then do
-    emitInstr $ IVCall ident args
+    emitInstr $ IVCall ident args'
     return $ AImmediate EVVoid
   else do
     addr <- freshReg retType
-    emitInstr $ ICall addr ident args
+    emitInstr $ ICall addr ident args'
     return addr
 genExpr' (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
 genExpr' (ENot expr) = genBoolExpr False expr

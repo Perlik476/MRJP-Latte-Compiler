@@ -11,6 +11,10 @@ data TopDef
     | PClassDef Ident ClassDef
     | PClassDefExt Ident Ident ClassDef
   deriving (Eq, Ord, Show, Read)
+getTopDefIdent :: TopDef -> Ident
+getTopDefIdent (PFunDef _ i _ _) = i
+getTopDefIdent (PClassDef i _) = i
+getTopDefIdent (PClassDefExt i _ _) = i
 
 data Arg = PArg Type Ident
   deriving (Eq, Ord, Show, Read)

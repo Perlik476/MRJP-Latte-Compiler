@@ -1,11 +1,20 @@
-int f(boolean b) {
-  int x = 1;
-  x = x + 1;
-  if (b) {} else {}
-  int z = x + 1;
-  return z;
+class A {
+  int x;
+}
+
+class B extends A {
+  int y;
+}
+
+void f(A a) {
+  a.x = 1;
 }
 
 int main() {
-  return f(true);
+  A a = new A;
+  B b = new B;
+  A a2 = new B;
+  f(a2);
+  printInt(a2.x);
+  return 0;
 }

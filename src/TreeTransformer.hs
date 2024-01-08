@@ -58,6 +58,8 @@ transformTopDef (Abs.PFunDef _ t ident args block) = do
   AST.PFunDef <$> transformType t <*> transformIIdentFun ident <*> mapM transformArg args <*> pure tBlock'
 transformTopDef (Abs.PClassDef _ ident classDef) = 
   AST.PClassDef <$> transformIIdentClass ident <*> transformClassDef classDef
+transformTopDef (Abs.PClassDefExt _ ident ident' classDef) = 
+  AST.PClassDefExt <$> transformIIdentClass ident <*> transformIIdentClass ident' <*> transformClassDef classDef
 transformArg :: Abs.Arg -> TM AST.Arg
 transformArg (Abs.PArg _ t ident) = AST.PArg <$> transformType t <*> transformIIdent ident
 
