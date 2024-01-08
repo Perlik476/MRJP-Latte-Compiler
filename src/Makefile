@@ -7,8 +7,10 @@ HAPPY      = happy
 HAPPY_OPTS = --array --info --ghc --coerce
 ALEX       = alex
 ALEX_OPTS  = --ghc
-BNFC       = bnfc
-# BNFC       = /home/students/inf/PUBLIC/MRJP/bin/bnfc
+BNFC       = /home/students/inf/PUBLIC/MRJP/bin/bnfc
+ifneq ($(shell which bnfc),)
+BNFC   	   = $(shell which bnfc)
+endif
 
 # List of goals not corresponding to file names.
 
