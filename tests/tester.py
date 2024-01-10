@@ -86,7 +86,7 @@ for options in options_list:
         os.remove(file.replace(".lat", ".bc"))
         
     print(f"Errors: {errs} out of {len(files)} files")
-    max_errors = 73
+    max_errors = 14
     if errs > max_errors:
         print(f"Too many errors, max: {max_errors}")
         exit(1)
