@@ -50,7 +50,7 @@ for options in options_list:
         result = subprocess.run([test_latte, file] + options, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
             print(f"Error compiling {file}")
-            # print(result.stderr.decode("utf-8"))
+            print(result.stderr.decode("utf-8"))
             errs += 1
             continue
 

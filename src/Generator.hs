@@ -887,6 +887,7 @@ genLhs' (EClassAttr expr ident) = do
   emitInstr $ IGetElementPtr addr'' addr' [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
   return addr''
 genLhs' (EFunctionCall ident exprs) = genExpr (EFunctionCall ident exprs)
+genLhs' (EMethodCall expr ident exprs) = genExpr (EMethodCall expr ident exprs)
 genLhs' (EArrayNew t expr) = genExpr (EArrayNew t expr)
 genLhs' (ECastNull t) = genExpr (ECastNull t)
 genLhs' (EClassNew ident) = genExpr (EClassNew ident)
