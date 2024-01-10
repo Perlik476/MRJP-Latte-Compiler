@@ -153,42 +153,47 @@ addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
     printDebug $ "Class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls ++ " and defaul vtable " ++ showVTable cls
     modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
 addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) = do
-  printDebug $ "Class " ++ ident ++ " extends " ++ ident'
-  let topDefExtended = identToTopDef Map.! ident'
-  addClassToCEnv identToTopDef topDefExtended
-  addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems))
-  cls <- gets $ (Map.! ident) . getCEnv
-  classExtended <- gets $ (Map.! ident') . getCEnv
-  classFields <- case getClassType cls of
-    CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
-    _ -> error "Class extending is not a struct"
-  classExtendedFields <- case getClassType classExtended of
-    CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
-    _ -> error "Class extending is not a struct"
-  let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : (tail classExtendedFields ++ tail classFields)
-  printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " with " ++ show classFields ++ " from self and " ++ show classExtendedFields ++ " from parent"
-  let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
-  let classMethods = getClassMethods cls
-  let classExtendedMethods = getClassMethods classExtended
-  let methods = foldl (\methods' method ->
-          case Map.lookup (getMethodName method) classExtendedMethods of
-            Just method' ->
-              let method'' = method' {
-                getMethodVTableIndex = getMethodVTableIndex method',
-                getMethodClass = ident,
-                getMethodType = getMethodType method
-              } in
-              Map.insert (getMethodName method) method'' methods'
-            Nothing -> Map.insert (getMethodName method) method methods'
-        ) classExtendedMethods $ Map.elems classMethods
-  let cls' = Class {
-    getClassName = ident,
-    getClassType = classType,
-    getClassMethods = methods,
-    getClassParent = Just ident'
-  }
-  printDebug $ "Extended class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls' ++ " and defaul vtable " ++ showVTable cls'
-  modify $ \s -> s { getCEnv = Map.insert ident cls' (getCEnv s) }
+  printDebug $ "ClassExt " ++ ident
+  cenv <- gets getCEnv
+  if Map.member ident cenv then
+    return ()
+  else do 
+    printDebug $ "Class " ++ ident ++ " extends " ++ ident'
+    let topDefExtended = identToTopDef Map.! ident'
+    addClassToCEnv identToTopDef topDefExtended
+    addClassToCEnv identToTopDef (PClassDef ident (ClassDef classItems))
+    cls <- gets $ (Map.! ident) . getCEnv
+    classExtended <- gets $ (Map.! ident') . getCEnv
+    classFields <- case getClassType cls of
+      CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
+      _ -> error "Class extending is not a struct"
+    classExtendedFields <- case getClassType classExtended of
+      CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
+      _ -> error "Class extending is not a struct"
+    let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : (tail classExtendedFields ++ tail classFields)
+    printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " with " ++ show classFields ++ " from self and " ++ show classExtendedFields ++ " from parent"
+    let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
+    let classMethods = getClassMethods cls
+    let classExtendedMethods = getClassMethods classExtended
+    let methods = foldl (\methods' method ->
+            case Map.lookup (getMethodName method) classExtendedMethods of
+              Just method' ->
+                let method'' = method' {
+                  getMethodVTableIndex = getMethodVTableIndex method',
+                  getMethodClass = ident,
+                  getMethodType = getMethodType method
+                } in
+                Map.insert (getMethodName method) method'' methods'
+              Nothing -> Map.insert (getMethodName method) method methods'
+          ) classExtendedMethods $ Map.elems classMethods
+    let cls' = Class {
+      getClassName = ident,
+      getClassType = classType,
+      getClassMethods = methods,
+      getClassParent = Just ident'
+    }
+    printDebug $ "Extended class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls' ++ " and defaul vtable " ++ showVTable cls'
+    modify $ \s -> s { getCEnv = Map.insert ident cls' (getCEnv s) }
 addClassToCEnv _ _ = pure ()
 
 processClassMethod :: Ident -> ClassElem -> GenM CType
