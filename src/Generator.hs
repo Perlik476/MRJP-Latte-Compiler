@@ -150,7 +150,7 @@ addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
       getClassMethods = methods,
       getClassParent = Nothing
     }
-    printDebug $ "Class " ++ ident ++ " has type " ++ show classType
+    printDebug $ "Class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls ++ " and defaul vtable " ++ showVTable cls
     modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
 addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) = do
   printDebug $ "Class " ++ ident ++ " extends " ++ ident'
@@ -160,12 +160,12 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
   cls <- gets $ (Map.! ident) . getCEnv
   classExtended <- gets $ (Map.! ident') . getCEnv
   classFields <- case getClassType cls of
-    CStruct _ fields -> return $ Map.toList fields
+    CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
     _ -> error "Class extending is not a struct"
   classExtendedFields <- case getClassType classExtended of
-    CStruct _ fields -> return $ Map.toList fields
+    CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
     _ -> error "Class extending is not a struct"
-  let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : classExtendedFields ++ tail classFields
+  let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : (tail classExtendedFields ++ tail classFields)
   printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " with " ++ show classFields ++ " from self and " ++ show classExtendedFields ++ " from parent"
   let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
   let classMethods = getClassMethods cls
@@ -185,8 +185,8 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
     getClassMethods = methods,
     getClassParent = Just ident'
   }
-  printDebug $ "Class " ++ ident ++ " has type " ++ show classType
-  modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
+  printDebug $ "Extended class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls' ++ " and defaul vtable " ++ showVTable cls'
+  modify $ \s -> s { getCEnv = Map.insert ident cls' (getCEnv s) }
 addClassToCEnv _ _ = pure ()
 
 processClassMethod :: Ident -> ClassElem -> GenM CType
@@ -637,7 +637,9 @@ genExpr' (EClassAttr expr ident) = do
   addr <- genExpr expr
   t <- getStructPtrFromClassPtr $ getAddrType addr
   let (CPtr (CStruct fieldNames fields)) = t
+  printDebug $ "Getting class attr " ++ ident ++ " of " ++ show expr ++ " of type " ++ show (getAddrType addr) ++ " with fields " ++ show fieldNames
   let t' = CPtr $ fields Map.! ident
+  -- printDebug $ "Getting field " ++ ident ++ " of type " ++ show t' ++ " from " ++ show addr ++ " of type " ++ show t ++ " with fields " ++ show fieldNames
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
   addr' <- freshReg t'
   emitInstr $ IGetElementPtr addr' addr [AImmediate $ EVInt 0, AImmediate $ EVInt $ toInteger fieldNum]
