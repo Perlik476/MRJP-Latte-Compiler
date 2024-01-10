@@ -143,13 +143,13 @@ addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
             } in
             Map.insert methodIdent method methods'
           ) Map.empty $ (classMethodNames `zip` classMethodTypes) `zip` [0..]
-    printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " and methods " ++ show methods
     let cls = Class {
       getClassName = ident,
       getClassType = classType,
       getClassMethods = methods,
       getClassParent = Nothing
     }
+    printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " and methods " ++ show (getClassMethodsInVTableOrder cls)
     printDebug $ "Class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls ++ " and defaul vtable " ++ showVTable cls
     modify $ \s -> s { getCEnv = Map.insert ident cls (getCEnv s) }
 addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) = do
@@ -259,7 +259,7 @@ genTopDef (PFunDef t ident args block) = do
       Map.insert ident (FunBlock ident t' args' funBasicBlocks) (getFunctions s)
   }
   return ()
-genTopDef _ = pure () -- TODO
+genTopDef _ = pure ()
 
 showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
@@ -658,8 +658,9 @@ genExpr' (EClassNew ident) = do
   genStruct t fieldNames Map.empty
 genExpr' (EMethodCall expr ident exprs) = do
   argAddrs <- mapM genExpr exprs
-  addr <- genLhs expr
+  addr <- genExpr expr
   let argAddrs' = addr : argAddrs
+  printDebug $ "Method call " ++ show ident ++ " with args " ++ show argAddrs' ++ " with addr " ++ show addr ++ " of type " ++ show (getAddrType addr)
   let (CPtr (CClass classIdent)) = getAddrType addr
   cenv <- gets getCEnv
   let cls = cenv Map.! classIdent

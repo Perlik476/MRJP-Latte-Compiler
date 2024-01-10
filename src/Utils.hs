@@ -257,12 +257,11 @@ encodeChar c = "\\" ++ Numeric.showHex (Data.Char.ord c) ""
 showClass :: Class -> String
 showClass cls = "%" ++ getClassName cls ++ " = type " ++ show (getClassType cls)
 
-
 showVTableType :: Class -> String
 showVTableType cls = 
   "%" ++ 
   getClassName cls ++ 
-  ".vtable.type = type {" ++ Data.List.intercalate ", " (map (show . getMethodType) $ Map.elems $ getClassMethods cls)
+  ".vtable.type = type {" ++ Data.List.intercalate ", " (map (show . getMethodType) $ getClassMethodsInVTableOrder cls)
   ++ "}"
 
 showVTable :: Class -> String
@@ -273,7 +272,7 @@ showVTable cls =
   getClassName cls ++ ".vtable.type { " ++
   Data.List.intercalate ", " (map (\method -> 
     show (getMethodType method) ++ " @" ++ getMethodClass method ++ "." ++ getMethodName method
-  ) $ Map.elems $ getClassMethods cls)
+  ) $ getClassMethodsInVTableOrder cls)
   ++ " }"
 
 
@@ -375,3 +374,9 @@ data Method = Method {
   getMethodType :: CType,
   getMethodVTableIndex :: Integer
 } deriving (Show)
+
+getClassMethodsInVTableOrder :: Class -> [Method]
+getClassMethodsInVTableOrder cls = 
+  map snd $ 
+  Data.List.sortBy (\(_, m1) (_, m2) -> compare (getMethodVTableIndex m1) (getMethodVTableIndex m2)) $
+  Map.toList $ getClassMethods cls
