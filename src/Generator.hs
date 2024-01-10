@@ -316,7 +316,8 @@ genStmt' (SAss expr1 expr2) = do
       if countPtrs t1 == countPtrs t2 + 1 then do
         addr2' <- if t1 == CPtr t2 then return addr2
           else do
-            addr2' <- freshReg t2
+            let (CPtr t1') = t1
+            addr2' <- freshReg t1'
             emitInstr $ IBitcast addr2' addr2
             return addr2'
         printDebug $ "emitting store " ++ show addr2' ++ " of type " ++ show (getAddrType addr2') ++ " to " ++ show addr1 ++ " of type " ++ show t1
