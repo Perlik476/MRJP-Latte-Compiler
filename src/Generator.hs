@@ -313,13 +313,22 @@ genStmt' (SAss expr1 expr2) = do
       let t2 = getAddrType addr2
       printDebug $ "addr1 in SAss is " ++ show addr1 ++ " of type " ++ show t1
       printDebug $ "addr2 in SAss is " ++ show addr2 ++ " of type " ++ show t2
-      if t1 == CPtr t2 then do
-        printDebug $ "emitting store " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
-        emitInstr $ IStore addr2 addr1
+      if countPtrs t1 == countPtrs t2 + 1 then do
+        addr2' <- if t1 == CPtr t2 then return addr2
+          else do
+            addr2' <- freshReg t2
+            emitInstr $ IBitcast addr2' addr2
+            return addr2'
+        printDebug $ "emitting store " ++ show addr2' ++ " of type " ++ show (getAddrType addr2') ++ " to " ++ show addr1 ++ " of type " ++ show t1
+        emitInstr $ IStore addr2' addr1
       else do
-        unless (t1 == t2) $ error "Types must match in assignment"
         let ident = getVarName expr1
-        addVarAddr ident addr2
+        addr2' <- if t1 == t2 then return addr2
+          else do
+            addr2' <- freshReg t1
+            emitInstr $ IBitcast addr2' addr2
+            return addr2'
+        addVarAddr ident addr2'
       printDebug $ "Assignment: " ++ show addr2 ++ " of type " ++ show t2 ++ " to " ++ show addr1 ++ " of type " ++ show t1
   return ()
 genStmt' (SIncr expr) = genStmt' (SAss expr (EOp expr OPlus (ELitInt 1)))
@@ -406,6 +415,9 @@ genStmt' (SFor t ident expr stmt) = do
     ])
     )
 
+countPtrs :: CType -> Integer
+countPtrs (CPtr t) = 1 + countPtrs t
+countPtrs _ = 0
 
 emitInstr :: Instr -> GenM ()
 emitInstr instr = do
@@ -899,6 +911,7 @@ freshLabel = do
 
 freshPhi :: Label -> CType -> GenM Phi
 freshPhi label t = do
+  printDebug $ "Creating phi for " ++ label ++ " with type " ++ show t
   block <- gets $ (Map.! label) . getBasicBlockEnv
   modify $ \s -> s { getPhiCount = getPhiCount s + 1 }
   phiId <- gets getPhiCount
@@ -906,6 +919,7 @@ freshPhi label t = do
   let phi = Phi newReg phiId t []
   modify $ \s -> s { getPhiToLabel = Map.insert phiId label (getPhiToLabel s) }
   updateBlockPhi label phiId phi
+  printDebug $ "Created phi " ++ show phiId ++ " for " ++ label ++ " with address " ++ show (getPhiAddr phi)
   return phi
 
 updateBlockPhi :: Label -> PhiID -> Phi -> GenM ()
