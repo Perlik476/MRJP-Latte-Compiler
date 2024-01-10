@@ -3,7 +3,8 @@ class A {
   string s;
 
   int m(int y) {
-    self.x = y;
+    x = y;
+    n();
     return y;
   }
 
@@ -13,6 +14,9 @@ class A {
 }
 
 class B extends A {
+  // int n() {
+  //   return self.x - 1;
+  // }
 }
 
 int main() {

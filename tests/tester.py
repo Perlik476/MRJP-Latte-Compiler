@@ -8,6 +8,8 @@ latte_dirs = [
     "tests/lattests/good",
     "tests/lattests/extensions/arrays1",
     "tests/lattests/extensions/struct",
+    "tests/lattests/extensions/objects1",
+    "tests/lattests/extensions/objects2",
     "tests/mrjp-tests-good/good",
     "tests/my-tests"
 ]

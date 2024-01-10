@@ -852,8 +852,8 @@ genLhs' (EClassAttr expr ident) = do
   addr <- genLhs expr
   addr' <- genDereferencePtrIfDoublePtr addr
   t <- getStructPtrFromClassPtr $ getAddrType addr'
-  printDebug $ "Generating genLhs EClassAttr " ++ ident ++ " of expr type " ++ show t
   let (CPtr (CStruct fieldNames fields)) = t
+  printDebug $ "(lhs) Getting class attr " ++ ident ++ " of " ++ show expr ++ " of type " ++ show (getAddrType addr) ++ " with fields " ++ show fieldNames
   let t' = fields Map.! ident
   let (Just fieldNum) = Data.List.elemIndex ident fieldNames
   addr'' <- freshReg $ CPtr t'

@@ -48,6 +48,7 @@ run options p f s =
       if success then do
         hPutStrLn stderr "OK"
         let ast = transformTree tree
+        liftIO $ print ast
         llvm_file_content <- compile options ast
         let fll = removeExtension f ++ "ll"
         let fbc = removeExtension f ++ "bc"
