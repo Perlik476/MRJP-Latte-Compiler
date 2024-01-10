@@ -172,11 +172,13 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
   let classExtendedMethods = getClassMethods classExtended
   let methods = foldl (\methods' method ->
           case Map.lookup (getMethodName method) classExtendedMethods of
-            Just method ->
-              let method' = method {
-                getMethodVTableIndex = getMethodVTableIndex method -- TODO
+            Just method' ->
+              let method'' = method' {
+                getMethodVTableIndex = getMethodVTableIndex method',
+                getMethodClass = ident,
+                getMethodType = getMethodType method
               } in
-              Map.insert (getMethodName method) method' methods'
+              Map.insert (getMethodName method) method'' methods'
             Nothing -> Map.insert (getMethodName method) method methods'
         ) classExtendedMethods $ Map.elems classMethods
   let cls' = Class {

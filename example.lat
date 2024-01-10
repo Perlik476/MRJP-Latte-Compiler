@@ -14,9 +14,9 @@ class A {
 }
 
 class B extends A {
-  // int n() {
-  //   return self.x - 1;
-  // }
+  int n() {
+    return self.x - 1;
+  }
 }
 
 int main() {
