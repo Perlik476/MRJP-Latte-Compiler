@@ -184,7 +184,11 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
                   getMethodType = getMethodType method
                 } in
                 Map.insert (getMethodName method) method'' methods'
-              Nothing -> Map.insert (getMethodName method) method methods'
+              Nothing -> 
+                let method'' = method {
+                  getMethodVTableIndex = toInteger $ Map.size methods'
+                } in
+                Map.insert (getMethodName method) method'' methods'
           ) classExtendedMethods $ Map.elems classMethods
     let cls' = Class {
       getClassName = ident,
@@ -192,7 +196,10 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
       getClassMethods = methods,
       getClassParent = Just ident'
     }
-    printDebug $ "Extended class " ++ ident ++ " has type " ++ show classType ++ " with vtable " ++ showVTableType cls' ++ " and defaul vtable " ++ showVTable cls'
+    printDebug $ "Extended class " ++ ident ++ " has type " ++ show classType
+    printDebug $ "with vtable " ++ showVTableType cls'
+    printDebug $ "and defaul vtable " ++ showVTable cls'
+    printDebug $ "and methods " ++ show (getClassMethodsInVTableOrder cls')
     modify $ \s -> s { getCEnv = Map.insert ident cls' (getCEnv s) }
 addClassToCEnv _ _ = pure ()
 
