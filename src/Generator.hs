@@ -34,6 +34,7 @@ compile options ast =
     getVEnv = Map.empty,
     getRegCount = 0,
     getFEnv = Map.empty,
+    getFunDefs = [],
     getCEnv = Map.empty,
     getSealedBlocks = [],
     getIncompletePhis = Map.empty,
@@ -60,6 +61,7 @@ compile options ast =
           "declare i8* @fun.internal.concatStrings(i8*, i8*)",
           "declare i1 @fun.internal.compareStrings(i8*, i8*)",
           "declare i1 @fun.internal.compareStringsNeq(i8*, i8*)",
+          "declare i1 @fun.internal.decrementReferenceCounter(i8*)",
           ""
           ] ++
           map showClass (Map.elems cenv) ++
@@ -80,8 +82,8 @@ genProgram (PProgram topDefs) = do
   let identToTopDef = Map.fromList $ map (\topDef -> (getTopDefIdent topDef, topDef)) topDefs
   mapM_ (addClassToCEnv identToTopDef) topDefs
   mapM_ addFunToFEnv topDefs
-  let topDefs' = concatMap getAllClassMethodsToTopDefs topDefs ++ topDefs
-  mapM_ genTopDef topDefs'
+  funs <- gets getFunDefs
+  mapM_ genTopDef funs
   postprocessFuns
   funs <- gets getFunctions
   modify $ \s -> s { getFunctions = funs }
@@ -110,7 +112,11 @@ getStdLib = Map.fromList [
   ("fun.readInt", FunType "fun.readInt" CInt []),
   ("fun.printString", FunType "fun.printString" CVoid [ARegister 0 CString]),
   ("fun.readString", FunType "fun.readString" CString []),
-  ("fun.error", FunType "fun.error" CVoid [])
+  ("fun.error", FunType "fun.error" CVoid []),
+  ("fun.internal.concatStrings", FunType "fun.internal.concatStrings" CString [ARegister 0 CString, ARegister 1 CString]),
+  ("fun.internal.compareStrings", FunType "fun.internal.compareStrings" CBool [ARegister 0 CString, ARegister 1 CString]),
+  ("fun.internal.compareStringsNeq", FunType "fun.internal.compareStringsNeq" CBool [ARegister 0 CString, ARegister 1 CString]),
+  ("fun.internal.decrementReferenceCounter", FunType "fun.internal.decrementReferenceCounter" CBool [ARegister 0 CString])
   ]
 
 addClassToCEnv :: Map Ident TopDef -> TopDef -> GenM ()
@@ -132,7 +138,9 @@ addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
               _ -> toCompType t
         return (ident', t')
       ) classFields
-    let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : classFields'
+    let classFields'' = (ident ++ ".reference.counter", CInt) : 
+                        (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : 
+                        classFields'
     let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
     let methods = foldl (\methods' ((methodIdent, methodType), index) ->
             let method = Method {
@@ -142,11 +150,13 @@ addClassToCEnv identToTopDef topDef@(PClassDef ident (ClassDef classItems)) = do
               getMethodType = methodType
             } in
             Map.insert methodIdent method methods'
-          ) Map.empty $ (classMethodNames `zip` classMethodTypes) `zip` [0..]
+          ) Map.empty $ (classMethodNames `zip` classMethodTypes) `zip` [1..]
+    destructor <- createClassDestructor topDef
+    let methods' = Map.insert (getMethodName destructor) destructor methods
     let cls = Class {
       getClassName = ident,
       getClassType = classType,
-      getClassMethods = methods,
+      getClassMethods = methods',
       getClassParent = Nothing
     }
     printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " and methods " ++ show (getClassMethodsInVTableOrder cls)
@@ -170,7 +180,9 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
     classExtendedFields <- case getClassType classExtended of
       CStruct fieldNames fields -> return $ map (\name -> (name, fields Map.! name)) fieldNames
       _ -> error "Class extending is not a struct"
-    let classFields'' = (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : (tail classExtendedFields ++ tail classFields)
+    let classFields'' = (ident ++ ".reference.counter", CInt) : 
+                        (ident ++ ".vtable.type", CPtr $ CClass $ ident ++ ".vtable.type") : 
+                        (tail classExtendedFields ++ tail classFields)
     printDebug $ "Class " ++ ident ++ " has fields " ++ show classFields'' ++ " with " ++ show classFields ++ " from self and " ++ show classExtendedFields ++ " from parent"
     let classType = CStruct (map fst classFields'') $ Map.fromList classFields''
     let classMethods = getClassMethods cls
@@ -203,6 +215,36 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
     modify $ \s -> s { getCEnv = Map.insert ident cls' (getCEnv s) }
 addClassToCEnv _ _ = pure ()
 
+
+createClassDestructor :: TopDef -> GenM Method
+createClassDestructor (PClassDef ident (ClassDef classItems)) = do
+  printDebug $ "Creating destructor for class " ++ ident
+  let destructorIdent = "destructor"
+  let classFields = filter isClassField classItems
+  let classFields' = map (\classItem -> case classItem of
+        ClassAttrDef t ident' -> (ident', t)
+        ) classFields
+  let referenceFields = filter (\(_, t) -> case t of
+        TArray _ -> True
+        TClass _ -> True
+        TStr -> True
+        _ -> False
+        ) classFields'
+  let destructorBlock = SBlock $ map (\(ident, t) ->
+        SCond (EFunctionCall "fun.internal.decrementReferenceCounter" [EClassAttr (EVar "self") ident])
+          (SExp $ EMethodCall (EClassAttr (EVar "self") ident) destructorIdent [])
+        ) referenceFields ++ [SVRet]
+  let destructor = ClassMethodDef TVoid destructorIdent [] destructorBlock
+  ct <- processClassMethod ident destructor
+  let destructor' = Method { 
+        getMethodName = destructorIdent,
+        getMethodClass = ident,
+        getMethodVTableIndex = 0,
+        getMethodType = ct
+  }
+  return destructor'
+
+
 processClassMethod :: Ident -> ClassElem -> GenM CType
 processClassMethod classIdent (ClassMethodDef t methodIdent args block) = do
   printDebug $ "Processing method " ++ methodIdent ++ " of class " ++ classIdent
@@ -228,7 +270,7 @@ isClassMethod = not . isClassField
 
 
 addFunToFEnv :: TopDef -> GenM ()
-addFunToFEnv (PFunDef t ident args block) = do
+addFunToFEnv def@(PFunDef t ident args block) = do
   funEntry <- freshLabel
   setCurrentLabel funEntry
   args' <- mapM (\(PArg t ident') -> do
@@ -247,6 +289,7 @@ addFunToFEnv (PFunDef t ident args block) = do
         _ -> toCompType t
   modify $ \s -> s {
     getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
+    getFunDefs = def:getFunDefs s,
     getCurrentFunLabels = []
   }
 addFunToFEnv _ = pure ()
@@ -627,6 +670,7 @@ genExpr' (EFunctionCall ident exprs) = do
     addr <- freshReg retType
     emitInstr $ ICall addr (AName ident Nothing) args'
     return addr
+
 genExpr' (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
 genExpr' (ENot expr) = genBoolExpr False expr
 genExpr' (EOp expr1 op expr2) = genBinOp op expr1 expr2
@@ -695,7 +739,7 @@ genExpr' (EMethodCall expr ident exprs) = do
   printDebug $ "methodVTable: " ++ show (getClassMethods cls)
   -- access vtable
   vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ classIdent ++ ".vtable.type")
-  emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 0]
+  emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
   vtableAddr' <- freshReg (CPtr $ CClass $ classIdent ++ ".vtable.type")
   emitInstr $ ILoad vtableAddr' vtableAddr
   -- access method

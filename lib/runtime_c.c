@@ -60,3 +60,13 @@ int _readInt() {
     scanf("%d ", &result);
     return result;
 }
+
+int _decrementReferenceCounter(void* ptr) {
+    // TODO null string
+    if (ptr != NULL) {
+        int* refCounter = (int*)ptr;
+        *refCounter = *refCounter - 1;
+        return *refCounter;
+    }
+    return -1;
+}

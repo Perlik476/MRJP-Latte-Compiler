@@ -42,6 +42,7 @@ data GenState = GenState {
   getBasicBlockEnv :: Map Label BasicBlock,
   getFunctions :: Map String FunBlock,
   getFEnv :: Map Ident FunType,
+  getFunDefs :: [TopDef],
   getCEnv :: Map Ident Class,
   getSealedBlocks :: [String],
   getPhiCount :: Integer,

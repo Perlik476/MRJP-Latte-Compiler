@@ -19,6 +19,7 @@ declare i8* @_readString()
 declare i32 @_compareStrings(i8*, i8*)
 declare i8* @_concatStrings(i8*, i8*)
 declare i32 @_readInt()
+declare i32 @_decrementReferenceCounter(i8*)
 
 
 define void @fun.printInt(i32 %x) {
@@ -63,4 +64,10 @@ define void @fun.error() {
   %r0 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @str.error, i64 0, i64 0))
   call void @exit(i32 134)
   unreachable
+}
+
+define i1 @fun.internal.decrementReferenceCounter(i8* %cls) {
+  %r1 = call i32 @_decrementReferenceCounter(i8* %cls)
+  %r2 = icmp eq i32 %r1, 0
+  ret i1 %r2
 }
