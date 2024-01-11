@@ -44,6 +44,7 @@ compile options ast =
     getVarType = Map.empty,
     getStringPool = Map.empty,
     getStringPoolCount = 0,
+    getBlockDeclRefs = [],
     getInternalVarIdentCount = 0,
     getOptions = options
   } in do
@@ -61,7 +62,8 @@ compile options ast =
           "declare i8* @fun.internal.concatStrings(i8*, i8*)",
           "declare i1 @fun.internal.compareStrings(i8*, i8*)",
           "declare i1 @fun.internal.compareStringsNeq(i8*, i8*)",
-          "declare i1 @fun.internal.decrementReferenceCounter(i8*)",
+          "declare void @fun.internal.decrementReferenceCounter(i8*)",
+          "declare void @fun.internal.incrementReferenceCounter(i8*)",
           ""
           ] ++
           map showClass (Map.elems cenv) ++
@@ -116,7 +118,8 @@ getStdLib = Map.fromList [
   ("fun.internal.concatStrings", FunType "fun.internal.concatStrings" CString [ARegister 0 CString, ARegister 1 CString]),
   ("fun.internal.compareStrings", FunType "fun.internal.compareStrings" CBool [ARegister 0 CString, ARegister 1 CString]),
   ("fun.internal.compareStringsNeq", FunType "fun.internal.compareStringsNeq" CBool [ARegister 0 CString, ARegister 1 CString]),
-  ("fun.internal.decrementReferenceCounter", FunType "fun.internal.decrementReferenceCounter" CBool [ARegister 0 CString])
+  ("fun.internal.decrementReferenceCounter", FunType "fun.internal.decrementReferenceCounter" CVoid [ARegister 0 $ CPtr CChar]),
+  ("fun.internal.incrementReferenceCounter", FunType "fun.internal.incrementReferenceCounter" CVoid [ARegister 0 $ CPtr CChar])
   ]
 
 addClassToCEnv :: Map Ident TopDef -> TopDef -> GenM ()
@@ -230,12 +233,16 @@ createClassDestructor (PClassDef ident (ClassDef classItems)) = do
         TStr -> True
         _ -> False
         ) classFields'
-  let destructorBlock = SBlock $ map (\(ident, t) ->
-        SCond (EFunctionCall "fun.internal.decrementReferenceCounter" [EClassAttr (EVar "self") ident])
-          (SExp $ EMethodCall (EClassAttr (EVar "self") ident) destructorIdent [])
-        ) referenceFields ++ [SVRet]
+  let destructorBlock = SBlock $ (SExp $ EFunctionCall "fun.printInt" [ELitInt 2137]) :
+        map (\(ident, t) ->
+        SExp $ EFunctionCall "fun.internal.decrementReferenceCounter" [EClassAttr (EVar "self") ident]) referenceFields
+        -- TODO dodać przy wychodzeniu z funkcji
+        ++ [SVRet]
   let destructor = ClassMethodDef TVoid destructorIdent [] destructorBlock
   ct <- processClassMethod ident destructor
+  fenv <- gets getFEnv
+  let destFun = fenv Map.! (ident ++ "." ++ destructorIdent)
+
   let destructor' = Method { 
         getMethodName = destructorIdent,
         getMethodClass = ident,
@@ -320,7 +327,27 @@ showArg :: Arg -> String
 showArg (PArg t ident) = show t ++ " " ++ ident
 
 genBlock :: Block -> GenM ()
-genBlock (SBlock stmts) = mapM_ genStmt stmts
+genBlock (SBlock stmts) = do
+  printDebug "Generating block"
+  prevBlockDeclRefs <- gets getBlockDeclRefs
+  modify $ \s -> s { getBlockDeclRefs = [] }
+  mapM_ genStmt stmts
+  printDebug "Generating block: stmts done"
+  label <- getLabel
+  unless (label == "None") $ do
+    blockDeclRefs <- gets getBlockDeclRefs -- has type [Ident]
+    printDebug $ "Block decl refs: " ++ show blockDeclRefs
+    blockDeclRefsAddrs <- mapM (\ident -> do
+      addr <- readVar ident =<< getLabel
+      return (ident, addr)
+      ) blockDeclRefs
+    printDebug $ "Block decl refs addrs: " ++ show blockDeclRefsAddrs
+    mapM_ (\(ident, addr) -> do
+      addr' <- freshReg $ CPtr CChar
+      emitInstr $ IBitcast addr' addr
+      emitInstr $ IVCall (AName "fun.internal.decrementReferenceCounter" Nothing) [addr']
+      ) blockDeclRefsAddrs
+
 
 
 
@@ -344,6 +371,7 @@ genStmt' (SDecl t ident expr) = do
   addVarAddr ident addr
   addVarType ident (getAddrType addr)
   printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
+  modify $ \s -> s { getBlockDeclRefs = ident : getBlockDeclRefs s }
   return ()
 genStmt' (SAss expr1 expr2) = do
   addr1 <- genLhs expr1
@@ -817,7 +845,7 @@ genStruct t fieldNames fields = do
     if ".vtable.type" `Data.List.isSuffixOf` name then do
       let className = take (length name - length ".vtable.type") name
       vtableAddr <- freshReg (CPtr $ CPtr $ CClass $ className ++ ".vtable.type")
-      emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 0]
+      emitInstr $ IGetElementPtr vtableAddr addr [AImmediate $ EVInt 0, AImmediate $ EVInt 1]
       emitInstr $ IStore (AName (className ++ ".vtable.data") (Just $ CPtr $ CClass name)) vtableAddr
     else
       case Map.lookup name fields of
@@ -1011,8 +1039,25 @@ writeVar ident label addr = do
   printDebug $ "Writing " ++ ident ++ " to " ++ label ++ " with address " ++ show addr
   printDebug $ "VEnv before is " ++ show venv
   case Map.lookup ident venv of
-    Just m -> modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
-    Nothing -> modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
+    Just m -> do
+      when (isRefType $ getAddrType addr) $ do
+        -- increment refence count for new address
+        addr' <- freshReg (CPtr CChar)
+        emitInstr $ IBitcast addr' addr
+        emitInstr $ IVCall (AName "fun.internal.incrementReferenceCounter" Nothing) [addr']
+        -- decrement reference count for old address
+        oldAddr <- readVar ident label
+        oldAddr' <- freshReg (CPtr CChar)
+        emitInstr $ IBitcast oldAddr' oldAddr
+        emitInstr $ IVCall (AName "fun.internal.decrementReferenceCounter" Nothing) [oldAddr']
+      modify $ \s -> s { getVEnv = Map.insert ident (Map.insert label addr m) venv }
+    Nothing -> do
+      when (isRefType $ getAddrType addr) $ do
+        -- increment refence count for new address
+        addr' <- freshReg (CPtr CChar)
+        emitInstr $ IBitcast addr' addr
+        emitInstr $ IVCall (AName "fun.internal.incrementReferenceCounter" Nothing) [addr']
+      modify $ \s -> s { getVEnv = Map.insert ident (Map.singleton label addr) venv }
   printDebug $ "VEnv after is " ++ show venv
 
 

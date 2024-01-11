@@ -52,6 +52,7 @@ data GenState = GenState {
   getVarType :: Map String CType,
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
+  getBlockDeclRefs :: [Ident],
   getInternalVarIdentCount :: Integer,
   getOptions :: Options
 }
@@ -351,6 +352,13 @@ instance Show CType where
   show (CClass ident) = "%" ++ ident
   show (CStruct fieldNames fields) = "{" ++ Data.List.intercalate ", " (map (\name -> show (fields Map.! name)) fieldNames) ++ "}"
   show (CFun ret args) = show ret ++ "(" ++ Data.List.intercalate ", " (map show args) ++ ")*"
+
+isRefType :: CType -> Bool
+isRefType (CPtr _) = True
+isRefType (CClass _) = True
+isRefType (CStruct {}) = True
+isRefType CString = True
+isRefType _ = False
 
 classToStruct :: CType -> GenM CType
 classToStruct (CClass ident) = do

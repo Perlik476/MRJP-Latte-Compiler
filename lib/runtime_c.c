@@ -61,12 +61,33 @@ int _readInt() {
     return result;
 }
 
-int _decrementReferenceCounter(void* ptr) {
+void _decrementReferenceCounter(void* ptr) {
+    printf("decrementing reference counter\n");
     // TODO null string
     if (ptr != NULL) {
         int* refCounter = (int*)ptr;
         *refCounter = *refCounter - 1;
-        return *refCounter;
+        if (*refCounter == 0) {
+            printf("getting vtable\n");
+            // get the vtable pointer (it's the second element of the struct)
+            void** vtable = (void**)((int*)ptr + 1);
+            printf("getting destructor\n");
+            // get the first method of the vtable which is the destructor (it's type is void(void*)))
+            void (*destructor)(char*) = (void(*)(char*))vtable[0];
+            printf("calling destructor\n");
+            // call the destructor
+            destructor((char*)ptr);
+            // free the memory
+            free(ptr);
+        }
     }
-    return -1;
+}
+
+void _incrementReferenceCounter(void* ptr) {
+    printf("incrementing reference counter\n");
+    // TODO null string
+    if (ptr != NULL) {
+        int* refCounter = (int*)ptr;
+        *refCounter = *refCounter + 1;
+    }
 }

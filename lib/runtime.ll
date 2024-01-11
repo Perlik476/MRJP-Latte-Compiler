@@ -19,7 +19,8 @@ declare i8* @_readString()
 declare i32 @_compareStrings(i8*, i8*)
 declare i8* @_concatStrings(i8*, i8*)
 declare i32 @_readInt()
-declare i32 @_decrementReferenceCounter(i8*)
+declare void @_decrementReferenceCounter(i8*)
+declare void @_incrementReferenceCounter(i8*)
 
 
 define void @fun.printInt(i32 %x) {
@@ -66,8 +67,12 @@ define void @fun.error() {
   unreachable
 }
 
-define i1 @fun.internal.decrementReferenceCounter(i8* %cls) {
-  %r1 = call i32 @_decrementReferenceCounter(i8* %cls)
-  %r2 = icmp eq i32 %r1, 0
-  ret i1 %r2
+define void @fun.internal.decrementReferenceCounter(i8* %cls) {
+  call void @_decrementReferenceCounter(i8* %cls)
+  ret void
+}
+
+define void @fun.internal.incrementReferenceCounter(i8* %cls) {
+  call void @_incrementReferenceCounter(i8* %cls)
+  ret void
 }
