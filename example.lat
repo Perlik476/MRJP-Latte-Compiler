@@ -6,5 +6,9 @@ int main() {
     int z = x + y;
     int u = x + y;
     printInt(z + u);
+    if (z == u) {
+
+    }
+    printInt(z + u);
     return z + u;
 }

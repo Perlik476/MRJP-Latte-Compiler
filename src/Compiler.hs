@@ -27,7 +27,7 @@ import TreeTransformer (transformTree)
 import Generator (compile)
 import System.Process
 
-import Utils (Options(..))
+import Utils (Options(..), CSE (..))
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -89,7 +89,7 @@ processArgs = foldl processArg (Options {
   optRemoveTrivialPhis = True,
   optMergeBlocks = True,
   optRemoveTrivialBlocks = True,
-  optLCSE = True
+  optCSE = GCSE
 })
   where
     processArg :: Options -> String -> Options
@@ -101,8 +101,9 @@ processArgs = foldl processArg (Options {
     processArg options "--merge-blocks=1" = options { optMergeBlocks = True }
     processArg options "--remove-trivial-blocks=0" = options { optRemoveTrivialBlocks = False }
     processArg options "--remove-trivial-blocks=1" = options { optRemoveTrivialBlocks = True }
-    processArg options "--LCSE=0" = options { optLCSE = False }
-    processArg options "--LCSE=1" = options { optLCSE = True }
+    processArg options "--CSE=0" = options { optCSE = NoCSE }
+    processArg options "--CSE=LCSE" = options { optCSE = LCSE }
+    processArg options "--CSE=GCSE" = options { optCSE = GCSE }
     processArg options _ = options
 
 main :: IO ()

@@ -28,8 +28,11 @@ data Options = Options {
   optRemoveTrivialPhis :: Bool,
   optMergeBlocks :: Bool,
   optRemoveTrivialBlocks :: Bool,
-  optLCSE :: Bool
+  optCSE :: CSE
 } deriving (Show)
+
+data CSE = NoCSE | LCSE | GCSE
+  deriving (Show)
 
 type GenM = StateT GenState IO
 
@@ -53,7 +56,8 @@ data GenState = GenState {
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
   getInternalVarIdentCount :: Integer,
-  getArithExprToAddr :: Map (Label, Address, ArithOp, Address) Address,
+  getArithExprToAddrGCSE :: Map (Address, ArithOp, Address) Address,
+  getArithExprToAddrLCSE :: Map (Label, Address, ArithOp, Address) Address,
   getOptions :: Options
 }
 

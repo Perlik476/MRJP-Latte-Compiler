@@ -44,7 +44,8 @@ compile options ast =
     getStringPool = Map.empty,
     getStringPoolCount = 0,
     getInternalVarIdentCount = 0,
-    getArithExprToAddr = Map.empty,
+    getArithExprToAddrLCSE = Map.empty,
+    getArithExprToAddrGCSE = Map.empty,
     getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
@@ -281,6 +282,13 @@ genBlock :: Block -> GenM ()
 genBlock (SBlock stmts) = mapM_ genStmt stmts
 
 
+setGCSEEnv :: Map (Address, ArithOp, Address) Address -> GenM ()
+setGCSEEnv arithExprToAddr = do
+  useCSE <- gets $ optCSE . getOptions
+  case useCSE of
+    GCSE -> modify $ \s -> s { getArithExprToAddrGCSE = arithExprToAddr }
+    _ -> pure ()
+
 
 genStmt :: Stmt -> GenM ()
 genStmt s = do
@@ -355,40 +363,48 @@ genStmt' (SCondElse expr thenStmt elseStmt) = do
   elseLabel <- freshLabel
   endLabel <- freshLabel
 
+  arithExprToAddr <- gets getArithExprToAddrGCSE
   emitIfThenElseBlocks expr thenLabel elseLabel
   sealBlock thenLabel
   sealBlock elseLabel
 
   setCurrentLabel thenLabel
+  setGCSEEnv arithExprToAddr
   genStmt thenStmt
   emitJumpIfNoTerminator endLabel
 
   setCurrentLabel elseLabel
+  setGCSEEnv arithExprToAddr
   genStmt elseStmt
   emitJumpIfNoTerminator endLabel
 
   sealBlock endLabel
   setCurrentLabel endLabel
+  setGCSEEnv arithExprToAddr
   return ()
 genStmt' (SCond expr thenStmt) = do
   thenLabel <- freshLabel
   endLabel <- freshLabel
 
+  arithExprToAddr <- gets getArithExprToAddrGCSE
   emitIfThenElseBlocks expr thenLabel endLabel
   sealBlock thenLabel
 
   setCurrentLabel thenLabel
+  setGCSEEnv arithExprToAddr
   genStmt thenStmt
   emitJumpIfNoTerminator endLabel
   sealBlock endLabel
 
   setCurrentLabel endLabel
+  setGCSEEnv arithExprToAddr
   return ()
 genStmt' (SWhile expr stmt) = do
   condLabel <- freshLabel
   bodyLabel <- freshLabel
   endLabel <- freshLabel
 
+  arithExprToAddr <- gets getArithExprToAddrGCSE
   emitJump condLabel
   setCurrentLabel condLabel
   emitIfThenElseBlocks expr bodyLabel endLabel
@@ -396,11 +412,13 @@ genStmt' (SWhile expr stmt) = do
   sealBlock endLabel
 
   setCurrentLabel bodyLabel
+  setGCSEEnv arithExprToAddr
   genStmt stmt
   emitJumpIfNoTerminator condLabel
   sealBlock condLabel
 
   setCurrentLabel endLabel
+  setGCSEEnv arithExprToAddr
   return ()
 genStmt' (SFor t ident expr stmt) = do
   let iterIdent = "iter." ++ ident
@@ -819,25 +837,35 @@ genBinOp op e1 e2 = do
   addr2 <- genExpr e2
   case getAddrType addr1 of
     CInt -> do
-      useLCSE <- gets $ optLCSE . getOptions
-      if useLCSE then do
-        arithExprs <- gets getArithExprToAddr
-        label <- getLabel
-        case Map.lookup (label, addr1, op, addr2) arithExprs of
-          Just addr -> return addr
-          Nothing -> do
-            addr <- freshReg CInt
-            emitInstr $ IBinOp addr addr1 op addr2
-            modify $ \s -> s { getArithExprToAddr = Map.insert (label, addr1, op, addr2) addr (getArithExprToAddr s) }
-            return addr
-      else do
-        addr <- freshReg CInt
-        emitInstr $ IBinOp addr addr1 op addr2
-        return addr
+      useCSE <- gets $ optCSE . getOptions
+      case useCSE of
+        NoCSE -> do
+          addr <- freshReg CInt
+          emitInstr $ IBinOp addr addr1 op addr2
+          return addr
+        LCSE -> do
+          arithExprs <- gets getArithExprToAddrLCSE
+          label <- getLabel
+          case Map.lookup (label, addr1, op, addr2) arithExprs of
+            Just addr -> return addr
+            Nothing -> do
+              addr <- freshReg CInt
+              emitInstr $ IBinOp addr addr1 op addr2
+              modify $ \s -> s { getArithExprToAddrLCSE = Map.insert (label, addr1, op, addr2) addr (getArithExprToAddrLCSE s) }
+              return addr
+        GCSE -> do
+          arithExprs <- gets getArithExprToAddrGCSE
+          case Map.lookup (addr1, op, addr2) arithExprs of
+            Just addr -> return addr
+            Nothing -> do
+              addr <- freshReg CInt
+              emitInstr $ IBinOp addr addr1 op addr2
+              modify $ \s -> s { getArithExprToAddrGCSE = Map.insert (addr1, op, addr2) addr (getArithExprToAddrGCSE s) }
+              return addr
     CString -> do
       addr <- freshReg (getAddrType addr1)
       emitInstr $ ICall addr (case op of
-        OPlus -> (AName "fun.internal.concatStrings" Nothing)
+        OPlus -> AName "fun.internal.concatStrings" Nothing
         _ -> error "Not implemented"
         ) [addr1, addr2]
       return addr
