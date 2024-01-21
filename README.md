@@ -14,10 +14,21 @@ Kompilator `latc_llvm` przyjmuje następujące opcje:
 - `--verbose` - wypisuje informacje o przebiegu kompilacji
 - `--comments` - wypisuje komentarze w kodzie LLVM
 - `--remove-trivial-phis=0|1` - usuwa trywialne phi (domyślnie 1)
-- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym nie uwzględnia się wspólnych podwyrażeń pochodzących z bloków instrukcji warunkowej lub bloku pętli ani wyrażeń z samego ich warunku) (domyślnie GCSE)
-- `--remove-trivial-blocks=0|1` - usuwa zbędne bloki (domyślnie 1)
-- `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1)
-- `--skip-trivial-conditions=0|1` - pomija trywialne warunki (np. `if (x == x) {...}` lub `x = 0; if (x == 0) {...}`) (domyślnie 1)
+- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia (domyślnie GCSE) (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym nie uwzględnia się wspólnych podwyrażeń pochodzących z bloków instrukcji warunkowej lub bloku pętli ani wyrażeń z samego ich warunku) 
+- `--remove-trivial-blocks=0|1` - usuwa zbędne bloki (domyślnie 1) (tj. bloki, które zawierają tylko skok bezwarunkowy do następnego bloku i nie są wykorzystywane w żadnym phi)
+- `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1) (tj. jeśli blok ma tylko jednego poprzednika i poprzednik ten ma tylko jednego następnika, to bloki te są scalane. Przykładem zastosowania jest następujący kod (przy wyłączonej opcji `--skip-trivial-conditions`):
+```
+    int foo() {
+        int x = 0;
+        if (x == 0) {
+            return x;
+        } else {
+            x++;
+        }
+        return x;
+    }
+```
+- `--skip-trivial-conditions=0|1` - pomija trywialne warunki (domyślnie 1) (np. `if (x == x) {...}` lub `x = 0; if (x == 0) {...}`)
 
 
 ## Struktura projektu
