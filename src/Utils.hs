@@ -27,7 +27,8 @@ data Options = Options {
   optComments :: Bool,
   optRemoveTrivialPhis :: Bool,
   optMergeBlocks :: Bool,
-  optRemoveTrivialBlocks :: Bool
+  optRemoveTrivialBlocks :: Bool,
+  optLCSE :: Bool
 } deriving (Show)
 
 type GenM = StateT GenState IO

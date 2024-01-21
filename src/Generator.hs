@@ -158,7 +158,7 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
   cenv <- gets getCEnv
   if Map.member ident cenv then
     return ()
-  else do 
+  else do
     printDebug $ "Class " ++ ident ++ " extends " ++ ident'
     let topDefExtended = identToTopDef Map.! ident'
     addClassToCEnv identToTopDef topDefExtended
@@ -185,7 +185,7 @@ addClassToCEnv identToTopDef (PClassDefExt ident ident' (ClassDef classItems)) =
                   getMethodType = getMethodType method
                 } in
                 Map.insert (getMethodName method) method'' methods'
-              Nothing -> 
+              Nothing ->
                 let method'' = method {
                   getMethodVTableIndex = toInteger $ Map.size methods'
                 } in
@@ -819,16 +819,21 @@ genBinOp op e1 e2 = do
   addr2 <- genExpr e2
   case getAddrType addr1 of
     CInt -> do
-      arithExprs <- gets getArithExprToAddr
-      label <- getLabel
-      addr <- case Map.lookup (label, addr1, op, addr2) arithExprs of
-        Just addr -> return addr
-        Nothing -> do
-          addr <- freshReg CInt
-          emitInstr $ IBinOp addr addr1 op addr2
-          modify $ \s -> s { getArithExprToAddr = Map.insert (label, addr1, op, addr2) addr (getArithExprToAddr s) }
-          return addr
-      return addr
+      useLCSE <- gets $ optLCSE . getOptions
+      if useLCSE then do
+        arithExprs <- gets getArithExprToAddr
+        label <- getLabel
+        case Map.lookup (label, addr1, op, addr2) arithExprs of
+          Just addr -> return addr
+          Nothing -> do
+            addr <- freshReg CInt
+            emitInstr $ IBinOp addr addr1 op addr2
+            modify $ \s -> s { getArithExprToAddr = Map.insert (label, addr1, op, addr2) addr (getArithExprToAddr s) }
+            return addr
+      else do
+        addr <- freshReg CInt
+        emitInstr $ IBinOp addr addr1 op addr2
+        return addr
     CString -> do
       addr <- freshReg (getAddrType addr1)
       emitInstr $ ICall addr (case op of

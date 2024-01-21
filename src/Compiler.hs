@@ -78,7 +78,8 @@ usage = do
       " --comments (file)                          Compile file with comments illustrating the compilation process",
       " --remove-trivial-phis=0|1 (file)           Compile file with removing trivial phis (default: 1)",
       " --remove-trivial-blocks=0|1 (file)         Compile file with removing trivial blocks (default: 1)",
-      " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)"
+      " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)",
+      " --LCSE=0|1 (file)                          Compile file with local common subexpression elimination (default: 1)"
     ]
 
 processArgs :: [String] -> Options
@@ -87,7 +88,8 @@ processArgs = foldl processArg (Options {
   optComments = False,
   optRemoveTrivialPhis = True,
   optMergeBlocks = True,
-  optRemoveTrivialBlocks = True
+  optRemoveTrivialBlocks = True,
+  optLCSE = True
 })
   where
     processArg :: Options -> String -> Options
@@ -99,6 +101,8 @@ processArgs = foldl processArg (Options {
     processArg options "--merge-blocks=1" = options { optMergeBlocks = True }
     processArg options "--remove-trivial-blocks=0" = options { optRemoveTrivialBlocks = False }
     processArg options "--remove-trivial-blocks=1" = options { optRemoveTrivialBlocks = True }
+    processArg options "--LCSE=0" = options { optLCSE = False }
+    processArg options "--LCSE=1" = options { optLCSE = True }
     processArg options _ = options
 
 main :: IO ()
