@@ -36,10 +36,12 @@ Kompilator `latc_llvm` przyjmuje następujące opcje:
 
 ## Rozszerzenia
 
+- Użycie phi
 - Tablice jednowymiarowe i pętle for
 - Struktury
-- Obiekty (niezaimplementowane)
-- Metody wirtualne (niezaimplementowane)
+- Obiekty
+- Metody wirtualne
+- LCSE
 
 ## Kluczowe (potencjalnie niestandardowe) informacje o języku:
 
