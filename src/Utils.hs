@@ -28,7 +28,8 @@ data Options = Options {
   optRemoveTrivialPhis :: Bool,
   optMergeBlocks :: Bool,
   optRemoveTrivialBlocks :: Bool,
-  optCSE :: CSE
+  optCSE :: CSE,
+  optSkipTrivialConditions :: Bool
 } deriving (Show)
 
 data CSE = NoCSE | LCSE | GCSE

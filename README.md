@@ -14,9 +14,10 @@ Kompilator `latc_llvm` przyjmuje następujące opcje:
 - `--verbose` - wypisuje informacje o przebiegu kompilacji
 - `--comments` - wypisuje komentarze w kodzie LLVM
 - `--remove-trivial-phis=0|1` - usuwa trywialne phi (domyślnie 1)
+- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym nie uwzględnia się wspólnych podwyrażeń pochodzących z bloków instrukcji warunkowej lub bloku pętli ani wyrażeń z samego ich warunku) (domyślnie GCSE)
 - `--remove-trivial-blocks=0|1` - usuwa zbędne bloki (domyślnie 1)
 - `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1)
-- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym np. nie uwzględnia się wspólnych podwyrażeń pochodzących z różnych bloków instrukcji warunkowej i wyrażeń z samego warunku) (domyślnie GCSE)
+- `--skip-trivial-conditions=0|1` - pomija trywialne warunki (np. `if (x == x) {...}` lub `x = 0; if (x == 0) {...}`) (domyślnie 1)
 
 
 ## Struktura projektu

@@ -28,18 +28,26 @@ options = [
     "--merge-blocks=1",
     "--remove-trivial-blocks=1",
     # "--CSE=LCSE"
-    "--CSE=GCSE"
+    "--CSE=GCSE",
+    "--skip-trivial-conditions=1"
 ]
 
-# options_list = [
-#     [
-#         f"--remove-trivial-phis={remove_trivial_phis}",
-#         f"--merge-blocks={merge_blocks}",
-#         f"--remove-trivial-blocks={remove_trivial_blocks}"
-#     ] for remove_trivial_phis in [0, 1] for merge_blocks in [0, 1] for remove_trivial_blocks in [0, 1]
-# ]
+options_list = [
+    [
+        f"--remove-trivial-phis={remove_trivial_phis}",
+        f"--merge-blocks={merge_blocks}",
+        f"--remove-trivial-blocks={remove_trivial_blocks}",
+        f"--CSE={cse}",
+        f"--skip-trivial-conditions={skip_trivial_conditions}"
+    ] 
+    for remove_trivial_phis in [0, 1]
+    for merge_blocks in [0, 1]
+    for remove_trivial_blocks in [0, 1] 
+    for cse in ["0", "LCSE", "GCSE"]
+    for skip_trivial_conditions in [0, 1]
+]
 
-options_list = [options]
+# options_list = [options]
 
 for options in options_list:
     print("Options: " + " ".join(options))

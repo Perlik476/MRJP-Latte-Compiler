@@ -1,14 +1,10 @@
 int main() {
-    int x = 1;
-    x = x + 1;
-    int y = 2;
-    y = y + 2;
-    int z = x + y;
-    int u = x + y;
-    printInt(z + u);
-    if (z == u) {
-
+    int x = 0;
+    x = x + 0;
+    if (x == x) {
+        x = 1;
+    } else {
+        x = 2;
     }
-    printInt(z + u);
-    return z + u;
+    return x;
 }

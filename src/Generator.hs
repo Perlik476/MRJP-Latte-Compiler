@@ -359,67 +359,81 @@ genStmt' SVRet = do
   emitVRet
   return ()
 genStmt' (SCondElse expr thenStmt elseStmt) = do
-  thenLabel <- freshLabel
-  elseLabel <- freshLabel
-  endLabel <- freshLabel
+  mb <- tryEvalBoolExpr expr 
+  case mb of
+    Just True -> genStmt thenStmt
+    Just False -> genStmt elseStmt
+    _ -> do
+      thenLabel <- freshLabel
+      elseLabel <- freshLabel
+      endLabel <- freshLabel
 
-  arithExprToAddr <- gets getArithExprToAddrGCSE
-  emitIfThenElseBlocks expr thenLabel elseLabel
-  sealBlock thenLabel
-  sealBlock elseLabel
+      arithExprToAddr <- gets getArithExprToAddrGCSE
+      emitIfThenElseBlocks expr thenLabel elseLabel
+      sealBlock thenLabel
+      sealBlock elseLabel
 
-  setCurrentLabel thenLabel
-  setGCSEEnv arithExprToAddr
-  genStmt thenStmt
-  emitJumpIfNoTerminator endLabel
+      setCurrentLabel thenLabel
+      setGCSEEnv arithExprToAddr
+      genStmt thenStmt
+      emitJumpIfNoTerminator endLabel
 
-  setCurrentLabel elseLabel
-  setGCSEEnv arithExprToAddr
-  genStmt elseStmt
-  emitJumpIfNoTerminator endLabel
+      setCurrentLabel elseLabel
+      setGCSEEnv arithExprToAddr
+      genStmt elseStmt
+      emitJumpIfNoTerminator endLabel
 
-  sealBlock endLabel
-  setCurrentLabel endLabel
-  setGCSEEnv arithExprToAddr
-  return ()
+      sealBlock endLabel
+      setCurrentLabel endLabel
+      setGCSEEnv arithExprToAddr
+      return ()
 genStmt' (SCond expr thenStmt) = do
-  thenLabel <- freshLabel
-  endLabel <- freshLabel
+  mb <- tryEvalBoolExpr expr
+  case mb of 
+    Just True -> genStmt thenStmt
+    Just False -> return ()
+    _ -> do
+      thenLabel <- freshLabel
+      endLabel <- freshLabel
 
-  arithExprToAddr <- gets getArithExprToAddrGCSE
-  emitIfThenElseBlocks expr thenLabel endLabel
-  sealBlock thenLabel
+      arithExprToAddr <- gets getArithExprToAddrGCSE
+      emitIfThenElseBlocks expr thenLabel endLabel
+      sealBlock thenLabel
 
-  setCurrentLabel thenLabel
-  setGCSEEnv arithExprToAddr
-  genStmt thenStmt
-  emitJumpIfNoTerminator endLabel
-  sealBlock endLabel
+      setCurrentLabel thenLabel
+      setGCSEEnv arithExprToAddr
+      genStmt thenStmt
+      emitJumpIfNoTerminator endLabel
+      sealBlock endLabel
 
-  setCurrentLabel endLabel
-  setGCSEEnv arithExprToAddr
-  return ()
+      setCurrentLabel endLabel
+      setGCSEEnv arithExprToAddr
+      return ()
 genStmt' (SWhile expr stmt) = do
-  condLabel <- freshLabel
-  bodyLabel <- freshLabel
-  endLabel <- freshLabel
+  mb <- tryEvalBoolExpr expr
+  case mb of
+    Just False -> return ()
+    _ -> do
+      condLabel <- freshLabel
+      bodyLabel <- freshLabel
+      endLabel <- freshLabel
 
-  arithExprToAddr <- gets getArithExprToAddrGCSE
-  emitJump condLabel
-  setCurrentLabel condLabel
-  emitIfThenElseBlocks expr bodyLabel endLabel
-  sealBlock bodyLabel
-  sealBlock endLabel
+      arithExprToAddr <- gets getArithExprToAddrGCSE
+      emitJump condLabel
+      setCurrentLabel condLabel
+      emitIfThenElseBlocks expr bodyLabel endLabel
+      sealBlock bodyLabel
+      sealBlock endLabel
 
-  setCurrentLabel bodyLabel
-  setGCSEEnv arithExprToAddr
-  genStmt stmt
-  emitJumpIfNoTerminator condLabel
-  sealBlock condLabel
+      setCurrentLabel bodyLabel
+      setGCSEEnv arithExprToAddr
+      genStmt stmt
+      emitJumpIfNoTerminator condLabel
+      sealBlock condLabel
 
-  setCurrentLabel endLabel
-  setGCSEEnv arithExprToAddr
-  return ()
+      setCurrentLabel endLabel
+      setGCSEEnv arithExprToAddr
+      return ()
 genStmt' (SFor t ident expr stmt) = do
   let iterIdent = "iter." ++ ident
   genStmt' (SDecl t iterIdent (AST.ELitInt 0))
@@ -566,6 +580,100 @@ emitIfThenElseBlocks ELitTrue thenLabel elseLabel = emitJump thenLabel >> return
 emitIfThenElseBlocks expr thenLabel elseLabel = do
   addr <- genExpr expr
   emitBranch addr thenLabel elseLabel >> return ()
+
+
+tryEvalBoolExpr :: Expr -> GenM (Maybe Bool)
+tryEvalBoolExpr expr = do
+  skipTrivialConditions <- gets $ optSkipTrivialConditions . getOptions
+  if skipTrivialConditions then
+    tryEvalBoolExpr' expr
+  else
+    return Nothing
+
+tryEvalBoolExpr' :: Expr -> GenM (Maybe Bool)
+tryEvalBoolExpr' ELitTrue = return $ Just True
+tryEvalBoolExpr' ELitFalse = return $ Just False
+tryEvalBoolExpr' (ENot expr) = do
+  result <- tryEvalBoolExpr' expr
+  case result of
+    Just True -> return $ Just False
+    Just False -> return $ Just True
+    _ -> return Nothing
+tryEvalBoolExpr' (EAnd expr1 expr2) = do
+  result1 <- tryEvalBoolExpr' expr1
+  case result1 of
+    Just True -> tryEvalBoolExpr' expr2
+    Just False -> return $ Just False
+    _ -> return Nothing 
+tryEvalBoolExpr' (EOr expr1 expr2) = do
+  result1 <- tryEvalBoolExpr' expr1
+  case result1 of
+    Just True -> return $ Just True
+    Just False -> tryEvalBoolExpr' expr2
+    _ -> return Nothing
+tryEvalBoolExpr' (ERel expr1 op expr2) = do
+  addr1 <- tryEvalExpr expr1
+  addr2 <- tryEvalExpr expr2
+  case (addr1, addr2) of
+    (Just (AImmediate (EVInt n1)), Just (AImmediate (EVInt n2))) -> return $ Just $ 
+      case op of
+        OLTH -> n1 < n2
+        OLE -> n1 <= n2
+        OGTH -> n1 > n2
+        OGE -> n1 >= n2
+        OEQU -> n1 == n2
+        ONE -> n1 /= n2
+    (Just (AImmediate (EVBool b1)), Just (AImmediate (EVBool b2))) -> return $ Just $ 
+      case op of
+        OEQU -> b1 == b2
+        ONE -> b1 /= b2
+        _ -> error "Invalid operation on bools"
+    (Just (AImmediate (EVNull _)), Just (AImmediate (EVNull _))) -> return $ Just $ 
+      case op of
+        OEQU -> True
+        ONE -> False
+        _ -> error "Invalid operation on nulls"
+    (Just (ARegister n1 _), Just (ARegister n2 _)) -> do
+      if n1 == n2 then
+        return $
+          case op of
+            OEQU -> Just True
+            ONE -> Just False
+            _ -> Nothing
+      else
+        return Nothing
+    _ -> return Nothing
+tryEvalBoolExpr' _ = return Nothing
+
+tryEvalExpr :: Expr -> GenM (Maybe Address)
+tryEvalExpr (ELitInt n) = return $ Just $ AImmediate $ EVInt n
+tryEvalExpr (ENeg expr) = do
+  addr <- tryEvalExpr expr
+  case addr of
+    Just (AImmediate (EVInt n)) -> return $ Just $ AImmediate $ EVInt (-n)
+    _ -> return Nothing
+tryEvalExpr (EOp expr1 op expr2) = do
+  addr1 <- tryEvalExpr expr1
+  addr2 <- tryEvalExpr expr2
+  case (addr1, addr2) of
+    (Just (AImmediate (EVInt n1)), Just (AImmediate (EVInt n2))) -> return $ Just $ AImmediate $ 
+      case op of
+        OPlus -> EVInt $ n1 + n2
+        OMinus -> EVInt $ n1 - n2
+        OTimes -> EVInt $ n1 * n2
+        ODiv -> EVInt $ n1 `div` n2
+        OMod -> EVInt $ n1 `mod` n2
+    _ -> return Nothing
+tryEvalExpr (EVar ident) = do
+  label <- getLabel
+  addr <- readVar ident label
+  return $ Just addr
+tryEvalExpr expr = do
+  b <- tryEvalBoolExpr expr
+  case b of
+    Just b' -> return $ Just $ AImmediate $ EVBool b'
+    _ -> return Nothing
+
 
 
 getVarName :: Expr -> String

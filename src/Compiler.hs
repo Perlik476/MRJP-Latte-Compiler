@@ -79,7 +79,8 @@ usage = do
       " --remove-trivial-phis=0|1 (file)           Compile file with removing trivial phis (default: 1)",
       " --remove-trivial-blocks=0|1 (file)         Compile file with removing trivial blocks (default: 1)",
       " --merge-blocks=0|1 (file)                  Compile file with merging blocks when possible (default: 1)",
-      " --LCSE=0|1 (file)                          Compile file with local common subexpression elimination (default: 1)"
+      " --CSE=0|LCSE|GCSE (file)                   Compile file with common subexpression elimination (default: GCSE)",
+      " --skip-trivial-conditions=0|1 (file)       Compile file with skipping trivial conditions (default: 1)"
     ]
 
 processArgs :: [String] -> Options
@@ -89,7 +90,8 @@ processArgs = foldl processArg (Options {
   optRemoveTrivialPhis = True,
   optMergeBlocks = True,
   optRemoveTrivialBlocks = True,
-  optCSE = GCSE
+  optCSE = GCSE,
+  optSkipTrivialConditions = True
 })
   where
     processArg :: Options -> String -> Options
@@ -104,6 +106,8 @@ processArgs = foldl processArg (Options {
     processArg options "--CSE=0" = options { optCSE = NoCSE }
     processArg options "--CSE=LCSE" = options { optCSE = LCSE }
     processArg options "--CSE=GCSE" = options { optCSE = GCSE }
+    processArg options "--skip-trivial-conditions=0" = options { optSkipTrivialConditions = False }
+    processArg options "--skip-trivial-conditions=1" = options { optSkipTrivialConditions = True }
     processArg options _ = options
 
 main :: IO ()
