@@ -52,6 +52,7 @@ data GenState = GenState {
   getStringPool :: Map String Integer,
   getStringPoolCount :: Integer,
   getInternalVarIdentCount :: Integer,
+  getArithExprToAddr :: Map (Label, Address, ArithOp, Address) Address,
   getOptions :: Options
 }
 

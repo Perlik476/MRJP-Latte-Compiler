@@ -44,6 +44,7 @@ compile options ast =
     getStringPool = Map.empty,
     getStringPoolCount = 0,
     getInternalVarIdentCount = 0,
+    getArithExprToAddr = Map.empty,
     getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
@@ -818,8 +819,15 @@ genBinOp op e1 e2 = do
   addr2 <- genExpr e2
   case getAddrType addr1 of
     CInt -> do
-      addr <- freshReg (getAddrType addr1)
-      emitInstr $ IBinOp addr addr1 op addr2
+      arithExprs <- gets getArithExprToAddr
+      label <- getLabel
+      addr <- case Map.lookup (label, addr1, op, addr2) arithExprs of
+        Just addr -> return addr
+        Nothing -> do
+          addr <- freshReg CInt
+          emitInstr $ IBinOp addr addr1 op addr2
+          modify $ \s -> s { getArithExprToAddr = Map.insert (label, addr1, op, addr2) addr (getArithExprToAddr s) }
+          return addr
       return addr
     CString -> do
       addr <- freshReg (getAddrType addr1)

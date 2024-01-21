@@ -1,10 +1,10 @@
-// Author: Krzysztof Małysa (2020)
-class Y extends X {}
-class X {}
-
-void tester() {
-    (new X[3])[1] = new Y;
-}
 int main() {
-    return 0;
+    int x = 1;
+    x = x + 1;
+    int y = 2;
+    y = y + 2;
+    int z = x + y;
+    int u = x + y;
+    printInt(z + u);
+    return z + u;
 }
