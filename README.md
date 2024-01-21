@@ -16,6 +16,7 @@ Kompilator `latc_llvm` przyjmuje następujące opcje:
 - `--remove-trivial-phis=0|1` - usuwa trywialne phi (domyślnie 1)
 - `--remove-trivial-blocks=0|1` - usuwa zbędne bloki (domyślnie 1)
 - `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1)
+- `--LCSE=0|1` - usuwa wspólne podwyrażenia w blokach podstawowych (domyślnie 1)
 
 
 ## Struktura projektu
