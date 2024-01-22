@@ -29,7 +29,8 @@ data Options = Options {
   optMergeBlocks :: Bool,
   optRemoveTrivialBlocks :: Bool,
   optCSE :: CSE,
-  optSkipTrivialConditions :: Bool
+  optSkipTrivialConditions :: Bool,
+  optInline :: Bool
 } deriving (Show)
 
 data CSE = NoCSE | LCSE | GCSE
@@ -59,6 +60,9 @@ data GenState = GenState {
   getInternalVarIdentCount :: Integer,
   getArithExprToAddrGCSE :: Map (Address, ArithOp, Address) Address,
   getArithExprToAddrLCSE :: Map (Label, Address, ArithOp, Address) Address,
+  getIsInlined :: Bool,
+  getRetLabel :: Maybe Label,
+  getRetVar :: Maybe Ident,
   getOptions :: Options
 }
 
@@ -185,7 +189,8 @@ instance Show FunBlock where
 data FunType = FunType {
   getFunTypeEntryLabel :: Label,
   getFunTypeRet :: CType,
-  getFunTypeArgs :: [Address]
+  getFunTypeArgs :: [(Address, Ident)],
+  getFunTypeBlock :: Maybe Block
 } deriving (Show)
 
 data BasicBlock = BasicBlock {
@@ -194,18 +199,17 @@ data BasicBlock = BasicBlock {
   getBlockInstrsCount :: Integer,
   getBlockPhis :: Map PhiID Phi,
   getBlockTerminator :: Maybe Instr,
-  getBlockPredecessors :: [Label],
-  getPhis :: Map Integer Address
+  getBlockPredecessors :: [Label]
 }
 instance Show BasicBlock where
-  show (BasicBlock label instrs _ phis (Just terminator) preds _) =
+  show (BasicBlock label instrs _ phis (Just terminator) preds) =
     label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
     ++ unlines (map (("  " ++) . show) $ Map.elems phis)
     ++ unlines (map (("  " ++) . show) $ Data.List.reverse instrs)
     ++ "  " ++ show terminator
   show (BasicBlock {}) = error "BasicBlock without terminator"
 newBlock :: Label -> BasicBlock
-newBlock label = BasicBlock label [] 0 Map.empty Nothing [] Map.empty
+newBlock label = BasicBlock label [] 0 Map.empty Nothing []
 
 type Label = String
 

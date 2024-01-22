@@ -46,6 +46,9 @@ compile options ast =
     getInternalVarIdentCount = 0,
     getArithExprToAddrLCSE = Map.empty,
     getArithExprToAddrGCSE = Map.empty,
+    getIsInlined = False,
+    getRetLabel = Nothing,
+    getRetVar = Nothing,
     getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
@@ -108,11 +111,11 @@ addStdLib = do
 
 getStdLib :: Map Ident FunType
 getStdLib = Map.fromList [
-  ("fun.printInt", FunType "fun.printInt" CVoid [ARegister 0 CInt]),
-  ("fun.readInt", FunType "fun.readInt" CInt []),
-  ("fun.printString", FunType "fun.printString" CVoid [ARegister 0 CString]),
-  ("fun.readString", FunType "fun.readString" CString []),
-  ("fun.error", FunType "fun.error" CVoid [])
+  ("fun.printInt", FunType "fun.printInt" CVoid [(ARegister 0 CInt, "param")] Nothing),
+  ("fun.readInt", FunType "fun.readInt" CInt [] Nothing),
+  ("fun.printString", FunType "fun.printString" CVoid [(ARegister 0 CString, "param")] Nothing),
+  ("fun.readString", FunType "fun.readString" CString [] Nothing),
+  ("fun.error", FunType "fun.error" CVoid [] Nothing)
   ]
 
 addClassToCEnv :: Map Ident TopDef -> TopDef -> GenM ()
@@ -216,7 +219,7 @@ processClassMethod classIdent (ClassMethodDef t methodIdent args block) = do
   printDebug $ "Fenv " ++ show fenv
   fun <- gets $ (Map.! methodIdent') . getFEnv
   let funRetType = getFunTypeRet fun
-  let funArgTypes = map getAddrType $ getFunTypeArgs fun
+  let funArgTypes = map (getAddrType . fst) $ getFunTypeArgs fun
   printDebug $ "Method " ++ methodIdent' ++ " has return type " ++ show funRetType ++ " and args " ++ show funArgTypes
   return $ CFun funRetType funArgTypes
 processClassMethod _ _ = error "Not a class method"
@@ -241,14 +244,14 @@ addFunToFEnv (PFunDef t ident args block) = do
     addr <- freshReg t'
     addVarAddr ident' addr
     addVarType ident' t'
-    return addr
+    return (addr, ident')
     ) args
   t' <- case t of
         TArray _ -> CPtr <$> toCompType t
         TClass ident' -> return $ CPtr $ CClass ident'
         _ -> toCompType t
   modify $ \s -> s {
-    getFEnv = Map.insert ident (FunType funEntry t' args') (getFEnv s),
+    getFEnv = Map.insert ident (FunType funEntry t' args' $ Just block) (getFEnv s),
     getCurrentFunLabels = []
   }
 addFunToFEnv _ = pure ()
@@ -265,7 +268,7 @@ genTopDef (PFunDef t ident args block) = do
   currentFunLabelsRev <- gets getCurrentFunLabels
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
-  let args' = getFunTypeArgs funType
+  let args' = map fst $ getFunTypeArgs funType
   let t' = getFunTypeRet funType
   modify $ \s -> s {
     getCurrentFunLabels = [],
@@ -552,12 +555,25 @@ emitBranch addr label1 label2 = do
 
 emitRet :: Address -> GenM ()
 emitRet addr = do
-  emitTerminator $ IRet addr
+  isInlined <- gets getIsInlined
+  if isInlined then do
+    (Just retLabel) <- gets getRetLabel
+    (Just retIdent) <- gets getRetVar
+    label <- getLabel
+    writeVar retIdent label addr
+    emitJump retLabel
+  else do
+    emitTerminator $ IRet addr
   emitBasicBlock
 
 emitVRet :: GenM ()
 emitVRet = do
-  emitTerminator IVRet
+  isInlined <- gets getIsInlined
+  if isInlined then do
+    (Just retLabel) <- gets getRetLabel
+    emitJump retLabel
+  else do
+    emitTerminator IVRet
   emitBasicBlock
 
 emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
@@ -735,7 +751,8 @@ genExpr' (EVar ident) = do
 genExpr' (EFunctionCall ident exprs) = do
   args <- mapM genExpr exprs
   funType <- gets $ (Map.! ident) . getFEnv
-  let funArgs = getFunTypeArgs funType
+  let funArgIdents = map snd $ getFunTypeArgs funType
+  let funArgs = map fst $ getFunTypeArgs funType
   printDebug $ "Function " ++ ident ++ " has args " ++ show (map (\addr -> (getAddrType addr, addr)) funArgs)
   let argTypes = map getAddrType funArgs
   args' <- mapM (\(addr, argType) -> do
@@ -746,14 +763,18 @@ genExpr' (EFunctionCall ident exprs) = do
       emitInstr $ IBitcast addr' addr
       return addr'
     ) (args `zip` argTypes)
-  let retType = getFunTypeRet funType
-  if retType == CVoid then do
-    emitInstr $ IVCall (AName ident Nothing) args'
-    return $ AImmediate EVVoid
+  inline <- gets $ optInline . getOptions
+  if inline && isInlineable funType then do
+    genInlineFunctionCall funType (args' `zip` funArgIdents)
   else do
-    addr <- freshReg retType
-    emitInstr $ ICall addr (AName ident Nothing) args'
-    return addr
+    let retType = getFunTypeRet funType
+    if retType == CVoid then do
+      emitInstr $ IVCall (AName ident Nothing) args'
+      return $ AImmediate EVVoid
+    else do
+      addr <- freshReg retType
+      emitInstr $ ICall addr (AName ident Nothing) args'
+      return addr
 genExpr' (ENeg expr) = genExpr (EOp (ELitInt 0) OMinus expr)
 genExpr' (ENot expr) = genBoolExpr False expr
 genExpr' (EOp expr1 op expr2) = genBinOp op expr1 expr2
@@ -849,6 +870,31 @@ genExpr' (EMethodCall expr ident exprs) = do
     emitInstr $ ICall addr methodAddr' argAddrs''
     return addr
 
+
+isInlineable :: FunType -> Bool
+isInlineable (FunType _ _ _ (Just _)) = True
+isInlineable _ = False
+
+genInlineFunctionCall :: FunType -> [(Address, Ident)] -> GenM Address
+genInlineFunctionCall funType args = do
+  let (Just block) = getFunTypeBlock funType
+  retLabel <- freshLabel
+  let ident = "fun.res." ++ show retLabel
+  addr <- freshReg (getFunTypeRet funType)
+  addVarAddr ident addr
+  addVarType ident (getAddrType addr)
+  printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
+  addr <- freshReg (getFunTypeRet funType)
+  modify $ \s -> s { getRetLabel = Just retLabel, getIsInlined = True, getRetVar = Just ident }
+  label <- getLabel
+  mapM_ (\(argAddr, argIdent) -> 
+      writeVar argIdent label argAddr
+    ) args
+  genBlock block
+  modify $ \s -> s { getRetLabel = Nothing, getIsInlined = False, getRetVar = Nothing }
+  sealBlock retLabel
+  setCurrentLabel retLabel
+  readVar ident retLabel
 
 
 genTypeSize :: CType -> GenM Address

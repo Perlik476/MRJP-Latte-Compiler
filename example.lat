@@ -1,11 +1,17 @@
-int foo() {
-    int x = 0;
-    if (x == 0) {
-        return x;
-    } else {
-        x++;
+int foo(int x) {
+    int y = goo();
+    while (x > 0) {
+        x--;
+        y = y * 2;
     }
-    return x;
+    return y;
 }
 
-int main() { return 0; }
+int goo() {
+    return 2137;
+}
+
+int main() { 
+    int x = foo(5);
+    return x;
+}

@@ -91,7 +91,8 @@ processArgs = foldl processArg (Options {
   optMergeBlocks = True,
   optRemoveTrivialBlocks = True,
   optCSE = GCSE,
-  optSkipTrivialConditions = True
+  optSkipTrivialConditions = True,
+  optInline = True
 })
   where
     processArg :: Options -> String -> Options
@@ -108,6 +109,8 @@ processArgs = foldl processArg (Options {
     processArg options "--CSE=GCSE" = options { optCSE = GCSE }
     processArg options "--skip-trivial-conditions=0" = options { optSkipTrivialConditions = False }
     processArg options "--skip-trivial-conditions=1" = options { optSkipTrivialConditions = True }
+    processArg options "--inline=0" = options { optInline = False }
+    processArg options "--inline=1" = options { optInline = True }
     processArg options _ = options
 
 main :: IO ()
