@@ -30,7 +30,9 @@ data Options = Options {
   optRemoveTrivialBlocks :: Bool,
   optCSE :: CSE,
   optSkipTrivialConditions :: Bool,
-  optInline :: Bool
+  optInline :: Bool,
+  optInlineMaxDepth :: Integer,
+  optInlineMaxLines :: Integer
 } deriving (Show)
 
 data CSE = NoCSE | LCSE | GCSE
@@ -63,7 +65,6 @@ data GenState = GenState {
   getArithExprToAddrLCSE :: Map (Label, Address, ArithOp, Address) Address,
   getIsInlined :: Bool,
   getInliningDepth :: Integer,
-  getInliningMaxDepth :: Integer,
   getInliningFunIdents :: [Ident],
   getRetLabel :: Map Integer Label,
   getRetVar :: Map Integer Ident,

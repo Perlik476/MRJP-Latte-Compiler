@@ -14,9 +14,12 @@ Kompilator `latc_llvm` przyjmuje następujące opcje:
 - `--verbose` - wypisuje informacje o przebiegu kompilacji
 - `--comments` - wypisuje komentarze w kodzie LLVM
 - `--remove-trivial-phis=0|1` - usuwa trywialne phi (domyślnie 1)
-- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia (domyślnie GCSE) (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym nie uwzględnia się wspólnych podwyrażeń pochodzących z bloków instrukcji warunkowej lub bloku pętli ani wyrażeń z samego ich warunku) 
+- `--CSE=0|LCSE|GCSE` - usuwa wspólne podwyrażenia arytmetyczne (domyślnie GCSE) (LCSE: w blokach podstawowych; GCSE: w obrębie funkcji, przy czym nie uwzględnia się wspólnych podwyrażeń pochodzących z bloków instrukcji warunkowej lub bloku pętli ani wyrażeń z samego ich warunku) 
+- `--inline=0|1` - wstawia funkcje w miejsce wywołań (domyślnie 1) (przy czym nie wstawia się funkcji już zainlinowanych). Dostępne są dodatkowe opcje:
+    - `--inline-max-depth=n` - maksymalna głębokość zagnieżdżenia wywołań funkcji, które mają zostać zainlinowane (domyślnie 3)`
+    - `--inline-max-lines=n` - maksymalna liczba instrukcji w funkcji, która ma zostać zainlinowana (domyślnie 5) (przy czym liczba ta niekoniecznie jest dokładna, gdyż uwzględnia się instrukcje powstałe po transformacji drzewa AST)
 - `--remove-trivial-blocks=0|1` - usuwa zbędne bloki (domyślnie 1) (tj. bloki, które zawierają tylko skok bezwarunkowy do następnego bloku i nie są wykorzystywane w żadnym phi)
-- `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1) (tj. jeśli blok ma tylko jednego poprzednika i poprzednik ten ma tylko jednego następnika, to bloki te są scalane. Przykładem zastosowania jest następujący kod (przy wyłączonej opcji `--skip-trivial-conditions`):
+- `--merge-blocks=0|1` - scala bloki, jeśli to możliwe (domyślnie 1) (tj. jeśli blok ma tylko jednego poprzednika i poprzednik ten ma tylko jednego następnika, to bloki te są scalane). Przykładem zastosowania jest następujący kod (przy wyłączonej opcji `--skip-trivial-conditions`):
 ```
     int foo() {
         int x = 0;
