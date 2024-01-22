@@ -19,35 +19,49 @@ latte_dirs_bad = [
 ]
 
 # options = [
-#     "--remove-trivial-phis=0",
-#     "--merge-blocks=0",
-#     "--remove-trivial-blocks=0"
+#     "--remove-trivial-phis=1",
+#     "--merge-blocks=1",
+#     "--remove-trivial-blocks=1",
+#     "--CSE=GCSE",
+#     # "--CSE=LCSE",
+#     "--skip-trivial-conditions=1",
+#     "--inline=1"
 # ]
+
+# to działa
 options = [
     "--remove-trivial-phis=1",
-    "--merge-blocks=1",
+    "--merge-blocks=0",
     "--remove-trivial-blocks=1",
-    # "--CSE=LCSE"
-    "--CSE=GCSE",
-    "--skip-trivial-conditions=1"
+    "--CSE=LCSE",
+    "--skip-trivial-conditions=1",
+    "--inline=1"
 ]
 
-options_list = [
-    [
-        f"--remove-trivial-phis={remove_trivial_phis}",
-        f"--merge-blocks={merge_blocks}",
-        f"--remove-trivial-blocks={remove_trivial_blocks}",
-        f"--CSE={cse}",
-        f"--skip-trivial-conditions={skip_trivial_conditions}"
-    ] 
-    for remove_trivial_phis in [0, 1]
-    for merge_blocks in [0, 1]
-    for remove_trivial_blocks in [0, 1] 
-    for cse in ["0", "LCSE", "GCSE"]
-    for skip_trivial_conditions in [0, 1]
-]
+# options = [
+#     "--remove-trivial-phis=0",
+#     "--merge-blocks=0",
+#     "--remove-trivial-blocks=0",
+#     "--CSE=0",
+#     "--skip-trivial-conditions=0"
+# ]
 
-# options_list = [options]
+# options_list = [
+#     [
+#         f"--remove-trivial-phis={remove_trivial_phis}",
+#         f"--merge-blocks={merge_blocks}",
+#         f"--remove-trivial-blocks={remove_trivial_blocks}",
+#         f"--CSE={cse}",
+#         f"--skip-trivial-conditions={skip_trivial_conditions}"
+#     ] 
+#     for remove_trivial_phis in [0, 1]
+#     for merge_blocks in [0, 1]
+#     for remove_trivial_blocks in [0, 1] 
+#     for cse in ["0", "LCSE", "GCSE"]
+#     for skip_trivial_conditions in [0, 1]
+# ]
+
+options_list = [options]
 
 for options in options_list:
     print("Options: " + " ".join(options))

@@ -64,6 +64,7 @@ data GenState = GenState {
   getIsInlined :: Bool,
   getInliningDepth :: Integer,
   getInliningMaxDepth :: Integer,
+  getInliningFunIdents :: [Ident],
   getRetLabel :: Map Integer Label,
   getRetVar :: Map Integer Ident,
   getOptions :: Options
@@ -210,7 +211,12 @@ instance Show BasicBlock where
     ++ unlines (map (("  " ++) . show) $ Map.elems phis)
     ++ unlines (map (("  " ++) . show) $ Data.List.reverse instrs)
     ++ "  " ++ show terminator
-  show (BasicBlock {}) = error "BasicBlock without terminator"
+  -- show (BasicBlock {}) = error "BasicBlock without terminator"
+  show (BasicBlock label instrs _ phis Nothing preds) = 
+    label ++ ":  ; preds: " ++ Data.List.intercalate ", " preds ++ "\n"
+    ++ unlines (map (("  " ++) . show) $ Map.elems phis)
+    ++ unlines (map (("  " ++) . show) $ Data.List.reverse instrs)
+    ++ "; No terminator"
 newBlock :: Label -> BasicBlock
 newBlock label = BasicBlock label [] 0 Map.empty Nothing []
 

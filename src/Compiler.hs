@@ -121,6 +121,7 @@ main = do
     "--help" : _ -> usage
     _ -> do
       let options = processArgs args
+      liftIO $ putStrLn $ "Options: " ++ show options
       let files = filter (\x -> head x /= '-') args
       case files of
         [] -> usage

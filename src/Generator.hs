@@ -50,6 +50,7 @@ compile options ast =
     getIsInlined = False,
     getInliningDepth = 0,
     getInliningMaxDepth = 5,
+    getInliningFunIdents = [],
     getRetLabel = Map.empty,
     getRetVar = Map.empty,
     getOptions = options
@@ -263,7 +264,11 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   funType <- gets $ (Map.! ident) . getFEnv
   let funEntry = getFunTypeEntryLabel funType
-  modify $ \s -> s { getCurrentFunLabels = [funEntry], getCurrentFunName = ident, getCurrentReturnType = getFunTypeRet funType }
+  modify $ \s -> s { 
+    getCurrentFunLabels = [funEntry], getCurrentFunName = ident, 
+    getCurrentReturnType = getFunTypeRet funType, getInliningDepth = 0,
+    getInliningFunIdents = [ident], getRetLabel = Map.empty, getRetVar = Map.empty
+  }
   setCurrentLabel funEntry
   genBlock block
   emitBasicBlock
@@ -492,7 +497,7 @@ emitBasicBlock = do
         funRetType <- gets $ getFunTypeRet . (Map.! funName) . getFEnv
         if funRetType == CVoid then do
           printDebug "Void function"
-          emitRet $ AImmediate EVVoid
+          emitVRet
         else do
           printDebug "Non-void function"
           emitRet $ AImmediate $ EVUndef funRetType
@@ -536,6 +541,8 @@ skipEmitBasicBlock = do
 
 emitJump :: Label -> GenM ()
 emitJump label = do
+  currentLabel <- getLabel
+  printDebug $ "Emitting jump to " ++ label ++ " from " ++ currentLabel
   addPredToBlock label =<< getLabel
   emitTerminator $ IJmp label
   emitBasicBlock
@@ -562,6 +569,8 @@ emitRet addr = do
     inliningDepth <- gets getInliningDepth
     retLabels <- gets getRetLabel
     retIdents <- gets getRetVar
+    liftIO $ putStrLn $ "Ret labels " ++ show retLabels
+    liftIO $ putStrLn $ "Ret idents " ++ show retIdents
     let retLabel = retLabels Map.! inliningDepth
     let retIdent = retIdents Map.! inliningDepth
     label <- getLabel
@@ -569,7 +578,7 @@ emitRet addr = do
     emitJump retLabel
   else do
     emitTerminator $ IRet addr
-  emitBasicBlock
+    emitBasicBlock
 
 emitVRet :: GenM ()
 emitVRet = do
@@ -581,7 +590,7 @@ emitVRet = do
     emitJump retLabel
   else do
     emitTerminator IVRet
-  emitBasicBlock
+    emitBasicBlock
 
 emitIfThenElseBlocks :: Expr -> Label -> Label -> GenM ()
 emitIfThenElseBlocks (EAnd expr1 expr2) thenLabel elseLabel = do
@@ -773,7 +782,8 @@ genExpr' (EFunctionCall ident exprs) = do
   inline <- gets $ optInline . getOptions
   inliningDepth <- gets getInliningDepth
   maxInliningDepth <- gets getInliningMaxDepth
-  if inline && isInlineable funType && inliningDepth < maxInliningDepth then do
+  inliningFunIdenst <- gets getInliningFunIdents
+  if inline && isInlineable funType && inliningDepth < maxInliningDepth && ident `notElem` inliningFunIdenst then do
     genInlineFunctionCall ident funType (args' `zip` funArgIdents)
   else do
     let retType = getFunTypeRet funType
@@ -890,8 +900,14 @@ genInlineFunctionCall funIdent funType args = do
   let (Just block) = getFunTypeBlock funType
   retLabel <- freshLabel
 
+  arithExprToAddr <- gets getArithExprToAddrGCSE
+
   currentReturnType <- gets getCurrentReturnType
-  modify $ \s -> s { getInliningDepth = getInliningDepth s + 1, getIsInlined = True, getCurrentReturnType = getFunTypeRet funType }
+  isInlined <- gets getIsInlined
+  modify $ \s -> s { 
+    getInliningDepth = getInliningDepth s + 1, getIsInlined = True, 
+    getCurrentReturnType = getFunTypeRet funType, getInliningFunIdents = funIdent : getInliningFunIdents s
+  }
   modify $ \s -> s { getRetLabel = Map.insert (getInliningDepth s) retLabel (getRetLabel s) }
   let ident = "fun.res." ++ retLabel
 
@@ -899,32 +915,37 @@ genInlineFunctionCall funIdent funType args = do
     addr <- freshReg (getFunTypeRet funType)
     addVarAddr ident addr
     addVarType ident (getAddrType addr)
-    printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
-
-    modify $ \s -> s {
-      getRetLabel = Map.insert (getInliningDepth s) retLabel (getRetLabel s),
-      getRetVar = Map.insert (getInliningDepth s) ident (getRetVar s) 
-    }
+    printDebug $ "Inline declared ret result " ++ ident ++ " with type " ++ show (getAddrType addr)
+    modify $ \s -> s { getRetVar = Map.insert (getInliningDepth s) ident (getRetVar s) }
 
   label <- getLabel
   mapM_ (\(argAddr, argIdent) -> 
       writeVar argIdent label argAddr
     ) args
   genBlock block
+  emitJumpIfNoTerminator retLabel
 
   unless (getFunTypeRet funType == CVoid) $ do
     modify $ \s -> s { getRetVar = Map.delete (getInliningDepth s) (getRetVar s) }
   modify $ \s -> s { getRetLabel = Map.delete (getInliningDepth s) (getRetLabel s) }
-  modify $ \s -> s { getInliningDepth = getInliningDepth s - 1, getIsInlined = False, getCurrentReturnType = currentReturnType }
+  modify $ \s -> s { 
+    getInliningDepth = getInliningDepth s - 1, getIsInlined = isInlined,
+    getCurrentReturnType = currentReturnType, getInliningFunIdents = tail (getInliningFunIdents s)
+  }
 
   printDebug $ "Finished inlining function " ++ show funType
 
   sealBlock retLabel
   setCurrentLabel retLabel
+
+  setGCSEEnv arithExprToAddr
+
   if getFunTypeRet funType == CVoid then do
     return $ AImmediate EVVoid
   else do
-    readVar ident retLabel
+    retAddr <- readVar ident retLabel
+    liftIO $ putStrLn $ "retAddr is " ++ show retAddr ++ " of type " ++ show (getAddrType retAddr)
+    return retAddr
 
 
 genTypeSize :: CType -> GenM Address
@@ -1232,7 +1253,7 @@ readVarRec ident label = do
             Nothing -> error $ "Block " ++ label ++ " not found in environment."
             _ -> return ()
           block <- gets $ (Map.! label) . getBasicBlockEnv
-          printDebug $ "Next reading " ++ ident ++ " from " ++ label ++ " with address " ++ show (getBlockInstrs block)
+          printDebug $ "Next reading " ++ ident ++ " from " ++ (head $ getBlockPredecessors block) ++ " with address " ++ show (getBlockInstrs block)
           readVar ident (head $ getBlockPredecessors block)
         else do
           printDebug $ "Block " ++ label ++ " sealed and has more than one predecessor"
