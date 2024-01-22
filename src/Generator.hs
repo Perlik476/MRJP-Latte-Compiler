@@ -49,7 +49,6 @@ compile options ast =
     getArithExprToAddrGCSE = Map.empty,
     getIsInlined = False,
     getInliningDepth = 0,
-    getInliningMaxDepth = 5,
     getInliningFunIdents = [],
     getRetLabel = Map.empty,
     getRetVar = Map.empty,
@@ -573,8 +572,6 @@ emitRet addr = do
     inliningDepth <- gets getInliningDepth
     retLabels <- gets getRetLabel
     retIdents <- gets getRetVar
-    liftIO $ putStrLn $ "Ret labels " ++ show retLabels
-    liftIO $ putStrLn $ "Ret idents " ++ show retIdents
     let retLabel = retLabels Map.! inliningDepth
     let retIdent = retIdents Map.! inliningDepth
     label <- getLabel
@@ -785,9 +782,11 @@ genExpr' (EFunctionCall ident exprs) = do
     ) (args `zip` argTypes)
   inline <- gets $ optInline . getOptions
   inliningDepth <- gets getInliningDepth
-  maxInliningDepth <- gets getInliningMaxDepth
+  maxInliningDepth <- gets $ optInlineMaxDepth . getOptions
+  maxInliningLines <- gets $ optInlineMaxLines . getOptions
   inliningFunIdenst <- gets getInliningFunIdents
-  if inline && isInlineable funType && inliningDepth < maxInliningDepth && ident `notElem` inliningFunIdenst then do
+  if inline && isInlineable funType && inliningDepth < maxInliningDepth 
+    && ident `notElem` inliningFunIdenst && getFunTypeLines funType < maxInliningLines then do
     genInlineFunctionCall ident funType (args' `zip` funArgIdents)
   else do
     let retType = getFunTypeRet funType
@@ -894,6 +893,27 @@ genExpr' (EMethodCall expr ident exprs) = do
     return addr
 
 
+getFunTypeLines :: FunType -> Integer
+getFunTypeLines (FunType _ _ _ (Just block)) = getBlockLines block
+
+getBlockLines :: Block -> Integer
+getBlockLines (SBlock stmts) = sum $ map getStmtLines stmts
+
+getStmtLines :: Stmt -> Integer
+getStmtLines SEmpty = 0
+getStmtLines (SExp expr) = 1
+getStmtLines (SBStmt block) = getBlockLines block
+getStmtLines (SDecl _ _ expr) = 1
+getStmtLines (SAss _ expr) = 1
+getStmtLines (SIncr _) = 1
+getStmtLines (SDecr _) = 1
+getStmtLines (SRet expr) = 1
+getStmtLines SVRet = 1
+getStmtLines (SCondElse expr thenStmt elseStmt) = 1 + getStmtLines thenStmt + getStmtLines elseStmt
+getStmtLines (SCond expr thenStmt) = 1 + getStmtLines thenStmt
+getStmtLines (SWhile expr stmt) = 1 + getStmtLines stmt
+getStmtLines (SFor _ _ expr stmt) = 1 + getStmtLines stmt
+
 isInlineable :: FunType -> Bool
 isInlineable (FunType _ _ _ (Just _)) = True
 isInlineable _ = False
@@ -948,7 +968,6 @@ genInlineFunctionCall funIdent funType args = do
     return $ AImmediate EVVoid
   else do
     retAddr <- readVar ident retLabel
-    liftIO $ putStrLn $ "retAddr is " ++ show retAddr ++ " of type " ++ show (getAddrType retAddr)
     return retAddr
 
 
@@ -1562,7 +1581,6 @@ mergeBlockWithPred fun block pred = do
       getFunTypeEntryLabel = entryLabel'
     }) (getFEnv s)
   }
-  liftIO $ print $ "Entry block is " ++ entryLabel ++ " and pred is " ++ pred ++ " and label is " ++ label
   let blocks'' = filter (\block' -> getBlockLabel block' == entryLabel') blocks' ++ filter (\block' -> getBlockLabel block' /= entryLabel') blocks'
   printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks''
   modify $ \s -> s {

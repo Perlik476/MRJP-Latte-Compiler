@@ -261,11 +261,13 @@ transformExpr (Abs.EClassAttr _ expr ident) = AST.EClassAttr <$> transformExpr e
 transformExpr (Abs.EMethodCall _ expr ident exprs) = AST.EMethodCall <$> transformExpr expr <*> transformIIdentClassMethod ident <*> mapM transformExpr exprs
 transformExpr (Abs.EArrayNew _ t expr) = AST.EArrayNew <$> transformType t <*> transformExpr expr
 transformExpr (Abs.EArrayElem _ expr expr') = AST.EArrayElem <$> transformExpr expr <*> transformExpr expr'
+transformExpr (Abs.ENeg _ (Abs.ENeg _ expr)) = transformExpr expr
 transformExpr (Abs.ENeg _ expr) = do
   tExpr <- transformExpr expr
   return $ case tExpr of
     AST.ELitInt integer -> AST.ELitInt (-integer)
     _ -> AST.ENeg tExpr
+transformExpr (Abs.ENot _ (Abs.ENot _ expr)) = transformExpr expr
 transformExpr (Abs.ENot _ expr) = do
   tExpr <- transformExpr expr
   return $ case tExpr of

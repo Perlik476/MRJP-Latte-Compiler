@@ -71,7 +71,7 @@ removeExtension = reverse . dropWhile (/= '.') . reverse
 usage :: IO ()
 usage = do
   putStrLn $ unlines
-    [ "usage: Call with one of the following argument combinations:", 
+    [ "usage: Call with one of the following argument combinations:",
       "  --help                                    Display this help message.",
       " (file)                                     Compile file",
       " --verbose (file)                           Compile file and print compiler messages",
@@ -84,7 +84,7 @@ usage = do
     ]
 
 processArgs :: [String] -> Options
-processArgs = foldl processArg (Options { 
+processArgs = foldl processArg (Options {
   optVerbose = False,
   optComments = False,
   optRemoveTrivialPhis = True,
@@ -92,7 +92,9 @@ processArgs = foldl processArg (Options {
   optRemoveTrivialBlocks = True,
   optCSE = GCSE,
   optSkipTrivialConditions = True,
-  optInline = True
+  optInline = True,
+  optInlineMaxDepth = 3,
+  optInlineMaxLines = 5
 })
   where
     processArg :: Options -> String -> Options
@@ -111,7 +113,13 @@ processArgs = foldl processArg (Options {
     processArg options "--skip-trivial-conditions=1" = options { optSkipTrivialConditions = True }
     processArg options "--inline=0" = options { optInline = False }
     processArg options "--inline=1" = options { optInline = True }
-    processArg options _ = options
+    processArg options other
+      | "--inline-max-depth=" `Data.List.isPrefixOf` other = let depth = read $ drop (length "--inline-max-depth=") other in
+                                                     options { optInlineMaxDepth = depth }
+      | "--inline-max-lines=" `Data.List.isPrefixOf` other = let lines = read $ drop (length "--inline-max-lines=") other in
+                                                     options { optInlineMaxLines = lines }
+      | "--" `Data.List.isPrefixOf` other = error $ "Unknown option: " ++ other
+      | otherwise = options
 
 main :: IO ()
 main = do
@@ -121,7 +129,6 @@ main = do
     "--help" : _ -> usage
     _ -> do
       let options = processArgs args
-      liftIO $ putStrLn $ "Options: " ++ show options
       let files = filter (\x -> head x /= '-') args
       case files of
         [] -> usage
