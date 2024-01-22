@@ -31,7 +31,7 @@ latte_dirs_bad = [
 # to działa
 options = [
     "--remove-trivial-phis=1",
-    "--merge-blocks=0",
+    "--merge-blocks=1",
     "--remove-trivial-blocks=1",
     "--CSE=LCSE",
     "--skip-trivial-conditions=1",

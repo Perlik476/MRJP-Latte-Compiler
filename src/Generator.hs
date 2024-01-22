@@ -276,12 +276,15 @@ genTopDef (PFunDef t ident args block) = do
   currentFunLabelsRev <- gets getCurrentFunLabels
   let currentFunLabels = reverse currentFunLabelsRev
   funBasicBlocks <- mapM (\label -> gets $ (Map.! label) . getBasicBlockEnv) currentFunLabels
+  funType' <- gets $ (Map.! ident) . getFEnv
+  let funEntry' = getFunTypeEntryLabel funType'
+  let funBasicBlocks' = filter (\block -> getBlockLabel block == funEntry') funBasicBlocks ++ filter (\block -> getBlockLabel block /= funEntry') funBasicBlocks
   let args' = map fst $ getFunTypeArgs funType
   let t' = getFunTypeRet funType
   modify $ \s -> s {
     getCurrentFunLabels = [],
     getFunctions =
-      Map.insert ident (FunBlock ident t' args' funBasicBlocks) (getFunctions s)
+      Map.insert ident (FunBlock ident t' args' funBasicBlocks') (getFunctions s)
   }
   return ()
 genTopDef _ = pure ()
@@ -1549,10 +1552,21 @@ mergeBlockWithPred fun block pred = do
       Just (IBr addr label1 label2) -> Just (IBr addr (if label1 == pred then label else label1) (if label2 == pred then label else label2))
       _ -> getBlockTerminator block'
   }) blocks
-  printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks'
+  fenv <- gets getFEnv
+  let funType = fenv Map.! getFunName fun
+  let entryLabel = getFunTypeEntryLabel funType
+  let entryLabel' = if entryLabel == pred then label else entryLabel
   modify $ \s -> s {
-    getBasicBlockEnv = Map.fromList $ map (\block' -> (getBlockLabel block', block')) blocks',
-    getFunctions = Map.insert (getFunName fun) (fun { getFunBlocks = blocks' }) (getFunctions s)
+    getFEnv = Map.insert (getFunName fun) (funType {
+      getFunTypeEntryLabel = entryLabel'
+    }) (getFEnv s)
+  }
+  liftIO $ print $ "Entry block is " ++ entryLabel ++ " and pred is " ++ pred ++ " and label is " ++ label
+  let blocks'' = filter (\block' -> getBlockLabel block' == entryLabel') blocks' ++ filter (\block' -> getBlockLabel block' /= entryLabel') blocks'
+  printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show blocks''
+  modify $ \s -> s {
+    getBasicBlockEnv = Map.fromList $ map (\block' -> (getBlockLabel block', block')) blocks'',
+    getFunctions = Map.insert (getFunName fun) (fun { getFunBlocks = blocks'' }) (getFunctions s)
   }
   fun' <- gets $ (Map.! getFunName fun) . getFunctions
   printDebug $ "Function " ++ getFunName fun ++ " has blocks " ++ show (map getBlockLabel $ getFunBlocks fun')
