@@ -33,7 +33,7 @@ options = [
     "--remove-trivial-phis=1",
     "--merge-blocks=1",
     "--remove-trivial-blocks=1",
-    "--CSE=LCSE",
+    "--CSE=GCSE",
     "--skip-trivial-conditions=1",
     "--inline=1"
 ]

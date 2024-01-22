@@ -267,7 +267,8 @@ genTopDef (PFunDef t ident args block) = do
   modify $ \s -> s { 
     getCurrentFunLabels = [funEntry], getCurrentFunName = ident, 
     getCurrentReturnType = getFunTypeRet funType, getInliningDepth = 0,
-    getInliningFunIdents = [ident], getRetLabel = Map.empty, getRetVar = Map.empty
+    getInliningFunIdents = [ident], getRetLabel = Map.empty, getRetVar = Map.empty,
+    getArithExprToAddrGCSE = Map.empty
   }
   setCurrentLabel funEntry
   genBlock block
