@@ -28,6 +28,7 @@ compile options ast =
     getCurrentLabel = "None",
     getCurrentFunLabels = [],
     getCurrentFunName = "NoneFun",
+    getCurrentReturnType = CVoid,
     getLabelCount = 0,
     getBasicBlockEnv = Map.fromList [("None", newBlock "None")],
     getFunctions = Map.empty,
@@ -47,8 +48,10 @@ compile options ast =
     getArithExprToAddrLCSE = Map.empty,
     getArithExprToAddrGCSE = Map.empty,
     getIsInlined = False,
-    getRetLabel = Nothing,
-    getRetVar = Nothing,
+    getInliningDepth = 0,
+    getInliningMaxDepth = 5,
+    getRetLabel = Map.empty,
+    getRetVar = Map.empty,
     getOptions = options
   } in do
     result <- runStateT (genProgram ast) initState
@@ -260,7 +263,7 @@ genTopDef :: TopDef -> GenM ()
 genTopDef (PFunDef t ident args block) = do
   funType <- gets $ (Map.! ident) . getFEnv
   let funEntry = getFunTypeEntryLabel funType
-  modify $ \s -> s { getCurrentFunLabels = [funEntry], getCurrentFunName = ident }
+  modify $ \s -> s { getCurrentFunLabels = [funEntry], getCurrentFunName = ident, getCurrentReturnType = getFunTypeRet funType }
   setCurrentLabel funEntry
   genBlock block
   emitBasicBlock
@@ -349,8 +352,7 @@ genStmt' (SDecr expr) = genStmt' (SAss expr (EOp expr OMinus (ELitInt 1)))
 genStmt' (SRet expr) = do
   addr <- genExpr expr
   fenv <- gets getFEnv
-  currentFunName <- gets getCurrentFunName
-  let funRetType = getFunTypeRet $ fenv Map.! currentFunName
+  funRetType <- gets getCurrentReturnType
   addr' <- if funRetType == getAddrType addr then return addr
     else do
       addr' <- freshReg funRetType
@@ -557,8 +559,11 @@ emitRet :: Address -> GenM ()
 emitRet addr = do
   isInlined <- gets getIsInlined
   if isInlined then do
-    (Just retLabel) <- gets getRetLabel
-    (Just retIdent) <- gets getRetVar
+    inliningDepth <- gets getInliningDepth
+    retLabels <- gets getRetLabel
+    retIdents <- gets getRetVar
+    let retLabel = retLabels Map.! inliningDepth
+    let retIdent = retIdents Map.! inliningDepth
     label <- getLabel
     writeVar retIdent label addr
     emitJump retLabel
@@ -570,7 +575,9 @@ emitVRet :: GenM ()
 emitVRet = do
   isInlined <- gets getIsInlined
   if isInlined then do
-    (Just retLabel) <- gets getRetLabel
+    inlinigDepth <- gets getInliningDepth
+    retLabels <- gets getRetLabel
+    let retLabel = retLabels Map.! inlinigDepth
     emitJump retLabel
   else do
     emitTerminator IVRet
@@ -764,8 +771,10 @@ genExpr' (EFunctionCall ident exprs) = do
       return addr'
     ) (args `zip` argTypes)
   inline <- gets $ optInline . getOptions
-  if inline && isInlineable funType then do
-    genInlineFunctionCall funType (args' `zip` funArgIdents)
+  inliningDepth <- gets getInliningDepth
+  maxInliningDepth <- gets getInliningMaxDepth
+  if inline && isInlineable funType && inliningDepth < maxInliningDepth then do
+    genInlineFunctionCall ident funType (args' `zip` funArgIdents)
   else do
     let retType = getFunTypeRet funType
     if retType == CVoid then do
@@ -875,26 +884,47 @@ isInlineable :: FunType -> Bool
 isInlineable (FunType _ _ _ (Just _)) = True
 isInlineable _ = False
 
-genInlineFunctionCall :: FunType -> [(Address, Ident)] -> GenM Address
-genInlineFunctionCall funType args = do
+genInlineFunctionCall :: Ident -> FunType -> [(Address, Ident)] -> GenM Address
+genInlineFunctionCall funIdent funType args = do
+  printDebug $ "Inlining function " ++ show funType ++ " with args " ++ show args
   let (Just block) = getFunTypeBlock funType
   retLabel <- freshLabel
-  let ident = "fun.res." ++ show retLabel
-  addr <- freshReg (getFunTypeRet funType)
-  addVarAddr ident addr
-  addVarType ident (getAddrType addr)
-  printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
-  addr <- freshReg (getFunTypeRet funType)
-  modify $ \s -> s { getRetLabel = Just retLabel, getIsInlined = True, getRetVar = Just ident }
+
+  currentReturnType <- gets getCurrentReturnType
+  modify $ \s -> s { getInliningDepth = getInliningDepth s + 1, getIsInlined = True, getCurrentReturnType = getFunTypeRet funType }
+  modify $ \s -> s { getRetLabel = Map.insert (getInliningDepth s) retLabel (getRetLabel s) }
+  let ident = "fun.res." ++ retLabel
+
+  unless (getFunTypeRet funType == CVoid) $ do
+    addr <- freshReg (getFunTypeRet funType)
+    addVarAddr ident addr
+    addVarType ident (getAddrType addr)
+    printDebug $ "Declared " ++ ident ++ " with type " ++ show (getAddrType addr)
+
+    modify $ \s -> s {
+      getRetLabel = Map.insert (getInliningDepth s) retLabel (getRetLabel s),
+      getRetVar = Map.insert (getInliningDepth s) ident (getRetVar s) 
+    }
+
   label <- getLabel
   mapM_ (\(argAddr, argIdent) -> 
       writeVar argIdent label argAddr
     ) args
   genBlock block
-  modify $ \s -> s { getRetLabel = Nothing, getIsInlined = False, getRetVar = Nothing }
+
+  unless (getFunTypeRet funType == CVoid) $ do
+    modify $ \s -> s { getRetVar = Map.delete (getInliningDepth s) (getRetVar s) }
+  modify $ \s -> s { getRetLabel = Map.delete (getInliningDepth s) (getRetLabel s) }
+  modify $ \s -> s { getInliningDepth = getInliningDepth s - 1, getIsInlined = False, getCurrentReturnType = currentReturnType }
+
+  printDebug $ "Finished inlining function " ++ show funType
+
   sealBlock retLabel
   setCurrentLabel retLabel
-  readVar ident retLabel
+  if getFunTypeRet funType == CVoid then do
+    return $ AImmediate EVVoid
+  else do
+    readVar ident retLabel
 
 
 genTypeSize :: CType -> GenM Address

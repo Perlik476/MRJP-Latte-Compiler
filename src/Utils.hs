@@ -42,6 +42,7 @@ data GenState = GenState {
   getCurrentLabel :: Label,
   getCurrentFunLabels :: [Label],
   getCurrentFunName :: String,
+  getCurrentReturnType :: CType,
   getVEnv :: Map String (Map Label Address),
   getRegCount :: Integer,
   getLabelCount :: Integer,
@@ -61,8 +62,10 @@ data GenState = GenState {
   getArithExprToAddrGCSE :: Map (Address, ArithOp, Address) Address,
   getArithExprToAddrLCSE :: Map (Label, Address, ArithOp, Address) Address,
   getIsInlined :: Bool,
-  getRetLabel :: Maybe Label,
-  getRetVar :: Maybe Ident,
+  getInliningDepth :: Integer,
+  getInliningMaxDepth :: Integer,
+  getRetLabel :: Map Integer Label,
+  getRetVar :: Map Integer Ident,
   getOptions :: Options
 }
 
