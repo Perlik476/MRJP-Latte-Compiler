@@ -5,30 +5,10 @@ from tqdm import tqdm
 
 test_latte = "./latc_llvm"
 latte_dirs = [
-    "tests/lattests/good",
-    "tests/lattests/extensions/arrays1",
-    "tests/lattests/extensions/struct",
-    "tests/lattests/extensions/objects1",
-    "tests/lattests/extensions/objects2",
-    "tests/mrjp-tests-good/good",
     "tests/my-tests"
 ]
-latte_dirs_bad = [
-    "tests/lattests/bad",
-    "tests/mrjp-tests/bad"
-]
+latte_dirs_bad = []
 
-# options = [
-#     "--remove-trivial-phis=1",
-#     "--merge-blocks=1",
-#     "--remove-trivial-blocks=1",
-#     "--CSE=GCSE",
-#     # "--CSE=LCSE",
-#     "--skip-trivial-conditions=1",
-#     "--inline=1"
-# ]
-
-# to działa
 options = [
     "--remove-trivial-phis=1",
     "--merge-blocks=1",
@@ -37,14 +17,6 @@ options = [
     "--skip-trivial-conditions=1",
     "--inline=1"
 ]
-
-# options = [
-#     "--remove-trivial-phis=0",
-#     "--merge-blocks=0",
-#     "--remove-trivial-blocks=0",
-#     "--CSE=0",
-#     "--skip-trivial-conditions=0"
-# ]
 
 # options_list = [
 #     [

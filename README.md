@@ -1,8 +1,25 @@
 # Latte compiler
 
-Compiler for [the Latte language](https://www.mimuw.edu.pl/~ben/Zajecia/Mrj2023/Latte/). Written in Haskell, generating LLVM code.
+Compiler for [the Latte language](https://www.mimuw.edu.pl/~ben/Zajecia/Mrj2023/Latte/) written in Haskell. The compiler generates LLVM code.
 
 Part of the Compiler construction course at the University of Warsaw.
+
+## Language description
+
+Latte is a simple language with a syntax similar to C and Java. It supports classes, objects, arrays, and strings, as well as basic control structures such as loops and conditionals. The language is statically typed and has a simple type system with basic types such as `int`, `string`, `bool`, and `void`. The language also supports functions, including recursion.
+
+### Example programs
+
+In the `tests/my-tests` directory, there are example programs written in the Latte language.
+
+## Requirements
+
+- `ghc` - Glasgow Haskell Compiler
+- `alex` - lexical analyser generator
+- `happy` - parser generator
+- `bnfc` - Backus-Naur Form Converter
+- `llvm-as` - LLVM assembler
+- `llvm-link` - LLVM linker
 
 ## Building the compiler
 
