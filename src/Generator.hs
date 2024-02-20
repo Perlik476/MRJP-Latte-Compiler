@@ -308,7 +308,15 @@ genStmt :: Stmt -> GenM ()
 genStmt s = do
   addComments <- gets $ optComments . getOptions
   when addComments $ emitInstr $ IComment $ show s
-  genStmt' s
+  currentLabel <- getLabel
+  currentFunName <- gets getCurrentFunName
+  fenv <- gets getFEnv
+  let entryLabel = getFunTypeEntryLabel $ fenv Map.! currentFunName
+  blockEnv <- gets getBasicBlockEnv
+  let block = blockEnv Map.! currentLabel
+  let preds = getBlockPredecessors block
+  unless (currentLabel /= entryLabel && null preds) $ do
+    genStmt' s
   when addComments $ emitInstr $ IComment $ show s ++ " done"
 
 genStmt' :: Stmt -> GenM ()
@@ -966,9 +974,7 @@ genInlineFunctionCall funIdent funType args = do
 
   if getFunTypeRet funType == CVoid then do
     return $ AImmediate EVVoid
-  else do
-    retAddr <- readVar ident retLabel
-    return retAddr
+  else readVar ident retLabel
 
 
 genTypeSize :: CType -> GenM Address

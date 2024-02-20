@@ -1,0 +1,15 @@
+int main(){
+    printInt(factorial(1, 10));
+    return 0;
+}
+
+
+int factorial(int result, int n){
+    if(n > 0)
+        return factorial(n * result, n - 1);
+    return id(result);
+}
+
+int id(int x){
+    return x;
+}
